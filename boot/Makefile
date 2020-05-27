@@ -7,7 +7,7 @@ PROJ_DIR := .
 KEYS_DIR := ../keys
 
 $(OUTPUT_DIRECTORY)/boot.out: \
-  LINKER_SCRIPT  := boot.ld
+  LINKER_SCRIPT  := main.ld
 
 # Source files common to all targets
 SRC_FILES += \

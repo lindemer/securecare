@@ -7,7 +7,7 @@ PROJ_DIR := .
 KEYS_DIR := ../keys
 
 $(OUTPUT_DIRECTORY)/rs.out: \
-  LINKER_SCRIPT  := rs.ld
+  LINKER_SCRIPT  := main.ld
 
 # Source files common to all targets
 SRC_FILES += \
