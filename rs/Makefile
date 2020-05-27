@@ -65,7 +65,7 @@ SRC_FILES += \
   $(SDK_ROOT)/components/libraries/crypto/nrf_crypto_init.c \
   $(SDK_ROOT)/components/libraries/crypto/nrf_crypto_shared.c \
   $(KEYS_DIR)/pub.c \
-  $(PROJ_DIR)/rs.c \
+  $(PROJ_DIR)/main.c \
   $(SDK_ROOT)/components/libraries/crypto/backend/nrf_sw/nrf_sw_backend_hash.c \
   $(SDK_ROOT)/external/nano-pb/pb_common.c \
   $(SDK_ROOT)/external/nano-pb/pb_decode.c \
@@ -110,7 +110,7 @@ INC_FOLDERS += \
   $(SDK_ROOT)/components/libraries/crypto/backend/cifra \
   $(SDK_ROOT)/external/openthread/include \
   $(SDK_ROOT)/external/fprintf \
-  $(PROJ_DIR)/include \
+  $(PROJ_DIR) \
   $(SDK_ROOT)/components/boards \
   $(SDK_ROOT)/components/iot/background_dfu \
   $(SDK_ROOT)/components/libraries/atomic \
@@ -118,7 +118,6 @@ INC_FOLDERS += \
   $(SDK_ROOT)/components/iot/coap \
   $(SDK_ROOT)/modules/nrfx/hal \
   $(SDK_ROOT)/components/libraries/atomic_fifo \
-  ../config \
   $(SDK_ROOT)/external/nrf_security/mbedtls_plat_config \
   $(SDK_ROOT)/external/nRF-IEEE-802.15.4-radio-driver/src/fem/three_pin_gpio \
   $(SDK_ROOT)/components/libraries/delay \
@@ -321,7 +320,7 @@ flash: default
 erase:
 	nrfjprog -f nrf52 --eraseall
 
-SDK_CONFIG_FILE := ../config/sdk_config.h
+SDK_CONFIG_FILE := sdk_config.h
 CMSIS_CONFIG_TOOL := $(SDK_ROOT)/external_tools/cmsisconfig/CMSIS_Configuration_Wizard.jar
 sdk_config:
 	java -jar $(CMSIS_CONFIG_TOOL) $(SDK_CONFIG_FILE)
