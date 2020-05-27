@@ -1,2 +1,10 @@
-# securecare
-https://www.ri.se/en/what-we-do/projects/sip-iot-securecare-secure-and-reliable-iot-better-living-and-elderly-care
+# SecureCare
+
+## Project Structure
+- `boot` contains the bootloader for the DFU client.
+- `rs` contains the application code for the ACE resource server and DFU client.
+
+## Build
+
+## Toolchain Installation
+This code has been built and tested on an nRF52840 using the [nRF5 SDK for Thread v4.0](https://www.nordicsemi.com/Software-and-tools/Software/nRF5-SDK-for-Thread-and-Zigbee/Download). Create an environment variable called `$NRF5_SDK` pointing to the SDK directory before running `make`. The SDK expects to find a copy of the [GNU ARM Embedded Toolchain v7-2018-q2-update](https://developer.arm.com/open-source/gnu-toolchain/gnu-rm/downloads) in the `/usr/local` directory. 
