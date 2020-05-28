@@ -73,9 +73,10 @@
 #include <openthread/platform/alarm-micro.h>
 #include <openthread/platform/alarm-milli.h>
 
-
-#define SCHED_QUEUE_SIZE                32                                            /**< Maximum number of events in the scheduler queue. */
-#define SCHED_EVENT_DATA_SIZE           APP_TIMER_SCHED_EVENT_DATA_SIZE               /**< Maximum app_scheduler event size. */
+// Maximum number of events in the scheduler queue.
+#define SCHED_QUEUE_SIZE                32
+// Maximum app_scheduler event size.
+#define SCHED_EVENT_DATA_SIZE           APP_TIMER_SCHED_EVENT_DATA_SIZE 
 
 extern const app_timer_id_t nrf_dfu_inactivity_timeout_timer_id;
 void handle_dfu_command(uint8_t argc, char *argv[]);
@@ -113,12 +114,10 @@ void handle_dfu_command(uint8_t argc, char *argv[])
     }
 }
 
-
 void coap_dfu_handle_error(void)
 {
     coap_dfu_reset_state();
 }
-
 
 static void address_print(const otIp6Address *addr)
 {
@@ -224,15 +223,49 @@ static void thread_instance_init(void)
     thread_configuration_t thread_configuration =
     {
         .radio_mode        = THREAD_RADIO_MODE_RX_ON_WHEN_IDLE,
-        .autocommissioning = true,
+        .autocommissioning = false,
     };
 
+    // Initialize OpenThread.
     thread_init(&thread_configuration);
+    otInstance * aInstance = thread_ot_instance_get();
+    
+    // Pre-comission with the OpenThread border router default settings.
+    otError error = otThreadSetEnabled(aInstance, true);
+    ASSERT(error == OT_ERROR_NONE);
+    otOperationalDataset aDataset;
+    memset(&aDataset, 0, sizeof(otOperationalDataset));
+    aDataset.mActiveTimestamp = 1;
+    aDataset.mComponents.mIsActiveTimestampPresent = true;
+    aDataset.mChannel = 15;
+    aDataset.mComponents.mIsChannelPresent = true;
+    aDataset.mPanId = (otPanId) 0x1234;
+    aDataset.mComponents.mIsPanIdPresent = true;
+    uint8_t extPanId[OT_EXT_PAN_ID_SIZE] = 
+        {0x11, 0x11, 0x11, 0x11, 0x22, 0x22, 0x22, 0x22};
+    memcpy(aDataset.mExtendedPanId.m8, extPanId, sizeof(aDataset.mExtendedPanId));
+    aDataset.mComponents.mIsExtendedPanIdPresent = true;
+    uint8_t key[OT_MASTER_KEY_SIZE] = 
+        {0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 
+         0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff};
+    memcpy(aDataset.mMasterKey.m8, key, sizeof(aDataset.mMasterKey));
+    aDataset.mComponents.mIsMasterKeyPresent = true;
+    otDatasetSetActive(aInstance, &aDataset);
+
+    // Force permanent child state.
+    otThreadSetRouterEligible(aInstance, false);
+
+    // Start OpenThread.
+    NRF_LOG_INFO("Thread interface has been enabled.");
+    NRF_LOG_INFO("802.15.4 Channel : %d", otLinkGetChannel(aInstance));
+    NRF_LOG_INFO("802.15.4 PAN ID  : 0x%04x", otLinkGetPanId(aInstance));
+    NRF_LOG_INFO("Radio mode       : %s", otThreadGetLinkMode(aInstance).mRxOnWhenIdle ?
+                                    "rx-on-when-idle" : "rx-off-when-idle");
+
     thread_cli_init();
     thread_state_changed_callback_set(state_changed_callback);
 
     otCliSetUserCommands(m_user_commands, sizeof(m_user_commands) / sizeof(otCliCommand));
-    otThreadSetRouterEligible(thread_ot_instance_get(), false);
 }
 
 
