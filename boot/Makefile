@@ -226,10 +226,11 @@ default: boot
 # Print all targets that can be built
 help:
 	@echo following targets are available:
-	@echo		boot
-	@echo		flash_mbr
-	@echo		sdk_config - starting external tool for editing sdk_config.h
-	@echo		flash      - flashing binary
+	@echo		boot       - compile and link (default)
+	@echo		mbr        - flash master boot record
+	@echo		flash      - flash image
+	@echo 		keys       - generate and overwrite key pair
+	@echo 		erase
 
 TEMPLATE_PATH := $(SDK_ROOT)/components/toolchain/gcc
 
@@ -238,24 +239,22 @@ include $(TEMPLATE_PATH)/Makefile.common
 
 $(foreach target, $(TARGETS), $(call define_target, $(target)))
 
-.PHONY: flash flash_mbr erase
+.PHONY: flash mbr keys erase
 
-# Flash the program
-flash: default
+flash:  default
 	@echo Flashing: $(OUTPUT_DIRECTORY)/boot.hex
-	nrfjprog -f nrf52 --program $(OUTPUT_DIRECTORY)/boot.hex --sectorerase
+	nrfjprog -f nrf52 --program $(OUTPUT_DIRECTORY)/boot.hex
 	nrfjprog -f nrf52 --reset
 
-# Flash softdevice
-flash_mbr:
+mbr:
 	@echo Flashing: mbr_nrf52_2.4.1_mbr.hex
-	nrfjprog -f nrf52 --program $(SDK_ROOT)/components/softdevice/mbr/hex/mbr_nrf52_2.4.1_mbr.hex --sectorerase
+	nrfjprog -f nrf52 --program $(SDK_ROOT)/components/softdevice/mbr/hex/mbr_nrf52_2.4.1_mbr.hex --chiperase
 	nrfjprog -f nrf52 --reset
+
+keys:
+	@echo Generating key pair.
+	nrfutil keys generate $(KEYS_DIR)/priv.pem
+	nrfutil keys display --key pk --format code $(KEYS_DIR)/priv.pem --out_file $(KEYS_DIR)/pub.c 
 
 erase:
 	nrfjprog -f nrf52 --eraseall
-
-SDK_CONFIG_FILE := sdk_config.h
-CMSIS_CONFIG_TOOL := $(SDK_ROOT)/external_tools/cmsisconfig/CMSIS_Configuration_Wizard.jar
-sdk_config:
-	java -jar $(CMSIS_CONFIG_TOOL) $(SDK_CONFIG_FILE)

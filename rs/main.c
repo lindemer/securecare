@@ -39,10 +39,8 @@
  */
 /** @file
  *
- * @defgroup thread_secure_dfu_example_main main.c
  * @{
- * @ingroup thread_secure_dfu_example
- * @brief Thread Secure DFU Example Application main file.
+ * @brief ACE/SUIT application main file. 
  *
  */
 #include <stdlib.h>
@@ -70,6 +68,8 @@
 
 #include <openthread/cli.h>
 #include <openthread/thread.h>
+#include <openthread/thread_ftd.h>
+#include <openthread/dataset_ftd.h>
 #include <openthread/platform/alarm-micro.h>
 #include <openthread/platform/alarm-milli.h>
 
@@ -89,21 +89,6 @@ static otCliCommand m_user_commands[] =
         .mCommand = handle_dfu_command
     }
 };
-
-
-__WEAK bool nrf_dfu_button_enter_check(void)
-{
-    // Dummy function for Keil compilation. This should not be called.
-    return false;
-}
-
-
-__WEAK void nrf_bootloader_app_start(uint32_t start_addr)
-{
-    (void)start_addr;
-    // Dummy function for Keil compilation. This should not be called.
-}
-
 
 void handle_dfu_command(uint8_t argc, char *argv[])
 {
@@ -247,6 +232,7 @@ static void thread_instance_init(void)
     thread_state_changed_callback_set(state_changed_callback);
 
     otCliSetUserCommands(m_user_commands, sizeof(m_user_commands) / sizeof(otCliCommand));
+    otThreadSetRouterEligible(thread_ot_instance_get(), false);
 }
 
 

@@ -298,9 +298,10 @@ default: rs
 # Print all targets that can be built
 help:
 	@echo following targets are available:
-	@echo		rs
-	@echo		sdk_config - starting external tool for editing sdk_config.h
-	@echo		flash      - flashing binary
+	@echo		rs 	   - compile and link (default)
+	@echo 		settings   - generate bootloader settings and merge
+	@echo		flash      - flash binary
+	@echo 		erase
 
 TEMPLATE_PATH := $(SDK_ROOT)/components/toolchain/gcc
 
@@ -311,16 +312,17 @@ $(foreach target, $(TARGETS), $(call define_target, $(target)))
 
 .PHONY: flash erase
 
-# Flash the program
-flash: default
-	@echo Flashing: $(OUTPUT_DIRECTORY)/rs.hex
-	nrfjprog -f nrf52 --program $(OUTPUT_DIRECTORY)/rs.hex --sectorerase
+settings:
+	@nrfutil settings generate --family NRF52840 --application               \
+	    $(OUTPUT_DIRECTORY)/rs.hex --application-version 1                   \
+	    --bootloader-version 1 --bl-settings-version 2                       \
+	    $(OUTPUT_DIRECTORY)/settings.hex
+	@mergehex -m $(OUTPUT_DIRECTORY)/rs.hex $(OUTPUT_DIRECTORY)/settings.hex \
+	    -o $(OUTPUT_DIRECTORY)/merged.hex
+
+flash:  default settings
+	nrfjprog -f nrf52 -r --program $(OUTPUT_DIRECTORY)/merged.hex --sectorerase
 	nrfjprog -f nrf52 --reset
 
 erase:
 	nrfjprog -f nrf52 --eraseall
-
-SDK_CONFIG_FILE := sdk_config.h
-CMSIS_CONFIG_TOOL := $(SDK_ROOT)/external_tools/cmsisconfig/CMSIS_Configuration_Wizard.jar
-sdk_config:
-	java -jar $(CMSIS_CONFIG_TOOL) $(SDK_CONFIG_FILE)
