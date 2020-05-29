@@ -4,7 +4,9 @@ This is an experimental implementation of the [SUIT protocol](https://datatracke
 ![alt text](https://github.com/lindemer/securecare/blob/master/securecare.png "SecureCare logo")
 
 ## Usage
-The flashed nRF52840 device is pre-programmed with the default Thread network credentials included with the [OpenThread border router](https://github.com/openthread/ot-br-posix) **for development purposes only**, and should connect automatically. `LED1` indicates the Thread connection status: off for detached, blink for connecting and on for connected. The device has a CoAP PUT endpoint at `/s` for sending SUIT manifests. The [mesh-local EID](https://openthread.io/guides/thread-primer/ipv6-addressing) IPv6 address of the board can be discovered by connecting a serial port communication program (e.g., `sudo minicom -D /dev/ttyACM0 -b 115200`) and running `ipaddr` from the OpenThread CLI. Alternatively, the link-local IPv6 address can discovered by pinging `ff02::1%wpan0` from the border router.
+The nRF52840 node is flashed with the default Thread credentials included with the [OpenThread border router](https://github.com/openthread/ot-br-posix) and should connect automatically to the network. `LED1` indicates the Thread connection status: off for detached, blink for connecting and on for connected. The node has a CoAP PUT endpoint at `/s` for receiving SUIT manifests. 
+
+The [mesh-local EID](https://openthread.io/guides/thread-primer/ipv6-addressing) IPv6 address of the board can be discovered by connecting a serial port communication program (e.g., `sudo minicom -D /dev/ttyACM0 -b 115200`) and running `ipaddr` from the OpenThread CLI. Alternatively, the link-local IPv6 address can discovered by pinging `ff02::1%wpan0` from the border router. The OpenThread border router is pre-configured with a NAT64 interface. Run `dns resolve ipv4.google.com fdaa:bb:1::2` from the OpenThread CLI on the node to check Internet connectivity.
 
 ## Project Structure
 - `keys` key pair for SUIT manifest signing and verification
