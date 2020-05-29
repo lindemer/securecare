@@ -1,6 +1,8 @@
 # SecureCare
 This is an experimental implementation of the [SUIT protocol](https://datatracker.ietf.org/wg/suit/about/) for the SIP-IoT SecureCare project at RISE Research Institutes of Sweden targeting the Nordic Semiconductor nRF52840 DK.
 
+![alt text](https://github.com/lindemer/securecare/securecare.png "SecureCare logo")
+
 ## Usage
 The flashed nRF52840 device is pre-programmed with the default Thread network credentials included with the [OpenThread border router](https://github.com/openthread/ot-br-posix) **for development purposes only**, and should connect automatically. `LED1` indicates the Thread connection status: off for detached, blink for connecting and on for connected. The device has a CoAP PUT endpoint at `/s` for sending SUIT manifests. The [mesh-local EID](https://openthread.io/guides/thread-primer/ipv6-addressing) IPv6 address of the board can be discovered by connecting a serial port communication program (e.g., `sudo minicom -D /dev/ttyACM0 -b 115200`) and running `ipaddr` from the OpenThread CLI. Alternatively, the link-local IPv6 address can discovered by pinging `ff02::1%wpan0` from the border router.
 
