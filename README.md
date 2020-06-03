@@ -10,6 +10,7 @@ The [mesh-local EID](https://openthread.io/guides/thread-primer/ipv6-addressing)
 
 ## Project Structure
 - `keys` key pair for SUIT manifest signing and verification
+- `lib` external libraries 
 - `src/boot` bootloader for the SUIT DFU client
 - `src/app` application code for the SUIT DFU client
 - `src/suit` SUIT manifest parser and encoder

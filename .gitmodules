@@ -1,3 +1,9 @@
 [submodule "src/cose/NanoCBOR"]
-	path = src/NanoCBOR
+	path = lib/NanoCBOR
 	url = https://github.com/bergzand/NanoCBOR
+[submodule "src/libcoap"]
+	path = lib/libcoap
+	url = https://github.com/obgm/libcoap
+[submodule "lib/mbedtls"]
+	path = lib/mbedtls
+	url = https://github.com/ARMmbed/mbedtls

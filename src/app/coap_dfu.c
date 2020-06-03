@@ -73,6 +73,8 @@
 #include "background_dfu_block.h"
 #include "openthread/random_noncrypto.h"
 
+#include "cose.h"
+
 #define NRF_LOG_LEVEL 4
 #define NRF_LOG_MODULE_NAME COAP_DFU
 #include "nrf_log.h"
@@ -683,6 +685,40 @@ static void trigger_request_callback(coap_resource_t * p_resource, coap_message_
     }
 }
 
+/***************************************************************************************************
+ * START OF: COSE tests
+ **************************************************************************************************/
+
+#define COSE_TEST_KEY_256_PRV                                                   \
+    "-----BEGIN EC PRIVATE KEY-----\r\n"                                        \
+    "MHcCAQEEIKw78CnaOuvcRE7dcngmKcbM6FbB3Ue3wkPYQbu+hNHeoAoGCCqGSM49\r\n"      \
+    "AwEHoUQDQgAEAWScYjUwMrXA0gAc/LD6EDmJu7Ob7LzngEVn9HJrj4zGUjELTUYf\r\n"      \
+    "Mq2CXK9SpGLX33eRmv9itRcWjWWmqZuh2w==\r\n"                                  \
+    "-----END EC PRIVATE KEY-----\r\n"
+
+static void cose_test(void)
+{
+    uint8_t obj[1024];
+    size_t len_obj = sizeof(obj);
+
+    const uint8_t pld[] = {0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef};
+    size_t len_pld = sizeof(pld);
+
+    const uint8_t kid[] = {0xC0, 0x53};
+    size_t len_kid = sizeof(kid);
+
+    cose_sign_context_t ctx;
+    cose_sign_init(&ctx, cose_mode_w, COSE_TEST_KEY_256_PRV);
+    cose_set_kid(&ctx.key, kid, len_kid);
+    int err_code = cose_sign1_write(&ctx, pld, len_pld, obj, &len_obj);
+
+    NRF_LOG_INFO("COSE Sign1 write returned: %x", err_code);
+}
+
+/***************************************************************************************************
+ * END OF: COSE tests
+ **************************************************************************************************/
+
 /**@brief A request callback for /s resource.
  *
  * An implementation of @ref coap_method_callback_t function type.
@@ -692,7 +728,7 @@ static void trigger_request_callback(coap_resource_t * p_resource, coap_message_
  */
 static void suit_request_callback(coap_resource_t * p_resource, coap_message_t * p_request)
 {
-    NRF_LOG_INFO("ACE token resource accessed.");
+    //NRF_LOG_INFO("ACE token resource accessed.");
 
     // TODO: Handle tokens.
     
@@ -708,6 +744,8 @@ static void suit_request_callback(coap_resource_t * p_resource, coap_message_t *
     message_conf.token_len = p_request->header.token_len;
     memcpy(message_conf.token, p_request->token, message_conf.token_len);
     message_conf.id = (p_request->header.type == COAP_TYPE_CON) ? p_request->header.id : message_id_get();
+
+    cose_test();
 
     // Placeholder GET request response string.
     const char * pld = "hello world\0";

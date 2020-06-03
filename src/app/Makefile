@@ -102,13 +102,13 @@ SRC_FILES += \
   $(SDK_ROOT)/components/libraries/crypto/backend/oberon/oberon_backend_hash.c \
   $(SDK_ROOT)/components/libraries/crypto/backend/oberon/oberon_backend_hmac.c \
   $(SDK_ROOT)/components/thread/utils/thread_utils.c \
-  $(PROJ_DIR)/../NanoCBOR/src/encoder.c \
-  $(PROJ_DIR)/../NanoCBOR/src/decoder.c \
+  $(PROJ_DIR)/../../lib/NanoCBOR/src/encoder.c \
+  $(PROJ_DIR)/../../lib/NanoCBOR/src/decoder.c \
   $(PROJ_DIR)/../cose/cose.c \
 
 # Include folders common to all targets
 INC_FOLDERS += \
-  $(PROJ_DIR)/../NanoCBOR/include \
+  $(PROJ_DIR)/../../lib/NanoCBOR/include \
   $(PROJ_DIR)/../cose \
   $(SDK_ROOT)/components/libraries/crypto/backend/cc310 \
   $(SDK_ROOT)/external/nrf_security/include \

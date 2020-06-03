@@ -215,9 +215,14 @@ int cose_sign1_write(cose_sign_context_t * ctx,
     uint8_t sig[ctx->len_sig];
     
     cose_sign1_hash(ctx, pld, len_pld, hash);
-    if (mbedtls_ecdsa_write_signature(ctx->pk.pk_ctx, ctx->md_alg, hash, ctx->len_hash, 
-                sig, &ctx->len_sig, NULL, NULL)) 
-        return COSE_ERROR_SIGN;
+
+    //if (mbedtls_ecdsa_write_signature(ctx->pk.pk_ctx, ctx->md_alg, hash, ctx->len_hash, 
+    //            sig, &ctx->len_sig, NULL, NULL)) 
+    //    return COSE_ERROR_SIGN;
+    int err_code = mbedtls_ecdsa_write_signature(ctx->pk.pk_ctx, ctx->md_alg, hash, ctx->len_hash, 
+                sig, &ctx->len_sig, NULL, NULL);
+    return err_code;
+
     if (cose_sign1_encode(&ctx->key, pld, len_pld, sig, ctx->len_sig, obj, len_obj))
         return COSE_ERROR_ENCODE;
 
