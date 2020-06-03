@@ -63,8 +63,9 @@
 #include "nrf_dfu_utils.h"
 #include "coap_dfu.h"
 #include "background_dfu_state.h"
-
 #include "thread_utils.h"
+
+#include "cose.h"
 
 #include <openthread/cli.h>
 #include <openthread/thread.h>
@@ -289,6 +290,39 @@ static void log_init(void)
     NRF_LOG_DEFAULT_BACKENDS_INIT();
 }
 
+/***************************************************************************************************
+ * @section COSE tests
+ **************************************************************************************************/
+
+#define COSE_TEST_KEY_256_PRV                                                   \
+    "-----BEGIN EC PRIVATE KEY-----\r\n"                                        \
+    "MHcCAQEEIKw78CnaOuvcRE7dcngmKcbM6FbB3Ue3wkPYQbu+hNHeoAoGCCqGSM49\r\n"      \
+    "AwEHoUQDQgAEAWScYjUwMrXA0gAc/LD6EDmJu7Ob7LzngEVn9HJrj4zGUjELTUYf\r\n"      \
+    "Mq2CXK9SpGLX33eRmv9itRcWjWWmqZuh2w==\r\n"                                  \
+    "-----END EC PRIVATE KEY-----\r\n"
+
+static void cose_test(void)
+{
+    uint8_t obj[1024];
+    size_t len_obj = sizeof(obj);
+
+    const uint8_t pld[] = {0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef};
+    size_t len_pld = sizeof(pld);
+
+    const uint8_t kid[] = {0xC0, 0x53};
+    size_t len_kid = sizeof(kid);
+
+    int err_code;
+
+    cose_sign_context_t ctx;
+    cose_sign_init(&ctx, cose_mode_w, COSE_TEST_KEY_256_PRV);
+    cose_set_kid(&ctx.key, kid, len_kid);
+    int err_code = cose_sign1_write(&ctx, pld, len_pld, obj, &len_obj);
+
+    NRF_LOG_INFO("COSE Sign1 write returned: %x", err_code);
+
+    cose_sign_free(&ctx);
+}
 
 /***************************************************************************************************
  * @section Main
@@ -317,11 +351,13 @@ int main(int argc, char *argv[])
 
     while (true)
     {
+        cose_test();
+
         coap_dfu_process();
 
         thread_process();
         app_sched_execute();
-
+    
         NRF_LOG_PROCESS();
     }
 }

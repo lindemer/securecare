@@ -90,9 +90,14 @@ SRC_FILES += \
   $(SDK_ROOT)/components/libraries/crypto/backend/oberon/oberon_backend_eddsa.c \
   $(SDK_ROOT)/components/libraries/crypto/backend/oberon/oberon_backend_hash.c \
   $(SDK_ROOT)/components/libraries/crypto/backend/oberon/oberon_backend_hmac.c \
+  $(PROJ_DIR)/../NanoCBOR/src/encoder.c \
+  $(PROJ_DIR)/../NanoCBOR/src/decoder.c \
+  $(PROJ_DIR)/../cose/cose.c \
 
 # Include folders common to all targets
 INC_FOLDERS += \
+  $(PROJ_DIR)/../NanoCBOR/include \
+  $(PROJ_DIR)/../cose \
   $(SDK_ROOT)/components/libraries/crypto/backend/cc310 \
   $(SDK_ROOT)/components/libraries/crypto/backend/cifra \
   $(SDK_ROOT)/external/fprintf \
@@ -178,6 +183,12 @@ CFLAGS += -mfloat-abi=hard -mfpu=fpv4-sp-d16
 # keep every function in a separate section, this allows linker to discard unused ones
 CFLAGS += -ffunction-sections -fdata-sections -fno-strict-aliasing
 CFLAGS += -fno-builtin -fshort-enums -flto
+
+# C flags for NanoCBOR
+CFLAGS += -DNANOCBOR_BYTEORDER_HEADER=\"nanocbor/nanocbor.h\"
+CFLAGS += -DNANOCBOR_HTOBE32_FUNC=__builtin_bswap32
+CFLAGS += -DNANOCBOR_HTOBE64_FUNC=__builtin_bswap64
+CFLAGS += -DNANOCBOR_BE64TOH_FUNC=__builtin_bswap64
 
 # C++ flags common to all targets
 CXXFLAGS += $(OPT)
