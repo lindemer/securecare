@@ -207,18 +207,17 @@ struct suit_component_s {
     bool run;      /* component is referenced by a run directive */
     uint32_t size; /* image size (bytes) */
 
-    /*
-     * These values are initialized to 0. If not 0, they should be
-     * processed accordingly by the update handler.
-     */
+    /**
+     * These values are initialized to 0. If not 0, they should be processed accordingly by the 
+     * update handler.
+     **/
     suit_digest_alg_t digest_alg;       /* digest algorithm */
     suit_archive_alg_t archive_alg;     /* compression algorithm */
 
-    /* 
-     * These pointers are initialized to NULL. If not NULL, they
-     * should be processed accordingly by the update handler. NB
-     * these reference locations in the encoded manifest itself.
-     */
+    /**
+     * These pointers are initialized to NULL. If not NULL, they should be processed accordingly by 
+     * the update handler. NB these reference locations in the encoded manifest itself.
+     **/
     uint8_t * uri; size_t len_uri;
     uint8_t * digest; size_t len_digest;
     uint8_t * class_id; size_t len_class_id;
@@ -233,10 +232,9 @@ typedef struct {
     uint32_t sequence_number; /* rollback protection */
     uint32_t component_count; /* may be less than maximum allowed */
 
-    /* 
-     * Recipients should specify a limit to the number of manifest
-     * components (see I-D Section 5.4).
-     */
+    /**
+     * Recipients should specify a limit to the number of manifest components (see I-D Section 5.4).
+     **/
     suit_component_t components[SUIT_MAX_COMPONENTS];
 
 } suit_context_t;
