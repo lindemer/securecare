@@ -1,11 +1,9 @@
-SUIT ?= $(CURDIR)
-COSE ?= $(CURDIR)/../cose
-CBOR ?= $(CURDIR)/../../lib/NanoCBOR
-BUILD ?= $(CURDIR)/build
-LDIR ?= /usr/local/lib
+SUIT  := $(CURDIR)
+COSE  := $(CURDIR)/../cose
+CBOR  := $(CURDIR)/../../lib/NanoCBOR
+BUILD := $(CURDIR)/build
 
-CC ?= gcc
-RM = rm -rf
+CC := gcc
 
 SRCS = \
     $(CBOR)/src/encoder.c \
@@ -54,10 +52,10 @@ $(BUILD)/cli.o: $(SUIT)/cli.c
 	$(CC) -c -o $@ $< $(CLFAGS) $(INCLUDES)
 
 suit: $(OBJS)
-	$(CC) -o $@ $^ $(CFLAGS) $(LIBS)
+	$(CC) -o $(BUILD)/$@ $^ $(CFLAGS) $(LIBS)
 
 .PHONY: clean
 
 clean:
-	$(RM) $(BUILD)	
+	@rm -rf $(BUILD)	
 
