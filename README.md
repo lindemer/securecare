@@ -15,12 +15,16 @@ The [mesh-local EID](https://openthread.io/guides/thread-primer/ipv6-addressing)
 - `src/app` application code for the SUIT DFU client
 - `src/suit` SUIT manifest parser and encoder
 - `src/cose` COSE parser and encoder
+- `src/ace` ACE client and authorization server
 
 ## Build and Run
 1. Run `make keys` from the `src/boot` directory to generate a key pair.
 2. Run `make mbr` from the `src/boot` directory to flash the master boot record.
 3. Run `make flash` from the `src/boot` directory to flash the bootloader.
 4. Run `make flash` from the `src/app` directory to flash the application code.
+5. Run `make cli` from the `src/suit` directory to compile the SUIT CLI encoder.
+6. Run `make client` from the `src/ace` directory to compile the ACE client.
+7. Run `make server` from the `src/ace` directory to compile the ACE authorization server.
 
 ## Toolchain Installation
 This code has been built and tested on an nRF52840 DK using the [nRF5 SDK for Thread v4.1.0](https://www.nordicsemi.com/Software-and-tools/Software/nRF5-SDK-for-Thread-and-Zigbee/Download). Create an environment variable called `$NRF5_SDK` pointing to the SDK directory before running `make`. The SDK expects to find a copy of the [Arm GCC Embedded Toolchain v7-2018-q2-update](https://developer.arm.com/open-source/gnu-toolchain/gnu-rm/downloads) in the `/usr/local` directory. 
