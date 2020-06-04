@@ -19,9 +19,9 @@ The [mesh-local EID](https://openthread.io/guides/thread-primer/ipv6-addressing)
 
 ## Build and Run
 1. Run `make keys` from the `src/boot` directory to generate a key pair.
-2. Run `make mbr` from the `src/boot` directory to flash the master boot record.
-3. Run `make flash` from the `src/boot` directory to flash the bootloader.
-4. Run `make flash` from the `src/app` directory to flash the application code.
+2. Run `make mbr` from the `src/boot` directory to flash the master boot record to the nRF52840.
+3. Run `make flash` from the `src/boot` directory to flash the bootloader to the nRF52840.
+4. Run `make flash` from the `src/app` directory to flash the application code to the nRF52840.
 5. Run `make cli` from the `src/suit` directory to compile the SUIT CLI encoder.
 6. Run `make client` from the `src/ace` directory to compile the ACE client.
 7. Run `make server` from the `src/ace` directory to compile the ACE authorization server.
