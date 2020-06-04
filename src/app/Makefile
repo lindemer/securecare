@@ -105,11 +105,13 @@ SRC_FILES += \
   $(PROJ_DIR)/../../lib/NanoCBOR/src/encoder.c \
   $(PROJ_DIR)/../../lib/NanoCBOR/src/decoder.c \
   $(PROJ_DIR)/../cose/cose.c \
+  $(PROJ_DIR)/../suit/suit.c \
 
 # Include folders common to all targets
 INC_FOLDERS += \
   $(PROJ_DIR)/../../lib/NanoCBOR/include \
   $(PROJ_DIR)/../cose \
+  $(PROJ_DIR)/../suit \
   $(SDK_ROOT)/components/libraries/crypto/backend/cc310 \
   $(SDK_ROOT)/external/nrf_security/include \
   $(SDK_ROOT)/components/libraries/crypto/backend/cifra \
