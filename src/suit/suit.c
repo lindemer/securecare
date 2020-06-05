@@ -296,7 +296,7 @@ int _suit_parse_common(suit_context_t * ctx,
  * @section Manifest parser (public)
  **************************************************************************************************/
 
-int suit_parse_init(suit_context_t * ctx,
+int suit_parse(suit_context_t * ctx,
         const uint8_t * man, size_t len_man)
 {
     nanocbor_value_t top, map;
@@ -379,27 +379,27 @@ int suit_parse_init(suit_context_t * ctx,
     return 0;
 }
 
-size_t suit_get_version(suit_context_t * ctx)
+uint32_t suit_get_version(suit_context_t * ctx)
 {
     return ctx->version;
 }
 
-size_t suit_get_sequence_number(suit_context_t * ctx)
+uint32_t suit_get_sequence_number(suit_context_t * ctx)
 {
     return ctx->sequence_number;
 }
 
-size_t suit_get_component_count(suit_context_t * ctx)
+uint32_t suit_get_component_count(suit_context_t * ctx)
 {
     return ctx->component_count;
 }
 
-bool suit_must_run(suit_context_t * ctx, size_t idx)
+bool suit_get_run(suit_context_t * ctx, size_t idx)
 {
     return ctx->components[idx].run;
 }
 
-size_t suit_get_size(suit_context_t * ctx, size_t idx)
+uint32_t suit_get_size(suit_context_t * ctx, size_t idx)
 {
     return ctx->components[idx].size;
 }
@@ -420,7 +420,7 @@ bool suit_has_digest(suit_context_t * ctx, size_t idx)
             ctx->components[idx].digest != NULL);
 }
 
-bool suit_digest_is_match(suit_context_t * ctx, size_t idx,
+bool suit_match_digest(suit_context_t * ctx, size_t idx,
         const uint8_t * digest, size_t len_digest)
 {
     if (suit_has_digest(ctx, idx))
@@ -452,7 +452,7 @@ bool suit_has_class_id(suit_context_t * ctx, size_t idx)
     return (ctx->components[idx].class_id != NULL);
 }
 
-bool suit_class_id_is_match(suit_context_t * ctx, size_t idx,
+bool suit_match_class_id(suit_context_t * ctx, size_t idx,
         const uint8_t * class_id, size_t len_class_id)
 {
     if (suit_has_class_id(ctx, idx))
@@ -467,7 +467,7 @@ bool suit_has_vendor_id(suit_context_t * ctx, size_t idx)
     return (ctx->components[idx].vendor_id != NULL);
 }
 
-bool suit_vendor_id_is_match(suit_context_t * ctx, size_t idx,
+bool suit_match_vendor_id(suit_context_t * ctx, size_t idx,
         const uint8_t * vendor_id, size_t len_vendor_id)
 {
     if (suit_has_vendor_id(ctx, idx))
@@ -491,7 +491,7 @@ suit_component_t * suit_get_source_component(suit_context_t * ctx, size_t idx)
  * @section Authentication wrapper encoder/decoder (public)
  **************************************************************************************************/
 
-int suit_manifest_unwrap(const char * pem, 
+int suit_unwrap(const char * pem, 
         const uint8_t * env, const size_t len_env,
         const uint8_t ** man, size_t * len_man)
 {
@@ -504,58 +504,56 @@ int suit_manifest_unwrap(const char * pem,
     size_t len_auth;
     nanocbor_value_t nc, map, arr;
     nanocbor_decoder_init(&nc, env, len_env);
-    if (nanocbor_enter_map(&nc, &map) < 0) return 1;
+    CBOR_ENTER_MAP(nc, map);
     uint32_t map_key;
     while (!nanocbor_at_end(&map)) {
-        if (nanocbor_get_uint32(&map, &map_key) < 0) return 1;
+        CBOR_GET_INT(map, map_key);
         if (map_key == suit_envelope_authentication_wrapper) {
-            if (nanocbor_get_bstr(&map, (const uint8_t **) &auth, &len_auth) < 0) 
-                return 1;
+            CBOR_GET_BSTR(map, auth, len_auth);
             break;
         }
         nanocbor_skip(&map);
     }
     nanocbor_decoder_init(&nc, auth, len_auth);
-    if (nanocbor_enter_array(&nc, &arr) < 0) return 1;
+    CBOR_ENTER_ARR(nc, arr);
 
     /* verify signature on authentication wrapper and get payload */ 
     uint8_t * pld;
     size_t len_pld;
-    if (cose_sign1_read(&ctx, arr.cur, arr.end - arr.cur, 
-                (const uint8_t **) &pld, &len_pld)) return 1;
+    if (cose_sign1_read(&ctx, arr.cur, arr.end - arr.cur, (const uint8_t **) &pld, &len_pld)) 
+        return 1;
 
     /* extract the manifest hash */
     uint8_t * hash;
     size_t len_hash;
     nanocbor_decoder_init(&nc, pld, len_pld);
-    if (nanocbor_enter_array(&nc, &arr) < 0) return 1;
+    CBOR_ENTER_ARR(nc, arr);
     nanocbor_skip(&arr);
-    if (nanocbor_get_bstr(&arr, (const uint8_t **) &hash, &len_hash) < 0) return 1;
+    CBOR_GET_BSTR(arr, hash, len_hash);
 
     /* extract manifest with CBOR byte string header */
     while (!nanocbor_at_end(&map)) {
-        if (nanocbor_get_uint32(&map, &map_key) < 0) return 1;
+        CBOR_GET_INT(map, map_key);
         if (map_key == suit_envelope_manifest) break;
         nanocbor_skip(&map);
     }
 
     /* compute hash and write it to the end of the output buffer */
-    const mbedtls_md_info_t * md_info =
-        mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
+    const mbedtls_md_info_t * md_info = mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
     size_t md_size = mbedtls_md_get_size(md_info);
     uint8_t hash_out[md_size];
     mbedtls_md(md_info, map.cur, (map.end - map.cur), hash_out);
     if (memcmp(hash, hash_out, md_size)) return 1;
 
     /* return the manifest contents without the byte string header */
-    if (nanocbor_get_bstr(&map, man, len_man) < 0) return 1;
+    CBOR_GET_BSTR(map, *man, *len_man);
 
     /* clean up */
     cose_sign_free(&ctx);
     return 0;
 }
 
-int suit_manifest_wrap(const char * pem,
+int suit_wrap(const char * pem,
         const uint8_t * man, const size_t len_man,
         uint8_t * env, size_t * len_env)
 {
@@ -563,14 +561,13 @@ int suit_manifest_wrap(const char * pem,
     cose_sign_context_t ctx;
     if (cose_sign_init(&ctx, cose_mode_w, pem)) return 1;
 
-    /* generate byte strin wrapper for manifest (included in hash) */
+    /* generate byte string wrapper for manifest (included in hash) */
     nanocbor_encoder_t nc;
     nanocbor_encoder_init(&nc, env, *len_env);
     nanocbor_fmt_bstr(&nc, len_man);
 
     /* hash the manifest and write it to the end of the output buffer */
-    const mbedtls_md_info_t * md_info =
-        mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
+    const mbedtls_md_info_t * md_info = mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
     size_t md_size = mbedtls_md_get_size(md_info);
     mbedtls_md_context_t md_ctx;
     mbedtls_md_setup(&md_ctx, md_info, 0);
@@ -587,8 +584,7 @@ int suit_manifest_wrap(const char * pem,
 
     /* write the authentication wrapper */
     size_t len_auth = *len_env - 5;
-    cose_sign1_write(&ctx, env + *len_env - md_size - 4, 
-            md_size + 4, env + 5, &len_auth);
+    cose_sign1_write(&ctx, env + *len_env - md_size - 4, md_size + 4, env + 5, &len_auth);
 
     /* encode the envelope header */
     nanocbor_encoder_init(&nc, env, 5);
@@ -598,8 +594,7 @@ int suit_manifest_wrap(const char * pem,
     nanocbor_fmt_array(&nc, 1);
 
     /* skip to end of authentication wrapper and encode the manifest */
-    nanocbor_encoder_init(&nc, env + 5 + len_auth, 
-            *len_env - 5 - len_auth);
+    nanocbor_encoder_init(&nc, env + 5 + len_auth, *len_env - 5 - len_auth);
     nanocbor_fmt_uint(&nc, suit_envelope_manifest);
     nanocbor_fmt_bstr(&nc, len_man);
     *len_env = len_auth + 5 + nanocbor_encoded_len(&nc);

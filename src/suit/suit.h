@@ -249,7 +249,7 @@ typedef struct {
  * @retval      0       pass
  * @retval      1       fail 
  */
-int suit_parse_init(suit_context_t * ctx,
+int suit_parse(suit_context_t * ctx,
         const uint8_t * man, size_t len_man);
 
 /**
@@ -264,7 +264,7 @@ int suit_parse_init(suit_context_t * ctx,
  * @retval      0       pass
  * @retval      1       fail 
  */
-int suit_manifest_unwrap(const char * pem, 
+int suit_unwrap(const char * pem, 
         const uint8_t * env, const size_t len_env,
         const uint8_t ** man, size_t * len_man);
 
@@ -280,41 +280,63 @@ int suit_manifest_unwrap(const char * pem,
  * @retval      0       pass
  * @retval      1       fail
  */
-int suit_manifest_wrap(const char * pem,
+int suit_wrap(const char * pem,
         const uint8_t * man, const size_t len_man,
         uint8_t * env, size_t * len_env);
 
-
 /* API for global SUIT manifest parameters */
 
-size_t suit_get_version(suit_context_t * ctx); 
-size_t suit_get_sequence_number(suit_context_t * ctx);
-size_t suit_get_component_count(suit_context_t * ctx);
+uint32_t suit_get_version(suit_context_t * ctx); 
+uint32_t suit_get_sequence_number(suit_context_t * ctx);
+uint32_t suit_get_component_count(suit_context_t * ctx);
+
+void suit_set_version(suit_context_t * ctx, uint32_t val); 
+void suit_set_sequence_number(suit_context_t * ctx, uint32_t val);
+void suit_set_component_count(suit_context_t * ctx, uint32_t val);
 
 /* API for components within a SUIT manifest */
 
-bool suit_must_run(suit_context_t * ctx, size_t idx);
+bool suit_get_run(suit_context_t * ctx, size_t idx);
+bool suit_set_run(suit_context_t * ctx, size_t idx);
 
-size_t suit_get_size(suit_context_t * ctx, size_t idx);
+uint32_t suit_get_size(suit_context_t * ctx, size_t idx);
+void suit_set_size(suit_context_t * ctx, size_t idx, uint32_t val);
 bool suit_has_size(suit_context_t * ctx, size_t idx);
 
 suit_digest_alg_t suit_get_digest_alg(suit_context_t * ctx, size_t idx);
+void suit_set_digest_alg(suit_context_t * ctx, size_t idx, suit_digest_alg_t val);
+
 suit_archive_alg_t suit_get_archive_alg(suit_context_t * ctx, size_t idx);
+void suit_set_archive_alg(suit_context_t * ctx, size_t idx, suit_archive_alg_t val);
 
 bool suit_has_digest(suit_context_t * ctx, size_t idx);
-bool suit_digest_is_match(suit_context_t * ctx, size_t idx,
+bool suit_match_digest(suit_context_t * ctx, size_t idx,
+        const uint8_t * digest, size_t len_digest);
+void suit_get_digest(suit_context_t * ctx, size_t idx,
+        const uint8_t ** digest, size_t * len_digest);
+void suit_set_digest(suit_context_t * ctx, size_t idx,
         const uint8_t * digest, size_t len_digest);
 
 bool suit_has_uri(suit_context_t * ctx, size_t idx);
 void suit_get_uri(suit_context_t * ctx, size_t idx,
         const uint8_t ** uri, size_t * len_uri);
+void suit_set_uri(suit_context_t * ctx, size_t idx,
+        const uint8_t * uri, size_t len_uri);
 
 bool suit_has_class_id(suit_context_t * ctx, size_t idx);
-bool suit_class_id_is_match(suit_context_t * ctx, size_t idx,
+bool suit_match_class_id(suit_context_t * ctx, size_t idx,
+        const uint8_t * class_id, size_t len_class_id);
+void suit_get_class_id(suit_context_t * ctx, size_t idx,
+        const uint8_t ** class_id, size_t * len_class_id);
+void suit_set_class_id(suit_context_t * ctx, size_t idx,
         const uint8_t * class_id, size_t len_class_id);
 
 bool suit_has_vendor_id(suit_context_t * ctx, size_t idx);
-bool suit_vendor_id_is_match(suit_context_t * ctx, size_t idx,
+bool suit_match_vendor_id(suit_context_t * ctx, size_t idx,
+        const uint8_t * vendor_id, size_t len_vendor_id);
+void suit_get_vendor_id(suit_context_t * ctx, size_t idx,
+        const uint8_t ** vendor_id, size_t * len_vendor_id);
+void suit_set_vendor_id(suit_context_t * ctx, size_t idx,
         const uint8_t * vendor_id, size_t len_vendor_id);
 
 bool suit_has_source_component(suit_context_t * ctx, size_t idx);

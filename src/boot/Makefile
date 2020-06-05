@@ -266,6 +266,7 @@ keys:
 	@echo Generating key pair.
 	nrfutil keys generate $(KEYS_DIR)/priv.pem
 	nrfutil keys display --key pk --format code $(KEYS_DIR)/priv.pem --out_file $(KEYS_DIR)/pub.c 
+	nrfutil keys display --key pk --format pem  $(KEYS_DIR)/priv.pem --out_file $(KEYS_DIR)/pub.pem 
 
 erase:
 	nrfjprog -f nrf52 --eraseall
