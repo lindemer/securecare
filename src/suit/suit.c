@@ -49,12 +49,10 @@
     if (nanocbor_get_uint32(&nc, &val) < 0) return 1;
 
 #define CBOR_GET_BSTR(nc, val, len_val) \
-    if (nanocbor_get_bstr(&nc, (const uint8_t **) &val, &len_val) < 0) \
-    return 1;
+    if (nanocbor_get_bstr(&nc, (const uint8_t **) &val, &len_val) < 0) return 1;
 
 #define CBOR_GET_TSTR(nc, val, len_val) \
-    if (nanocbor_get_tstr(&nc, (const uint8_t **) &val, &len_val) < 0) \
-    return 1;
+    if (nanocbor_get_tstr(&nc, (const uint8_t **) &val, &len_val) < 0) return 1;
 
 /***************************************************************************************************
  * @section Manifest parser (private)
@@ -296,8 +294,7 @@ int _suit_parse_common(suit_context_t * ctx,
  * @section Manifest parser (public)
  **************************************************************************************************/
 
-int suit_parse(suit_context_t * ctx,
-        const uint8_t * man, size_t len_man)
+int suit_parse(suit_context_t * ctx, const uint8_t * man, size_t len_man)
 {
     nanocbor_value_t top, map;
     nanocbor_decoder_init(&top, man, len_man);
@@ -379,112 +376,34 @@ int suit_parse(suit_context_t * ctx,
     return 0;
 }
 
-uint32_t suit_get_version(suit_context_t * ctx)
-{
-    return ctx->version;
-}
-
-uint32_t suit_get_sequence_number(suit_context_t * ctx)
-{
-    return ctx->sequence_number;
-}
-
-uint32_t suit_get_component_count(suit_context_t * ctx)
-{
-    return ctx->component_count;
-}
-
-bool suit_get_run(suit_context_t * ctx, size_t idx)
-{
-    return ctx->components[idx].run;
-}
-
-uint32_t suit_get_size(suit_context_t * ctx, size_t idx)
-{
-    return ctx->components[idx].size;
-}
-
-bool suit_has_size(suit_context_t * ctx, size_t idx)
-{
-    return suit_get_size(ctx, idx) != 0;
-}
-
-suit_digest_alg_t suit_get_digest_alg(suit_context_t * ctx, size_t idx)
-{
-    return ctx->components[idx].digest_alg;
-}
-
-bool suit_has_digest(suit_context_t * ctx, size_t idx)
-{
-    return (suit_get_digest_alg(ctx, idx) != 0 &&
-            ctx->components[idx].digest != NULL);
-}
-
-bool suit_match_digest(suit_context_t * ctx, size_t idx,
+bool suit_match_digest(suit_context_t * ctx, size_t idx, 
         const uint8_t * digest, size_t len_digest)
 {
-    if (suit_has_digest(ctx, idx))
+    if (ctx->components[idx].digest_alg != 0 && ctx->components[idx].digest != NULL)
         if (len_digest == ctx->components[idx].len_digest)
             if (!memcmp(digest, ctx->components[idx].digest, len_digest))
                 return true;
     return false;
 }
 
-suit_archive_alg_t suit_get_archive_alg(suit_context_t * ctx, size_t idx)
-{
-    return ctx->components[idx].archive_alg;
-}
-
-bool suit_has_uri(suit_context_t * ctx, size_t idx)
-{
-    return (ctx->components[idx].uri != NULL);
-}
-
-void suit_get_uri(suit_context_t * ctx, size_t idx,
-        const uint8_t ** uri, size_t * len_uri)
-{
-    *uri = ctx->components[idx].uri;
-    *len_uri = ctx->components[idx].len_uri;
-}
-
-bool suit_has_class_id(suit_context_t * ctx, size_t idx)
-{
-    return (ctx->components[idx].class_id != NULL);
-}
-
 bool suit_match_class_id(suit_context_t * ctx, size_t idx,
         const uint8_t * class_id, size_t len_class_id)
 {
-    if (suit_has_class_id(ctx, idx))
+    if (ctx->components[idx].class_id != NULL)
         if (len_class_id == ctx->components[idx].len_class_id)
             if (!memcmp(class_id, ctx->components[idx].class_id, len_class_id))
                 return true;
     return false;
 }
 
-bool suit_has_vendor_id(suit_context_t * ctx, size_t idx)
-{
-    return (ctx->components[idx].vendor_id != NULL);
-}
-
 bool suit_match_vendor_id(suit_context_t * ctx, size_t idx,
         const uint8_t * vendor_id, size_t len_vendor_id)
 {
-    if (suit_has_vendor_id(ctx, idx))
+    if (ctx->components[idx].vendor_id != NULL)
         if (len_vendor_id == ctx->components[idx].len_vendor_id)
             if (!memcmp(vendor_id, ctx->components[idx].vendor_id, len_vendor_id))
                 return true;
     return false;
-}
-
-bool suit_has_source_component(suit_context_t * ctx, size_t idx)
-{
-    return (ctx->components[idx].source != NULL);
-}
-
-suit_component_t * suit_get_source_component(suit_context_t * ctx, size_t idx)
-{
-    return ctx->components[idx].source;
 }
 
 /***************************************************************************************************

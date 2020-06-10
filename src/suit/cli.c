@@ -31,60 +31,55 @@
  **/
 
 #define USAGE fprintf(stderr,                                                           \
-        "Copyright (c) 2020, RISE AB\n"                                                 \
+        "Copyright (c) 2020, RISE Research Institutes of Sweden\n"                      \
         "All rights reserved.\n\n"                                                      \
-        "Usage: %s [-cknruv] [output file]\n"                                           \
-        "-c [class ID]                   (optional)\n"                                  \
-        "-k [PEM file]                   (required)\n"                                  \
-        "-n [version number]             (optional)\n"                                  \
-        "-u [remote URI]                 (optional)\n"                                  \
-        "-v [vendor ID]                  (optional)\n"                                  \
-        "-p requires no argument. An existing manifest is parsed from stdin.\n"         \
+        "Usage: %s [-hknp] > [output file] < [input file]\n"                            \
+        "-h displays this text\n"                                                       \
+        "-k [key file] (required)\n"                                                    \
+        "-n [sequence number] (defaults to 0)\n"                                        \
+        "-p parses a manifest from stdin and decodes it\n"                              \
         "\nExamples:\n"                                                                 \
-        "cat firmware.bin | %s -k keys/priv.pem -n 2 -u coap://[::1] manifest.bin\n"    \
-        "cat manfest.bin | %s -p -k keys/pub.pem -\n"                                   \
+        "%s -k keys/priv.pem -s 0 > manifest.bin < firmware.bin\n"                      \
+        "%s -k keys/pub.pem -p < manifest.bin\n"                                        \
 , argv[0], argv[0], argv[0]);
 
 /* default values */
-#define DEFC "01234567890abdef" /* SUIT class ID */
-#define DEFV "01234567890abdef" /* SUIT vendor ID */
-#define DEFN "0"                /* SUIT version number */
+#define SUIT_CLASS_ID   "01234567890abdef"
+#define SUIT_VENDOR_ID  "01234567890abdef"
+#define SUIT_REMOTE_URI "coaps://[::1]:5683"
 
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 
+#include <mbedtls/md.h>
 #include "suit.h"
 
-static void parse(const uint8_t * buffer, const size_t len_buffer, const char * pem);
-static void encode(suit_context_t * ctx, uint8_t ** buffer, size_t * len_buffer, const char * pem);
+void read_stdin(uint8_t * wptr, uint32_t * bytes);
+void hash_firmware(const uint8_t * buffer, const uint32_t len_buffer, suit_component_t * component); 
+void parse_manifest(const uint8_t * buffer, const size_t len_buffer, const char * pem);
+void encode_manifest(suit_context_t * ctx, uint8_t ** buffer, size_t * len_buffer, const char * pem);
+void xxd(const uint8_t * data, size_t len, int w);
 
 int main (int argc, char *argv[])
 {
     char * k = NULL;  /* PEM key file */
-    char * u = NULL;  /* SUIT uri */
-    char * n = NULL;  /* SUIT version number */
-    char * c = NULL;  /* SUIT class ID */
-    char * v = NULL;  /* SUIT vendor ID */
-    bool   p = false; /* parse manifest from stdin */
+    char * n = NULL;  /* SUIT sequence number */
+    bool   p = false; /* parse_manifest manifest from stdin */
     
     int opt; /* parse command line arguments */
-    while ((opt = getopt (argc, argv, "k:u:n:c:v:p")) != -1) {
+    while ((opt = getopt (argc, argv, "hk:n:p")) != -1) {
         switch (opt) {
+        case 'h': USAGE; exit(EXIT_FAILURE);
         case 'k': k = optarg; break;
-        case 'u': u = optarg; break;
         case 'n': n = optarg; break;
-        case 'c': c = optarg; break;
-        case 'v': v = optarg; break;
         case 'p': p = true;   break;
-        default: USAGE; exit(EXIT_FAILURE);
         }
     }
     
     /* buffer for PEM-formatted key */
-    size_t len_pem = 2048;
-    char * pem = (char *) malloc(len_pem);
+    char * pem = (char *) malloc(2048);
 
     if (k != NULL) { /* read key from PEM file */
 
@@ -93,41 +88,68 @@ int main (int argc, char *argv[])
         fclose(fptr);
           
     } else { /* no key file specified */
+
         free(pem); USAGE; exit(EXIT_FAILURE);
+
     }
 
     /* buffer for I/O */
-    size_t bytes = 0;
-    size_t len_buffer = 2048; 
-    uint8_t * buffer = (uint8_t *) malloc(len_buffer);
-    
-    if (p) { /* parse existing manifest from stdin */
+    uint32_t bytes = 0;
+    uint8_t * ibuff = (uint8_t *) malloc(2048);
+    read_stdin(ibuff, &bytes);
 
-        uint8_t * wptr = buffer;
-        while (read(STDIN_FILENO, wptr, 1) > 0) { bytes++; wptr++; }
-        parse(buffer, len_buffer, pem);
+    //printf("Image size\t%d [B]\n", bytes);
+    
+    if (p) { /* parse_manifest existing manifest from stdin */
+
+        /* do something... */
 
     } else { /* write new manifest */
 
         suit_context_t ctx;
+        ctx.version = 1;
+        ctx.component_count = 1;
 
+        if (n == NULL) ctx.sequence_number = 0;
+        else ctx.sequence_number = (uint32_t) strtol(n, NULL, 0);
 
-        if (n == NULL) { printf("Using default version number: %s\n", DEFN); n = DEFN; }
-        if (c == NULL) { printf("Using default class ID: %s\n",       DEFC); c = DEFC; }
-        if (v == NULL) { printf("Using default vendor ID: %s\n",      DEFV); v = DEFV; }
+        ctx.components[0].uri = SUIT_REMOTE_URI;
+        ctx.components[0].len_uri = strlen(SUIT_REMOTE_URI);
+        ctx.components[0].class_id = SUIT_CLASS_ID;
+        ctx.components[0].len_class_id = strlen(SUIT_CLASS_ID);
+        ctx.components[0].vendor_id = SUIT_VENDOR_ID;
+        ctx.components[0].len_vendor_id = strlen(SUIT_VENDOR_ID); 
+
+        hash_firmware(ibuff, bytes, &ctx.components[0]);
+        //xxd(ctx.components[0].digest, ctx.components[0].len_digest, 32); 
 
     }
 
-    /* output file name is the last non-option argument specified */
-    char * filename; 
-    for (int idx = optind; idx < argc; idx++) filename = argv[idx];
-
     free(pem);
-    free(buffer);
+    free(ibuff);
     return 0;
 }
 
-static void parse(const uint8_t * buffer, const size_t len_buffer, const char * pem)
+void read_stdin(uint8_t * wptr, uint32_t * bytes)
+{
+    while (read(STDIN_FILENO, wptr, 1) > 0) { 
+        (*bytes)++; 
+        wptr++; 
+    }
+}
+
+void hash_firmware(const uint8_t * buffer, const uint32_t len_buffer, suit_component_t * component)
+{
+    mbedtls_md_type_t md_type = MBEDTLS_MD_SHA256;
+    const mbedtls_md_info_t * md_info = mbedtls_md_info_from_type(md_type);
+    component->digest = malloc(mbedtls_md_get_size(md_info));
+    mbedtls_md(md_info, buffer, len_buffer, component->digest);
+    component->len_digest = mbedtls_md_get_size(md_info); 
+    component->digest_alg = suit_digest_alg_sha256;
+    component->size = len_buffer;
+}
+
+void parse_manifest(const uint8_t * buffer, size_t len_buffer, const char * pem)
 {
     size_t bytes = 0;
     size_t len_manifest = 2048;
@@ -142,7 +164,19 @@ static void parse(const uint8_t * buffer, const size_t len_buffer, const char * 
     if (err) fprintf(stderr, "suit_parse_init returned %d\n", err);
 }
 
-static void encode(suit_context_t * ctx, uint8_t ** buffer, size_t * len_buffer, const char * pem)
+void encode_manifest(suit_context_t * ctx, uint8_t ** buffer, size_t * len_buffer, const char * pem)
 {
     
+}
+
+void xxd(const uint8_t * data, size_t len, int w)
+{
+    size_t i, j;
+    for (i = 0; i < len; i += w) {
+        for (j = 0; j < w; j++) {
+            if (i + j == len) break;
+            else printf("%02x", *(data + i + j));
+        }
+        printf("\n");
+    }
 }
