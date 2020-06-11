@@ -53,7 +53,7 @@ dkms.conf
 
 # Build directories
 build
-.cbor
+*.cbor
 
 # Vim
 *.*.swp
