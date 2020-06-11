@@ -57,3 +57,4 @@ build
 
 # Vim
 *.*.swp
+*.*.swo
