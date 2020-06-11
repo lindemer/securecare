@@ -30,23 +30,24 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  **/
 
-#define USAGE fprintf(stderr,                                                           \
-        "Copyright (c) 2020, RISE Research Institutes of Sweden\n"                      \
-        "All rights reserved.\n\n"                                                      \
-        "Usage: %s [-hknp] > [output file] < [input file]\n"                            \
-        "-h displays this text\n"                                                       \
-        "-k [key file] (required)\n"                                                    \
-        "-n [sequence number] (defaults to 0)\n"                                        \
-        "-p parses a manifest from stdin and decodes it\n"                              \
-        "\nExamples:\n"                                                                 \
-        "%s -k keys/priv.pem -s 0 > manifest.bin < firmware.bin\n"                      \
-        "%s -k keys/pub.pem -p < manifest.bin\n"                                        \
+#define USAGE fprintf(stderr,                                                                   \
+        "Copyright (c) 2020, RISE Research Institutes of Sweden\n"                              \
+        "All rights reserved.\n"                                                                \
+        "\nUsage: %s [-hknpu] > [output file] < [input file]\n"                                 \
+        "\t-h displays this text\n"                                                             \
+        "\t-k [key file]\n"                                                                     \
+        "\t-n [sequence number]\n"                                                              \
+        "\t-p parses a manifest from stdin and decodes it\n"                                    \
+        "\t-u [remote firmware URI]\n"                                                          \
+        "\nExamples:\n"                                                                         \
+        "%s -k keys/priv.pem -n 0 -u coaps://[::1]/firmware > manifest.cbor < firmware.exe\n"   \
+        "%s -k keys/pub.pem -p < manifest.cbor\n"                                               \
 , argv[0], argv[0], argv[0]);
 
-/* default values */
-#define SUIT_CLASS_ID   "01234567890abdef"
-#define SUIT_VENDOR_ID  "01234567890abdef"
-#define SUIT_REMOTE_URI "coaps://[::1]:5683"
+#define SUIT_CLASS_ID   "1492af1425695e48bf429b2d51f2ab45"
+#define SUIT_VENDOR_ID  "fa6b4a53d5ad5fdfbe9de663e4d41ffe"
+
+#define HEAP_BUFFER 2048
 
 #include <stdbool.h>
 #include <stdio.h>
@@ -58,49 +59,48 @@
 
 void read_stdin(uint8_t * wptr, uint32_t * bytes);
 void hash_firmware(const uint8_t * buffer, const uint32_t len_buffer, suit_component_t * component); 
-void parse_manifest(const uint8_t * buffer, const size_t len_buffer, const char * pem);
-void encode_manifest(suit_context_t * ctx, uint8_t ** buffer, size_t * len_buffer, const char * pem);
+void read_manifest(const uint8_t * buffer, const size_t len_buffer, const char * pem);
 void xxd(const uint8_t * data, size_t len, int w);
 
 int main (int argc, char *argv[])
 {
     char * k = NULL;  /* PEM key file */
-    char * n = NULL;  /* SUIT sequence number */
-    bool   p = false; /* parse_manifest manifest from stdin */
+    char * n = NULL;  /* manifest sequence number */
+    bool   p = false; /* parse manifest from stdin */
+    char * u = NULL;  /* remote firmware URI */
     
     int opt; /* parse command line arguments */
-    while ((opt = getopt (argc, argv, "hk:n:p")) != -1) {
+    while ((opt = getopt (argc, argv, "hk:n:pu:")) != -1) {
         switch (opt) {
         case 'h': USAGE; exit(EXIT_FAILURE);
         case 'k': k = optarg; break;
         case 'n': n = optarg; break;
         case 'p': p = true;   break;
+        case 'u': u = optarg; break;
         }
     }
     
     /* buffer for PEM-formatted key */
-    char * pem = (char *) malloc(2048);
+    char * pem = (char *) malloc(HEAP_BUFFER);
 
     if (k != NULL) { /* read key from PEM file */
 
-        FILE * fptr = fopen(k, "r"); char sym;
-        if (fptr != NULL) while ((sym = getc(fptr)) != EOF) strcat(pem, &sym);
+        FILE * fptr = fopen(k, "r"); char * wptr = pem;
+        while (!feof(fptr)) *(wptr++) = fgetc(fptr);
         fclose(fptr);
-          
+
     } else { /* no key file specified */
 
-        free(pem); USAGE; exit(EXIT_FAILURE);
+        USAGE; exit(EXIT_FAILURE);
 
     }
 
     /* buffer for I/O */
-    uint32_t bytes = 0;
-    uint8_t * ibuff = (uint8_t *) malloc(2048);
-    read_stdin(ibuff, &bytes);
-
-    //printf("Image size\t%d [B]\n", bytes);
+    uint32_t ibytes = 0;
+    uint8_t * buffer = (uint8_t *) malloc(HEAP_BUFFER);
+    read_stdin(buffer, &ibytes);
     
-    if (p) { /* parse_manifest existing manifest from stdin */
+    if (p) { /* read_manifest existing manifest from stdin */
 
         /* do something... */
 
@@ -113,20 +113,38 @@ int main (int argc, char *argv[])
         if (n == NULL) ctx.sequence_number = 0;
         else ctx.sequence_number = (uint32_t) strtol(n, NULL, 0);
 
-        ctx.components[0].uri = SUIT_REMOTE_URI;
-        ctx.components[0].len_uri = strlen(SUIT_REMOTE_URI);
+        if (u == NULL) {
+            USAGE; exit(EXIT_FAILURE);
+        } else {
+            ctx.components[0].uri = u;
+            ctx.components[0].len_uri = strlen(u);
+        }
+
         ctx.components[0].class_id = SUIT_CLASS_ID;
         ctx.components[0].len_class_id = strlen(SUIT_CLASS_ID);
         ctx.components[0].vendor_id = SUIT_VENDOR_ID;
         ctx.components[0].len_vendor_id = strlen(SUIT_VENDOR_ID); 
+        ctx.components[0].archive_alg = 0;
+        ctx.components[0].source = NULL;
 
-        hash_firmware(ibuff, bytes, &ctx.components[0]);
-        //xxd(ctx.components[0].digest, ctx.components[0].len_digest, 32); 
+        hash_firmware(buffer, ibytes, &ctx.components[0]);
+        
+        /* encode the manifest */
+        size_t obytes = HEAP_BUFFER;
+        suit_encode(&ctx, buffer, &obytes);
+
+        /* sign the manifest */
+        size_t len_wrapped = HEAP_BUFFER;
+        uint8_t * wrapped = (uint8_t *) malloc(HEAP_BUFFER);
+        int err = suit_wrap(pem, buffer, obytes, wrapped, &len_wrapped);
+
+        /* write to stdout */
+        fwrite(wrapped, sizeof(uint8_t), len_wrapped, stdout);
 
     }
 
     free(pem);
-    free(ibuff);
+    free(buffer);
     return 0;
 }
 
@@ -149,11 +167,10 @@ void hash_firmware(const uint8_t * buffer, const uint32_t len_buffer, suit_compo
     component->size = len_buffer;
 }
 
-void parse_manifest(const uint8_t * buffer, size_t len_buffer, const char * pem)
+void read_manifest(const uint8_t * buffer, size_t len_buffer, const char * pem)
 {
     size_t bytes = 0;
-    size_t len_manifest = 2048;
-    uint8_t * manifest = malloc(len_manifest);
+    uint8_t * manifest = malloc(HEAP_BUFFER);
 
     int err;
     err = suit_unwrap(pem, buffer, len_buffer, (const uint8_t **) &manifest, &bytes);
@@ -162,11 +179,6 @@ void parse_manifest(const uint8_t * buffer, size_t len_buffer, const char * pem)
     suit_context_t ctx;
     err = suit_parse(&ctx, manifest, bytes);
     if (err) fprintf(stderr, "suit_parse_init returned %d\n", err);
-}
-
-void encode_manifest(suit_context_t * ctx, uint8_t ** buffer, size_t * len_buffer, const char * pem)
-{
-    
 }
 
 void xxd(const uint8_t * data, size_t len, int w)

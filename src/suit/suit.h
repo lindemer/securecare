@@ -207,21 +207,14 @@ struct suit_component_s {
     bool run;      /* component is referenced by a run directive */
     uint32_t size; /* image size (bytes) */
 
-    /**
-     * These values are initialized to 0. If not 0, they should be processed accordingly by the 
-     * update handler.
-     **/
     suit_digest_alg_t digest_alg;       /* digest algorithm */
     suit_archive_alg_t archive_alg;     /* compression algorithm */
 
-    /**
-     * These pointers are initialized to NULL. If not NULL, they should be processed accordingly by 
-     * the update handler. NB these reference locations in the encoded manifest itself.
-     **/
-    uint8_t * uri; size_t len_uri;
-    uint8_t * digest; size_t len_digest;
-    uint8_t * class_id; size_t len_class_id;
-    uint8_t * vendor_id; size_t len_vendor_id;
+    uint8_t * uri; size_t len_uri;              /* NULL if not in manifest */
+    uint8_t * digest; size_t len_digest;        /* NULL if not in manifest */
+    uint8_t * class_id; size_t len_class_id;    /* NULL if not in manifest */
+    uint8_t * vendor_id; size_t len_vendor_id;  /* NULL if not in manifest */
+    
     suit_component_t * source;
 
 };
@@ -232,25 +225,37 @@ typedef struct {
     uint32_t sequence_number; /* rollback protection */
     uint32_t component_count; /* may be less than maximum allowed */
 
-    /**
-     * Recipients should specify a limit to the number of manifest components (see I-D Section 5.4).
-     **/
+    /* Recipients should specify a maximum number of components (see I-D Section 5.4). */ 
     suit_component_t components[SUIT_MAX_COMPONENTS];
 
 } suit_context_t;
 
 /**
- * @brief Parses the top-level CBOR map in a SUIT manifest
+ * @brief Parses a serialized SUIT manifest into a suit_context_t struct. This function does not
+ *        allocate additional memory; pointers in the ctx struct will reference locations in the 
+ *        manifest itself. 
  *
- * @param       ctx     Pointer to SUIT parser context struct
- * @param       man     Pointer to encoded SUIT manifest
- * @param       len_man Size of manifest
+ * @param[out]  ctx     Pointer to an uninitiaized SUIT context struct
+ * @param[in]   man     Pointer to encoded SUIT manifest
+ * @param[in]   len_man Size of manifest
  *
  * @retval      0       pass
  * @retval      1       fail 
  */
-int suit_parse(suit_context_t * ctx,
-        const uint8_t * man, size_t len_man);
+int suit_parse(suit_context_t * ctx, const uint8_t * man, size_t len_man);
+
+/**
+ * @brief Encodes a SUIT manifest from the contents of a suit_context_t struct. This function 
+ *        implements a download/install/secure boot scenario implicitly.
+ *
+ * @param[in]   ctx     Pointer to an initialized SUIT context struct
+ * @param[out]  man     Pointer to encoded SUIT manifest (allocated by CALLER)
+ * @param[i/o]  len_man Size of buffer; returns bytes written 
+ *
+ * @retval      0       pass
+ * @retval      1       fail
+ */
+int suit_encode(suit_context_t * ctx, uint8_t * man, size_t * len_man);
 
 /**
  * @brief Authenticate a signed SUIT envelope and return the manifest
@@ -275,7 +280,7 @@ int suit_unwrap(const char * pem,
  * @param       man     Pointer to serialized SUIT manifest
  * @param       len_man Size of manifest
  * @param[out]  env     Pointer to SUIT envelope (allocated by CALLER)
- * @param[out]  len_env Size of envelope
+ * @param[i/o]  len_env Size of buffer; returns bytes written
  *
  * @retval      0       pass
  * @retval      1       fail

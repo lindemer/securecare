@@ -54,13 +54,25 @@
 #define CBOR_GET_TSTR(nc, val, len_val) \
     if (nanocbor_get_tstr(&nc, (const uint8_t **) &val, &len_val) < 0) return 1;
 
+#define CBOR_INIT(nc, buf, len_buf) \
+    nanocbor_encoder_t nc; \
+    nanocbor_encoder_init(&nc, buf, len_buf);
+
+#define CBOR_INIT_ARR(nc, buf, len_buf, items) \
+    nanocbor_encoder_t nc; \
+    nanocbor_encoder_init(&nc, buf, len_buf); \
+    nanocbor_fmt_array(&nc, items);
+
+#define CBOR_INIT_MAP(nc, buf, len_buf, pairs) \
+    nanocbor_encoder_t nc; \
+    nanocbor_encoder_init(&nc, buf, len_buf); \
+    nanocbor_fmt_map(&nc, pairs);
+
 /***************************************************************************************************
  * @section Manifest parser (private)
  **************************************************************************************************/
 
-int _suit_parse_parameters(
-        suit_context_t * ctx, size_t idx,
-        nanocbor_value_t * map, bool override)
+int _suit_parse_parameters(suit_context_t * ctx, size_t idx, nanocbor_value_t * map, bool override)
 {
     nanocbor_value_t arr;
     uint32_t map_key; uint32_t map_val;
@@ -95,7 +107,7 @@ int _suit_parse_parameters(
 
             /**
              * Image digests are stored in a sub-array containing an algorithm identifier (int) and
-             * the digest (bstr).
+             * the digest (bstr). They are copied by reference into the ctx struct.
              **/
             case suit_param_image_digest:
                 CBOR_ENTER_ARR(*map, arr);
@@ -143,9 +155,7 @@ int _suit_parse_parameters(
     return 0;
 }
 
-int _suit_parse_sequence(
-        suit_context_t * ctx, uint32_t idx,
-        const uint8_t * seq, size_t len_seq)
+int _suit_parse_sequence(suit_context_t * ctx, uint32_t idx, const uint8_t * seq, size_t len_seq)
 {
     nanocbor_value_t top, arr, subarr, map;
     nanocbor_decoder_init(&top, seq, len_seq);
@@ -160,15 +170,13 @@ int _suit_parse_sequence(
             /* DIRECTIVE override parameters */
             case suit_dir_override_params:
                 CBOR_ENTER_MAP(arr, map);
-                if (_suit_parse_parameters(ctx, idx, &map, true))
-                    return 1;
+                if (_suit_parse_parameters(ctx, idx, &map, true)) return 1;
                 nanocbor_skip(&arr); break;
 
             /* DIRECTIVE set parameters */
             case suit_dir_set_params:
                 CBOR_ENTER_MAP(arr, map);
-                if (_suit_parse_parameters(ctx, idx, &map, false))
-                    return 1;
+                if (_suit_parse_parameters(ctx, idx, &map, false)) return 1;
                 nanocbor_skip(&arr); break;
 
             /* DIRECTIVE run this component */
@@ -216,8 +224,7 @@ int _suit_parse_sequence(
              *  - class IDs should be checked, if present
              *  - digests should be verified, if present
              *  - components should be fetched if a URI is present
-             *  - components should be copied if a source component
-             *    is declared
+             *  - components should be copied if a source component is declared
              */
 
             /* CONDITION check vendor ID */
@@ -248,8 +255,7 @@ int _suit_parse_sequence(
     return 0;
 }
 
-int _suit_parse_common(suit_context_t * ctx,
-        const uint8_t * com, size_t len_com)
+int _suit_parse_common(suit_context_t * ctx, const uint8_t * com, size_t len_com)
 {
     nanocbor_value_t top, map, arr, elem;
     nanocbor_decoder_init(&top, com, len_com);
@@ -271,14 +277,12 @@ int _suit_parse_common(suit_context_t * ctx,
                 nanocbor_decoder_init(&arr, tmp, len_tmp);
                 CBOR_ENTER_ARR(arr, elem);
                 ctx->component_count = elem.remaining;
-                if (ctx->component_count > SUIT_MAX_COMPONENTS)
-                    return 1;
+                if (ctx->component_count > SUIT_MAX_COMPONENTS) return 1;
                 break;
 
             case suit_common_seq:
                 CBOR_GET_BSTR(map, tmp, len_tmp);
-                if (_suit_parse_sequence(ctx, 0, tmp, len_tmp))
-                    return 1;
+                if (_suit_parse_sequence(ctx, 0, tmp, len_tmp)) return 1;
                 break;
 
             /* CONTINUE if unsupported */
@@ -325,8 +329,7 @@ int suit_parse(suit_context_t * ctx, const uint8_t * man, size_t len_man)
 
             case suit_header_common:
                 CBOR_GET_BSTR(map, tmp, len_tmp);
-                if (_suit_parse_common(ctx, tmp, len_tmp))
-                    return 1;
+                if (_suit_parse_common(ctx, tmp, len_tmp)) return 1;
                 break;
 
             case suit_header_manifest_version:
@@ -340,32 +343,27 @@ int suit_parse(suit_context_t * ctx, const uint8_t * man, size_t len_man)
 
             case suit_header_payload_fetch:
                 CBOR_GET_BSTR(map, tmp, len_tmp);
-                if (_suit_parse_sequence(ctx, 0, tmp, len_tmp))
-                    return 1;
+                if (_suit_parse_sequence(ctx, 0, tmp, len_tmp)) return 1;
                 break;
 
             case suit_header_install:
                 CBOR_GET_BSTR(map, tmp, len_tmp);
-                if (_suit_parse_sequence(ctx, 0, tmp, len_tmp))
-                    return 1;
+                if (_suit_parse_sequence(ctx, 0, tmp, len_tmp)) return 1;
                 break;
 
             case suit_header_validate:
                 CBOR_GET_BSTR(map, tmp, len_tmp);
-                if (_suit_parse_sequence(ctx, 0, tmp, len_tmp))
-                    return 1;
+                if (_suit_parse_sequence(ctx, 0, tmp, len_tmp)) return 1;
                 break;
 
             case suit_header_load:
                 CBOR_GET_BSTR(map, tmp, len_tmp);
-                if (_suit_parse_sequence(ctx, 0, tmp, len_tmp))
-                    return 1;
+                if (_suit_parse_sequence(ctx, 0, tmp, len_tmp)) return 1;
                 break;
 
             case suit_header_run:
                 CBOR_GET_BSTR(map, tmp, len_tmp);
-                if (_suit_parse_sequence(ctx, 0, tmp, len_tmp))
-                    return 1;
+                if (_suit_parse_sequence(ctx, 0, tmp, len_tmp)) return 1;
                 break;
 
             /* FAIL if unsupported */
@@ -404,6 +402,177 @@ bool suit_match_vendor_id(suit_context_t * ctx, size_t idx,
             if (!memcmp(vendor_id, ctx->components[idx].vendor_id, len_vendor_id))
                 return true;
     return false;
+}
+
+/***************************************************************************************************
+ * @section Manifest encoder (private)
+ **************************************************************************************************/
+
+#define STACK_BUFFER 256
+
+int _suit_encode_oneoff(uint32_t val, uint8_t * wptr, size_t * bytes)
+{
+    CBOR_INIT_ARR(nc, wptr, *bytes, 1);
+
+        nanocbor_fmt_uint(&nc, val);
+        nanocbor_fmt_null(&nc);
+
+    *bytes = nanocbor_encoded_len(&nc);
+    return 0;
+}
+
+int _suit_encode_install(suit_component_t * comp, uint8_t * wptr, size_t * bytes)
+{
+    CBOR_INIT_ARR(nc, wptr, *bytes, 6);
+
+        /* URI */
+        nanocbor_fmt_uint(&nc, suit_dir_set_params);
+        nanocbor_fmt_map(&nc, 1);
+
+            nanocbor_fmt_uint(&nc, suit_param_uri);
+            nanocbor_put_bstr(&nc, comp->uri, comp->len_uri);
+
+        /* directives and conditions */
+        nanocbor_fmt_uint(&nc, suit_dir_fetch); nanocbor_fmt_null(&nc);
+        nanocbor_fmt_uint(&nc, suit_cond_image_match); nanocbor_fmt_null(&nc);
+
+    *bytes = nanocbor_encoded_len(&nc);
+    return 0;
+}
+
+int _suit_encode_image_digest(suit_component_t * comp, uint8_t * wptr, size_t * bytes)
+{
+    CBOR_INIT_ARR(nc, wptr, *bytes, 2);
+
+        nanocbor_fmt_uint(&nc, (uint32_t) comp->digest_alg);
+        nanocbor_put_bstr(&nc, comp->digest, comp->len_digest);
+
+    *bytes = nanocbor_encoded_len(&nc);
+    return 0;
+}
+
+int _suit_encode_common_sequence(suit_component_t * comp, uint8_t * wptr, size_t * bytes)
+{
+    CBOR_INIT_ARR(nc, wptr, *bytes, 6);
+
+        /* parameter overrides */
+        nanocbor_fmt_uint(&nc, suit_dir_override_params);
+        nanocbor_fmt_map(&nc, 4);
+
+            /* vendor ID */
+            nanocbor_fmt_uint(&nc, suit_param_vendor_id);
+            nanocbor_put_bstr(&nc, comp->vendor_id, comp->len_vendor_id);
+
+            /* class ID */
+            nanocbor_fmt_uint(&nc, suit_param_class_id);
+            nanocbor_put_bstr(&nc, comp->class_id, comp->len_class_id);
+
+            /* image digest */
+            nanocbor_fmt_uint(&nc, suit_param_image_digest);
+            size_t len_digest = STACK_BUFFER; uint8_t digest[STACK_BUFFER];
+            _suit_encode_image_digest(comp, digest, &len_digest);
+            nanocbor_put_bstr(&nc, digest, len_digest);
+
+            /* image size */
+            nanocbor_fmt_uint(&nc, suit_param_image_size);
+            nanocbor_fmt_uint(&nc, comp->size);
+
+        /* directives and conditions */
+        nanocbor_fmt_uint(&nc, suit_cond_vendor_id); nanocbor_fmt_null(&nc);
+        nanocbor_fmt_uint(&nc, suit_cond_class_id); nanocbor_fmt_null(&nc);
+
+    *bytes = nanocbor_encoded_len(&nc);
+    return 0;
+}
+
+int _suit_encode_common_components(suit_context_t * ctx, uint8_t * wptr, size_t * bytes)
+{
+    CBOR_INIT_ARR(nc, wptr, *bytes, ctx->component_count);
+
+    /* Components are declared in an array of single-element arrays containing single-byte names. */
+    uint8_t name = 0;
+    for (int i = 0; i < ctx->component_count; i++) {
+        nanocbor_fmt_array(&nc, 1);
+        nanocbor_put_bstr(&nc, &name, 1);
+        name++;
+    }
+
+    *bytes = nanocbor_encoded_len(&nc);
+    return 0;
+}
+
+int _suit_encode_common(suit_context_t * ctx, uint8_t * wptr, size_t * bytes)
+{
+    CBOR_INIT_MAP(nc, wptr, *bytes, 2);
+
+        /* components */
+        nanocbor_fmt_uint(&nc, suit_common_comps);
+        size_t len_comps = STACK_BUFFER; uint8_t comps[STACK_BUFFER];
+        _suit_encode_common_components(ctx, comps, &len_comps);
+        nanocbor_put_bstr(&nc, comps, len_comps);
+
+        /* common sequence */
+        nanocbor_fmt_uint(&nc, suit_common_seq);
+        size_t len_seq = STACK_BUFFER; uint8_t seq[STACK_BUFFER];
+        _suit_encode_common_sequence(&ctx->components[0], seq, &len_seq);
+        nanocbor_put_bstr(&nc, seq, len_seq);
+
+    *bytes = nanocbor_encoded_len(&nc);
+    return 0;
+}
+
+/***************************************************************************************************
+ * @section Manifest encoder (public)
+ **************************************************************************************************/
+
+int suit_encode(suit_context_t * ctx, uint8_t * man, size_t * len_man)
+{
+    /**
+     * Some parameters are hard-coded here to support a download/install/secure boot scenario. The
+     * top-level map contains all fields supported by suit_parse() except payload fetch. The remote
+     * URI should, instead, be encoded in the install sequence (according to Example 2 in the I-D).
+     **/
+
+    uint8_t buf[STACK_BUFFER];
+    size_t len_buf;
+
+    /* encode top-level map tag*/
+    CBOR_INIT_MAP(nc, man, *len_man, 6);
+
+        /* manifest version */
+        nanocbor_fmt_uint(&nc, suit_header_manifest_version);
+        nanocbor_fmt_uint(&nc, ctx->version);
+
+        /* manifest sequence number */
+        nanocbor_fmt_uint(&nc, suit_header_manifest_seq_num);
+        nanocbor_fmt_uint(&nc, ctx->sequence_number);
+
+        /* common */
+        nanocbor_fmt_uint(&nc, suit_header_common);
+        len_buf = STACK_BUFFER;
+        _suit_encode_common(ctx, buf, &len_buf);
+        nanocbor_put_bstr(&nc, buf, len_buf);
+
+        /* install */ 
+        nanocbor_fmt_uint(&nc, suit_header_install);
+        len_buf = STACK_BUFFER;
+        _suit_encode_install(&ctx->components[0], buf, &len_buf);
+        nanocbor_put_bstr(&nc, buf, len_buf);
+    
+        /* validate */
+        nanocbor_fmt_uint(&nc, suit_header_validate);
+        len_buf = STACK_BUFFER;
+        _suit_encode_oneoff((uint32_t) suit_cond_image_match, buf, &len_buf);
+        nanocbor_put_bstr(&nc, buf, len_buf);
+
+        /* run */
+        nanocbor_fmt_uint(&nc, suit_header_run);
+        len_buf = STACK_BUFFER;
+        _suit_encode_oneoff((uint32_t) suit_dir_run, buf, &len_buf);
+        nanocbor_put_bstr(&nc, buf, len_buf);
+
+    *len_man = nanocbor_encoded_len(&nc);
+    return 0;
 }
 
 /***************************************************************************************************
