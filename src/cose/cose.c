@@ -1,46 +1,50 @@
 /**
- * Copyright (c) 2020, RISE Research Institutes of Sweden
+ * Copyright (c) 2020, RISE Research Institutes of Sweden AB
  * All rights reserved.
  *
- * Redistribution and use in source and binary forms, with or without modification, are permitted
- * provided that the following conditions are met:
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
  *
- * 1. Redistributions of source code must retain the above copyright notice, this list of conditions
- * and the following disclaimer.
+ * 1. Redistributions of source code must retain the above copyright notice,
+ * this list of conditions and the following disclaimer.
  *
- * 2. Redistributions in binary form must reproduce the above copyright notice, this list of
- * conditions and the following disclaimer in the documentation and/or other materials provided with
- * the distribution.
+ * 2. Redistributions in binary form must reproduce the above copyright notice,
+ * this list of conditions and the following disclaimer in the documentation
+ * and/or other materials provided with the distribution.
  *
- * 3. Neither the name of the copyright holder nor the names of its contributors may be used to 
- * endorse or promote products derived from this software without specific prior written permission.
+ * 3. Neither the name of the copyright holder nor the names of its contributors
+ * may be used to endorse or promote products derived from this software without
+ * specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR
- * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND
- * FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR 
- * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
- * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
- * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY
- * WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR 
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
  **/
 
 #include "cose.h"
 
-/***************************************************************************************************
+/*******************************************************************************
  * @section Common to all COSE objects
- **************************************************************************************************/
+ ******************************************************************************/
 
-#define HASH_TSTR(md_ctx, nc, buf, len_buf, str)                                                   \
-    nanocbor_encoder_init(&nc, buf, len_buf);                                                      \
-    nanocbor_fmt_tstr(&nc, strlen((const char *) str));                                            \
-    mbedtls_md_update(&md_ctx, buf, nanocbor_encoded_len(&nc));                                    \
+#define HASH_TSTR(md_ctx, nc, buf, len_buf, str)                               \
+    nanocbor_encoder_init(&nc, buf, len_buf);                                  \
+    nanocbor_fmt_tstr(&nc, strlen((const char *) str));                        \
+    mbedtls_md_update(&md_ctx, buf, nanocbor_encoded_len(&nc));                \
     mbedtls_md_update(&md_ctx, str, strlen((const char *) str));
 
-#define HASH_BSTR(md_ctx, nc, buf, len_buf, bstr, len_bstr)                                        \
-    nanocbor_encoder_init(&nc, buf, len_buf);                                                      \
-    nanocbor_fmt_bstr(&nc, len_bstr);                                                              \
-    mbedtls_md_update(&md_ctx, buf, nanocbor_encoded_len(&nc));                                    \
+#define HASH_BSTR(md_ctx, nc, buf, len_buf, bstr, len_bstr)                    \
+    nanocbor_encoder_init(&nc, buf, len_buf);                                  \
+    nanocbor_fmt_bstr(&nc, len_bstr);                                          \
+    mbedtls_md_update(&md_ctx, buf, nanocbor_encoded_len(&nc));                \
     mbedtls_md_update(&md_ctx, bstr, len_bstr);
 
 void cose_set_kid(cose_key_t * key, const uint8_t * kid, size_t len_kid)
@@ -63,9 +67,8 @@ int cose_encode_prot(cose_key_t * key, nanocbor_encoder_t * nc)
     return nanocbor_encoded_len(nc);
 }
 
-/***************************************************************************************************
- * @section COSE Sign1
- **************************************************************************************************/
+/******************************************************************************* * @section COSE Sign1
+ ******************************************************************************/
 
 int cose_sign_init(
         cose_sign_context_t * ctx, 
@@ -147,7 +150,8 @@ int cose_sign1_hash(
     nanocbor_fmt_array(&nc, 4);
     mbedtls_md_update(&md_ctx, buf, nanocbor_encoded_len(&nc));
 
-    HASH_TSTR(md_ctx, nc, buf, len_buf, (const unsigned char *) COSE_CONTEXT_SIGN1)
+    HASH_TSTR(md_ctx, nc, buf, len_buf, 
+            (const unsigned char *) COSE_CONTEXT_SIGN1)
     HASH_BSTR(md_ctx, nc, buf, len_buf, prot, len_prot)
     HASH_BSTR(md_ctx, nc, buf, len_buf, ctx->key.aad, ctx->key.len_aad)
     HASH_BSTR(md_ctx, nc, buf, len_buf, pld, len_pld)
@@ -211,11 +215,12 @@ int cose_sign1_write(cose_sign_context_t * ctx,
     
     cose_sign1_hash(ctx, pld, len_pld, hash);
 
-    if (mbedtls_ecdsa_write_signature(ctx->pk.pk_ctx, ctx->md_alg, hash, ctx->len_hash, 
-                sig, &ctx->len_sig, NULL, NULL)) 
+    if (mbedtls_ecdsa_write_signature(ctx->pk.pk_ctx, ctx->md_alg, 
+                hash, ctx->len_hash, sig, &ctx->len_sig, NULL, NULL)) 
         return COSE_ERROR_SIGN;
 
-    if (cose_sign1_encode(&ctx->key, pld, len_pld, sig, ctx->len_sig, obj, len_obj))
+    if (cose_sign1_encode(&ctx->key, pld, len_pld, sig, ctx->len_sig, 
+                obj, len_obj))
         return COSE_ERROR_ENCODE;
 
     return COSE_ERROR_NONE;
@@ -229,7 +234,8 @@ int cose_sign1_read(cose_sign_context_t * ctx,
     uint8_t * sig;
     size_t len_sig;
 
-    if (cose_sign1_decode(ctx, obj, len_obj, pld, len_pld, (const uint8_t **) &sig, &len_sig, hash))
+    if (cose_sign1_decode(ctx, obj, len_obj, pld, len_pld, 
+                (const uint8_t **) &sig, &len_sig, hash))
         return COSE_ERROR_DECODE;
     if (mbedtls_pk_verify(&ctx->pk, ctx->md_alg, hash, 0, sig, len_sig))
         return COSE_ERROR_AUTHENTICATE;
@@ -242,9 +248,8 @@ void cose_sign_free(cose_sign_context_t * ctx)
     mbedtls_pk_free(&ctx->pk);
 }
 
-/***************************************************************************************************
- * @section COSE Encrypt0
- **************************************************************************************************/
+/******************************************************************************* * @section COSE Encrypt0
+ ******************************************************************************/
 
 int cose_crypt_init(cose_crypt_context_t * ctx,
         const uint8_t * key, cose_alg_t alg,
@@ -285,8 +290,9 @@ int cose_do_encrypt(
         ctx->key.alg == cose_alg_aes_gcm_192 ||
         ctx->key.alg == cose_alg_aes_gcm_256) {
 
-        if (mbedtls_gcm_crypt_and_tag(&ctx->gcm, MBEDTLS_GCM_ENCRYPT, len_pld, ctx->iv, ctx->len_iv,
-                    tbe, len_tbe, pld, enc, ctx->len_mac, enc + len_pld))
+        if (mbedtls_gcm_crypt_and_tag(&ctx->gcm, MBEDTLS_GCM_ENCRYPT, len_pld,
+                    ctx->iv, ctx->len_iv, tbe, len_tbe, pld, enc, ctx->len_mac,
+                    enc + len_pld))
             return COSE_ERROR_ENCRYPT;
 
     } else return COSE_ERROR_UNSUPPORTED;
@@ -304,8 +310,8 @@ int cose_do_decrypt(
         ctx->key.alg == cose_alg_aes_gcm_256) {
 
         *len_pld = len_enc - ctx->len_mac;
-        if (mbedtls_gcm_auth_decrypt(&ctx->gcm, *len_pld, ctx->iv, ctx->len_iv, tbe, len_tbe, 
-                    enc + *len_pld, ctx->len_mac, enc, pld))
+        if (mbedtls_gcm_auth_decrypt(&ctx->gcm, *len_pld, ctx->iv, ctx->len_iv,
+                    tbe, len_tbe, enc + *len_pld, ctx->len_mac, enc, pld))
             return COSE_ERROR_DECRYPT;
             
     } else return COSE_ERROR_UNSUPPORTED;
@@ -387,7 +393,8 @@ int cose_encrypt0_decode(
         int32_t map_key;
         if (nanocbor_get_int32(&map, &map_key) < 0) return COSE_ERROR_DECODE;
         if (map_key == cose_header_iv) {
-            if (nanocbor_get_bstr(&map, (const uint8_t **) &ctx->iv, &ctx->len_iv) < 0)
+            if (nanocbor_get_bstr(
+                        &map, (const uint8_t **) &ctx->iv, &ctx->len_iv) < 0)
                 return COSE_ERROR_DECODE;
             else break;
         }
@@ -411,8 +418,10 @@ int cose_encrypt0_write(cose_crypt_context_t *ctx,
     uint8_t tbe[len_tbe];
 
     if (cose_tbe0(&ctx->key,tbe, &len_tbe)) return COSE_ERROR_ENCODE;
-    if (cose_do_encrypt(ctx, pld, len_pld, tbe, len_tbe, enc)) return COSE_ERROR_ENCRYPT;
-    if (cose_encrypt0_encode(ctx, enc, len_enc,  obj, len_obj)) return COSE_ERROR_ENCODE;
+    if (cose_do_encrypt(ctx, pld, len_pld, tbe, len_tbe, enc)) 
+        return COSE_ERROR_ENCRYPT;
+    if (cose_encrypt0_encode(ctx, enc, len_enc,  obj, len_obj)) 
+        return COSE_ERROR_ENCODE;
 
     return COSE_ERROR_NONE;
 }
@@ -427,9 +436,11 @@ int cose_encrypt0_read(cose_crypt_context_t * ctx,
     uint8_t * enc; size_t len_enc;
 
     if (cose_tbe0(&ctx->key, tbe, &len_tbe))  return COSE_ERROR_ENCODE;
-    if (cose_encrypt0_decode(ctx, obj, len_obj, (const uint8_t **) &enc, &len_enc))
+    if (cose_encrypt0_decode(ctx, obj, len_obj, 
+                (const uint8_t **) &enc, &len_enc))
         return COSE_ERROR_DECODE;
-    if (cose_do_decrypt(ctx, enc, len_enc, tbe, len_tbe, pld, len_pld)) return COSE_ERROR_DECRYPT;
+    if (cose_do_decrypt(ctx, enc, len_enc, tbe, len_tbe, pld, len_pld)) 
+        return COSE_ERROR_DECRYPT;
 
     return COSE_ERROR_NONE;
 }

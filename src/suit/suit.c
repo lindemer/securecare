@@ -1,41 +1,48 @@
 /**
- * Copyright (c) 2020, RISE Research Institutes of Sweden
+ * Copyright (c) 2020, RISE Research Institutes of Sweden AB
  * All rights reserved.
  *
- * Redistribution and use in source and binary forms, with or without modification, are permitted
- * provided that the following conditions are met:
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
  *
- * 1. Redistributions of source code must retain the above copyright notice, this list of conditions
- * and the following disclaimer.
+ * 1. Redistributions of source code must retain the above copyright notice,
+ * this list of conditions and the following disclaimer.
  *
- * 2. Redistributions in binary form must reproduce the above copyright notice, this list of
- * conditions and the following disclaimer in the documentation and/or other materials provided with
- * the distribution.
+ * 2. Redistributions in binary form must reproduce the above copyright notice,
+ * this list of conditions and the following disclaimer in the documentation
+ * and/or other materials provided with the distribution.
  *
- * 3. Neither the name of the copyright holder nor the names of its contributors may be used to 
- * endorse or promote products derived from this software without specific prior written permission.
+ * 3. Neither the name of the copyright holder nor the names of its contributors
+ * may be used to endorse or promote products derived from this software without
+ * specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR
- * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND
- * FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR 
- * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
- * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
- * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY
- * WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR 
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
  **/
 
 #include "suit.h"
 
 /**
- * All strings in the SUIT manifest are copied by reference to their memory locations in the 
- * manifest itself. The caller must not deallocate the memory containing the original manifest 
- * until processing is complete. This parser does not support soft-failure; any error will result 
- * in total manifest rejection.
+ * All strings in the SUIT manifest are copied by reference to their memory
+ * locations in the manifest itself. The caller must not deallocate the memory
+ * containing the original manifest until processing is complete. This parser
+ * does not support soft-failure; any error will result in total rejection.
  **/
 
-#define SUIT_STACK_BUFFER 256 /* default size of stack-allocated buffers for serialization */
-#define SUIT_HASH_SIZE 32 /* default size of message digest (SHA-256) */
+/* default size of stack-allocated buffers for serialization */
+#define SUIT_STACK_BUFFER 256
+
+/* default size of message digest (SHA-256) */
+#define SUIT_HASH_SIZE 32
 
 #define CBOR_ENTER_ARR(nc1, nc2) \
     if (nanocbor_enter_array(&nc1, &nc2) < 0) return 1;
@@ -60,11 +67,12 @@
     nanocbor_encoder_init(&nc, buf, len_buf); \
     nanocbor_fmt_map(&nc, pairs);
 
-/***************************************************************************************************
+/*******************************************************************************
  * @section Manifest parser (private)
- **************************************************************************************************/
+ ******************************************************************************/
 
-int _suit_parse_image_digest(suit_component_t * comp, const uint8_t * md, size_t len_md)
+int _suit_parse_image_digest(suit_component_t * comp,
+        const uint8_t * md, size_t len_md)
 {
     nanocbor_value_t top, arr;
     nanocbor_decoder_init(&top, md, len_md);
@@ -76,7 +84,8 @@ int _suit_parse_image_digest(suit_component_t * comp, const uint8_t * md, size_t
     return 0;
 }
 
-int _suit_parse_parameters(suit_context_t * ctx, size_t idx, nanocbor_value_t * map, bool override)
+int _suit_parse_parameters(suit_context_t * ctx,
+        size_t idx, nanocbor_value_t * map, bool override)
 {
     suit_component_t * comp = &ctx->components[idx];
 
@@ -85,7 +94,7 @@ int _suit_parse_parameters(suit_context_t * ctx, size_t idx, nanocbor_value_t * 
         CBOR_GET_INT(*map, map_key);
         switch (map_key) {
 
-            /* The vendor id, class id and uri fields are copied by reference. */
+            /* The id and uri fields are copied by reference. */
             case suit_param_vendor_id:
                 if (override || comp->vendor_id == NULL)
                     CBOR_GET_BSTR(*map, comp->vendor_id, comp->len_vendor_id);
@@ -101,31 +110,35 @@ int _suit_parse_parameters(suit_context_t * ctx, size_t idx, nanocbor_value_t * 
                     CBOR_GET_TSTR(*map, comp->uri, comp->len_uri);
                 break;
 
-            /* Image digests are wrapped as follows: bstr(arr(uint, bstr(hash))). */ 
+            /* Image digests are wrapped: bstr(arr(uint, bstr(hash))). */ 
             case suit_param_image_digest:
                 if (override || comp->digest == NULL) {
-                    uint8_t * md; size_t len_md; CBOR_GET_BSTR(*map, md, len_md);
+                    uint8_t * md; size_t len_md;
+                    CBOR_GET_BSTR(*map, md, len_md);
                     if (_suit_parse_image_digest(comp, md, len_md)) return 1; 
                 }
                 break;
 
-            /* The image size and archive (i.e., compression) information are copied by value. */
+            /* The image size and archive information are copied by value. */
             case suit_param_image_size:
                 if (override || comp->size == 0) CBOR_GET_INT(*map, comp->size);
                 break;
 
             case suit_param_archive_info:
                 if (override || comp->archive_alg == 0)
-                    if (nanocbor_get_uint32(map, (uint32_t *) &comp->archive_alg) < 0) return 1;
+                    if (nanocbor_get_uint32(
+                                map, (uint32_t *) &comp->archive_alg) < 0)
+                        return 1;
                 break;
 
             /**
-             * A source is a reference from one manifest component to another. This is stored as a
-             * pointer in the suit_component struct.
+             * A source is a reference from one manifest component to another.
+             * This is stored as a pointer in the suit_component struct.
              **/
             case suit_param_source_comp:
                 CBOR_GET_INT(*map, map_val);
-                if (override || comp->source == NULL) comp->source = &ctx->components[map_val];
+                if (override || comp->source == NULL) 
+                    comp->source = &ctx->components[map_val];
                 break;
 
             /* FAIL if unsupported */
@@ -136,7 +149,8 @@ int _suit_parse_parameters(suit_context_t * ctx, size_t idx, nanocbor_value_t * 
     return 0;
 }
 
-int _suit_parse_sequence(suit_context_t * ctx, uint32_t idx, const uint8_t * seq, size_t len_seq)
+int _suit_parse_sequence(suit_context_t * ctx,
+        uint32_t idx, const uint8_t * seq, size_t len_seq)
 {
     nanocbor_value_t top, arr, subarr, map;
     nanocbor_decoder_init(&top, seq, len_seq);
@@ -172,8 +186,8 @@ int _suit_parse_sequence(suit_context_t * ctx, uint32_t idx, const uint8_t * seq
                 break;
 
             /**
-             * This condition is underspecified in the latest draft. There is insufficient 
-             * information to create a working implementation.
+             * This condition is underspecified in the latest draft. There is
+             * insufficient information to create a working implementation.
              **/
 
             /* CONDITION check component offset */
@@ -181,8 +195,9 @@ int _suit_parse_sequence(suit_context_t * ctx, uint32_t idx, const uint8_t * seq
                 nanocbor_skip(&arr); break;
 
             /**
-             * This directive provides an ordered list of command sequences to attempt. The first 
-             * to succeed is accepted. If all fail, the manifest is rejected.
+             * This directive provides an ordered list of command sequences to
+             * attempt. The first to succeed is accepted. If all fail, the
+             * manifest is rejected.
              **/
 
             /* DIRECTIVE try each */
@@ -199,8 +214,8 @@ int _suit_parse_sequence(suit_context_t * ctx, uint32_t idx, const uint8_t * seq
                 nanocbor_skip(&arr); break;
 
             /**
-             * These conditions and directives are not parsed directly. They are implied by the
-             * existence of other fields in the manifest.
+             * These conditions and directives are not parsed directly. They
+             * are implied by the existence of other fields in the manifest.
              *  - vendor ids should be checked, if present
              *  - class ids should be checked, if present
              *  - digests should be verified, if present
@@ -236,7 +251,8 @@ int _suit_parse_sequence(suit_context_t * ctx, uint32_t idx, const uint8_t * seq
     return 0;
 }
 
-int _suit_parse_common(suit_context_t * ctx, const uint8_t * comm, size_t len_comm)
+int _suit_parse_common(suit_context_t * ctx,
+        const uint8_t * comm, size_t len_comm)
 {
     nanocbor_value_t top, map, arr, elem;
     nanocbor_decoder_init(&top, comm, len_comm);
@@ -249,9 +265,10 @@ int _suit_parse_common(suit_context_t * ctx, const uint8_t * comm, size_t len_co
         switch (map_key) {
 
             /**
-             * The number of components listed in the manifest must not exceed the recipient's 
-             * specified limit (see I-D Section 5.4). The components are referenced by index in the 
-             * manifest. The component ids can be discarded.
+             * The number of components listed in the manifest must not exceed
+             * the recipient's specified limit (see I-D Section 5.4). The
+             * components are referenced by index in the manifest. The
+             * component ids can be discarded.
              **/
             case suit_common_comps:
                 CBOR_GET_BSTR(map, tmp, len_tmp);
@@ -275,9 +292,9 @@ int _suit_parse_common(suit_context_t * ctx, const uint8_t * comm, size_t len_co
     return 0;
 }
 
-/***************************************************************************************************
+/*******************************************************************************
  * @section Manifest parser (public)
- **************************************************************************************************/
+ ******************************************************************************/
 
 int suit_parse(suit_context_t * ctx, const uint8_t * man, size_t len_man)
 {
@@ -358,7 +375,8 @@ int suit_parse(suit_context_t * ctx, const uint8_t * man, size_t len_man)
 bool suit_match_digest(suit_context_t * ctx, size_t idx, 
         const uint8_t * digest, size_t len_digest)
 {
-    if (ctx->components[idx].digest_alg != 0 && ctx->components[idx].digest != NULL)
+    if (ctx->components[idx].digest_alg != 0 
+            && ctx->components[idx].digest != NULL)
         if (len_digest == ctx->components[idx].len_digest)
             if (!memcmp(digest, ctx->components[idx].digest, len_digest))
                 return true;
@@ -380,14 +398,15 @@ bool suit_match_vendor_id(suit_context_t * ctx, size_t idx,
 {
     if (ctx->components[idx].vendor_id != NULL)
         if (len_vendor_id == ctx->components[idx].len_vendor_id)
-            if (!memcmp(vendor_id, ctx->components[idx].vendor_id, len_vendor_id))
+            if (!memcmp(vendor_id, ctx->components[idx].vendor_id,
+                        len_vendor_id))
                 return true;
     return false;
 }
 
-/***************************************************************************************************
+/*******************************************************************************
  * @section Manifest encoder (private)
- **************************************************************************************************/
+ ******************************************************************************/
 
 int _suit_encode_oneoff(uint32_t val, uint8_t * wptr, size_t * bytes)
 {
@@ -401,7 +420,8 @@ int _suit_encode_oneoff(uint32_t val, uint8_t * wptr, size_t * bytes)
     return 0;
 }
 
-int _suit_encode_install(suit_component_t * comp, uint8_t * wptr, size_t * bytes)
+int _suit_encode_install(suit_component_t * comp,
+        uint8_t * wptr, size_t * bytes)
 {
     nanocbor_encoder_t nc;
     CBOR_INIT_ARR(nc, wptr, *bytes, 6);
@@ -421,7 +441,8 @@ int _suit_encode_install(suit_component_t * comp, uint8_t * wptr, size_t * bytes
     return 0;
 }
 
-int _suit_encode_image_digest(suit_component_t * comp, uint8_t * wptr, size_t * bytes)
+int _suit_encode_image_digest(suit_component_t * comp,
+        uint8_t * wptr, size_t * bytes)
 {
     nanocbor_encoder_t nc;
     CBOR_INIT_ARR(nc, wptr, *bytes, 2);
@@ -433,7 +454,8 @@ int _suit_encode_image_digest(suit_component_t * comp, uint8_t * wptr, size_t * 
     return 0;
 }
 
-int _suit_encode_common_sequence(suit_component_t * comp, uint8_t * wptr, size_t * bytes)
+int _suit_encode_common_sequence(suit_component_t * comp,
+        uint8_t * wptr, size_t * bytes)
 {
     nanocbor_encoder_t nc;
     CBOR_INIT_ARR(nc, wptr, *bytes, 6);
@@ -452,7 +474,8 @@ int _suit_encode_common_sequence(suit_component_t * comp, uint8_t * wptr, size_t
 
             /* image digest */
             nanocbor_fmt_uint(&nc, suit_param_image_digest);
-            size_t len_digest = SUIT_STACK_BUFFER; uint8_t digest[SUIT_STACK_BUFFER];
+            size_t len_digest = SUIT_STACK_BUFFER;
+            uint8_t digest[SUIT_STACK_BUFFER];
             _suit_encode_image_digest(comp, digest, &len_digest);
             nanocbor_put_bstr(&nc, digest, len_digest);
 
@@ -468,12 +491,13 @@ int _suit_encode_common_sequence(suit_component_t * comp, uint8_t * wptr, size_t
     return 0;
 }
 
-int _suit_encode_common_components(suit_context_t * ctx, uint8_t * wptr, size_t * bytes)
+int _suit_encode_common_components(suit_context_t * ctx,
+        uint8_t * wptr, size_t * bytes)
 {
     nanocbor_encoder_t nc;
     CBOR_INIT_ARR(nc, wptr, *bytes, ctx->component_count);
 
-    /* Components are declared in an array of single-element arrays containing single-byte names. */
+    /* Components are declared in an array of single-element arrays... */
     uint8_t name = 0;
     for (int i = 0; i < ctx->component_count; i++) {
         nanocbor_fmt_array(&nc, 1);
@@ -506,16 +530,17 @@ int _suit_encode_common(suit_context_t * ctx, uint8_t * wptr, size_t * bytes)
     return 0;
 }
 
-/***************************************************************************************************
+/*******************************************************************************
  * @section Manifest encoder (public)
- **************************************************************************************************/
+ ******************************************************************************/
 
 int suit_encode(suit_context_t * ctx, uint8_t * man, size_t * len_man)
 {
     /**
-     * Some parameters are hard-coded here to support a download/install/secure boot scenario. The
-     * top-level map contains all fields supported by suit_parse() except payload fetch. The remote
-     * uri should, instead, be encoded in the install sequence (according to Example 2 in the I-D).
+     * Some parameters are hard-coded here to support a download/install/secure
+     * boot scenario. The top-level map contains all fields supported by 
+     * suit_parse() except payload fetch. The remote uri should, instead, be
+     * encoded in the install sequence (according to Example 2 in the I-D).
      **/
 
     uint8_t buf[SUIT_STACK_BUFFER];
@@ -561,9 +586,8 @@ int suit_encode(suit_context_t * ctx, uint8_t * man, size_t * len_man)
     return 0;
 }
 
-/***************************************************************************************************
- * @section Authentication wrapper (public)
- **************************************************************************************************/
+/******************************************************************************* * @section Authentication wrapper (public)
+ ******************************************************************************/
 
 extern void xxd(const uint8_t * data, size_t len, int w);
 
@@ -576,7 +600,8 @@ int suit_unwrap(const char * pem,
     if (cose_sign_init(&ctx, cose_mode_r, pem)) return 1;
 
     /* hash_in is extracted from the manifest; hash_out is computed */
-    const mbedtls_md_info_t * md_info = mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
+    const mbedtls_md_info_t * md_info = 
+        mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
     uint8_t hash_out[SUIT_HASH_SIZE];
 
     /* bytestrings to be extracted */
@@ -603,30 +628,29 @@ int suit_unwrap(const char * pem,
                 CBOR_GET_BSTR(tmp1, auth, len_auth);
 
                 /* get payload */
-                if (cose_sign1_read(&ctx, auth, len_auth, (const uint8_t **) &pld, &len_pld))
+                if (cose_sign1_read(&ctx, auth, len_auth, 
+                            (const uint8_t **) &pld, &len_pld))
                     return 1;
 
                 /* extract manifest hash */
                 nanocbor_decoder_init(&tmp0, pld, len_pld);
                 CBOR_ENTER_ARR(tmp0, tmp1);
-                uint32_t digest_alg;
-                CBOR_GET_INT(tmp1, digest_alg);
+                uint32_t digest_alg; CBOR_GET_INT(tmp1, digest_alg);
                 if (digest_alg != suit_digest_alg_sha256) return 1;
                 CBOR_GET_BSTR(tmp1, hash_in, len_hash);
-
                 break;
 
             case suit_envelope_manifest:
 
-                /* get the start address of the bytestring-wrapped manifest */
+                /* get the start address of the bstr-wrapped manifest */
                 man_start = (uint8_t *) map.cur;
 
                 /* extract manifest */
                 CBOR_GET_BSTR(map, *man, *len_man);
 
-                /* hash the bytestring-wrapped manifest */
-                mbedtls_md(md_info, man_start, (*man + *len_man) - man_start, hash_out); 
-
+                /* hash the bstr-wrapped manifest */
+                mbedtls_md(md_info, man_start, 
+                        (*man + *len_man) - man_start, hash_out); 
                 break;
         }
     }
@@ -646,15 +670,16 @@ int suit_wrap(const char * pem,
     cose_sign_context_t ctx;
     if (cose_sign_init(&ctx, cose_mode_w, pem)) return 1;
 
-    /* wrap encoded manifest in a bytestring */
+    /* wrap encoded manifest in a bstr */
     uint8_t man_bstr[SUIT_STACK_BUFFER];
     nanocbor_encoder_t nc;
     nanocbor_encoder_init(&nc, man_bstr, SUIT_STACK_BUFFER);
     nanocbor_put_bstr(&nc, man, len_man);
     size_t len_man_bstr = nanocbor_encoded_len(&nc);
 
-    /* hash the bytestring-wrapped manifest */
-    const mbedtls_md_info_t * md_info = mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
+    /* hash the bstr-wrapped manifest */
+    const mbedtls_md_info_t * md_info = 
+        mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
     uint8_t hash[SUIT_HASH_SIZE];
     mbedtls_md(md_info, man_bstr, len_man_bstr, hash); 
 
@@ -670,7 +695,7 @@ int suit_wrap(const char * pem,
     size_t len_auth = SUIT_STACK_BUFFER;
     cose_sign1_write(&ctx, pld, len_pld, auth, &len_auth);
 
-    /* wrap the encoded authentication wrapper in a bytestring AND an array... */
+    /* wrap the encoded authentication wrapper in a bstr AND an array... */
     uint8_t auth_arr[SUIT_STACK_BUFFER];
     CBOR_INIT_ARR(nc, auth_arr, SUIT_STACK_BUFFER, 1);
     nanocbor_put_bstr(&nc, auth, len_auth);

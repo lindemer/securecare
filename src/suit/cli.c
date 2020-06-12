@@ -1,42 +1,46 @@
 /**
- * Copyright (c) 2020, RISE Research Institutes of Sweden
+ * Copyright (c) 2020, RISE Research Institutes of Sweden AB
  * All rights reserved.
  *
- * Redistribution and use in source and binary forms, with or without modification, are permitted
- * provided that the following conditions are met:
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
  *
- * 1. Redistributions of source code must retain the above copyright notice, this list of conditions
- * and the following disclaimer.
+ * 1. Redistributions of source code must retain the above copyright notice,
+ * this list of conditions and the following disclaimer.
  *
- * 2. Redistributions in binary form must reproduce the above copyright notice, this list of
- * conditions and the following disclaimer in the documentation and/or other materials provided with
- * the distribution.
+ * 2. Redistributions in binary form must reproduce the above copyright notice,
+ * this list of conditions and the following disclaimer in the documentation
+ * and/or other materials provided with the distribution.
  *
- * 3. Neither the name of the copyright holder nor the names of its contributors may be used to 
- * endorse or promote products derived from this software without specific prior written permission.
+ * 3. Neither the name of the copyright holder nor the names of its contributors
+ * may be used to endorse or promote products derived from this software without
+ * specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR
- * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND
- * FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR 
- * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
- * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
- * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY
- * WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR 
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
  **/
 
-#define USAGE fprintf(stderr,                                                           \
-"Copyright (c) 2020, RISE Research Institutes of Sweden\n"                              \
-"All rights reserved.\n"                                                                \
-"\nUsage: %s [-hknpu] > [output file] < [input file]\n"                                 \
-"\t-h displays this text\n"                                                             \
-"\t-k [key file]\n"                                                                     \
-"\t-n [sequence number]\n"                                                              \
-"\t-p parses a manifest from stdin and decodes it\n"                                    \
-"\t-u [remote firmware URI]\n"                                                          \
-"\nExamples:\n"                                                                         \
-"%s -k keys/priv.pem -n 0 -u coaps://[::1]/firmware > manifest.cbor < firmware.exe\n"   \
-"%s -k keys/pub.pem -p < manifest.cbor\n"                                               \
+#define USAGE fprintf(stderr,                                                          \
+"Copyright (c) 2020, RISE Research Institutes of Sweden\n"                             \
+"All rights reserved.\n"                                                               \
+"\nUsage: %s [-hknpu] > [output file] < [input file]\n"                                \
+"\t-h displays this text\n"                                                            \
+"\t-k [key file]\n"                                                                    \
+"\t-n [sequence number]\n"                                                             \
+"\t-p parses a manifest from stdin and decodes it\n"                                   \
+"\t-u [remote firmware URI]\n"                                                         \
+"\nExamples:\n"                                                                        \
+"%s -k keys/priv.pem -n 0 -u coaps://[::1]/firmware > manifest.cbor < firmware.exe\n"  \
+"%s -k keys/pub.pem -p < manifest.cbor\n"                                              \
 , argv[0], argv[0], argv[0]);
 
 #define HEAP_BUFFER 2048
@@ -50,7 +54,8 @@
 #include "suit.h"
 
 void read_stdin(uint8_t * wptr, uint32_t * bytes);
-void hash_firmware(const uint8_t * buffer, const uint32_t len_buffer, suit_component_t * component); 
+void hash_firmware(const uint8_t * buffer, const uint32_t len_buffer, 
+        suit_component_t * component); 
 void print_bstr(const uint8_t * buffer, const uint32_t len_buffer);
 void xxd(const uint8_t * data, size_t len, int w);
 
@@ -101,7 +106,8 @@ int main (int argc, char *argv[])
     if (p) { /* parse and decode existing manifest */
 
         uint8_t * manifest = malloc(HEAP_BUFFER);
-        if (suit_unwrap(pem, buffer, HEAP_BUFFER, (const uint8_t **) &manifest, &obytes)) {
+        if (suit_unwrap(pem, buffer, HEAP_BUFFER, 
+                    (const uint8_t **) &manifest, &obytes)) {
             fprintf(stderr, "Signature verification failed.\n");
             exit(EXIT_FAILURE);
         }
@@ -126,13 +132,16 @@ int main (int argc, char *argv[])
             }
 
             printf("(%d) Class ID\t\t", i); 
-            xxd(ctx.components[i].class_id, ctx.components[i].len_class_id, 32);
+            xxd(ctx.components[i].class_id, 
+                ctx.components[i].len_class_id, 32);
 
             printf("(%d) Vendor ID\t\t", i); 
-            xxd(ctx.components[i].vendor_id, ctx.components[i].len_vendor_id, 32);
+            xxd(ctx.components[i].vendor_id, 
+                ctx.components[i].len_vendor_id, 32);
 
             printf("(%d) Image digest\t", i); 
-            xxd(ctx.components[i].digest, ctx.components[i].len_digest, 32);
+            xxd(ctx.components[i].digest,
+                ctx.components[i].len_digest, 32);
 
             printf("(%d) Image size\t\t%d [B]\n", i, ctx.components[i].size);
         
@@ -192,9 +201,11 @@ void read_stdin(uint8_t * wptr, uint32_t * bytes)
     }
 }
 
-void hash_firmware(const uint8_t * buffer, const uint32_t len_buffer, suit_component_t * component)
+void hash_firmware(const uint8_t * buffer, const uint32_t len_buffer,
+        suit_component_t * component)
 {
-    const mbedtls_md_info_t * md_info = mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
+    const mbedtls_md_info_t * md_info = 
+        mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
     component->digest = malloc(mbedtls_md_get_size(md_info));
     mbedtls_md(md_info, buffer, len_buffer, component->digest);
     component->len_digest = mbedtls_md_get_size(md_info); 
