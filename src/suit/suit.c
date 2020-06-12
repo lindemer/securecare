@@ -586,7 +586,8 @@ int suit_encode(suit_context_t * ctx, uint8_t * man, size_t * len_man)
     return 0;
 }
 
-/******************************************************************************* * @section Authentication wrapper (public)
+/*******************************************************************************
+ * @section Authentication wrapper (public)
  ******************************************************************************/
 
 extern void xxd(const uint8_t * data, size_t len, int w);

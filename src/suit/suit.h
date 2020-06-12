@@ -224,7 +224,7 @@ typedef struct {
     uint32_t sequence_number;
     uint32_t component_count;
 
-    /* Recipients should specify a maximum number of components (see I-D Section 5.4). */ 
+    /* Recipients should specify a maximum number of components. */ 
     suit_component_t components[SUIT_MAX_COMPONENTS];
 
 } suit_context_t;
