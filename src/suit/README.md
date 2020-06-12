@@ -1,5 +1,5 @@
 ### CLI Usage
-To generate a new SUIT manifest with sequence number 0:
+To generate a new SUIT manifest:
 ```
 ./build/suit -k keys/priv.pem -n 0 -u coaps://[::1]/firmware > manifest.cbor < firmware.exe
 ```
@@ -15,7 +15,7 @@ Signature OK!
 
 SUIT version		1
 Component count		1
-Sequence number		2
+Sequence number		0
 
 Component details:
 (0) Remote URI		coaps://[::1]/firmware
