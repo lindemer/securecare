@@ -143,8 +143,8 @@ typedef enum {
     suit_dir_set_dep_idx = 13,
     suit_dir_abort = 14,
     suit_dir_try_each = 15,
-    suit_dir_do_each = 16, // TBD
-    suit_dir_map_filter = 17, // TBD
+    suit_dir_do_each = 16,
+    suit_dir_map_filter = 17,
     suit_dir_process_dep = 18,
     suit_dir_set_params = 19,
     suit_dir_override_params = 20,
@@ -207,13 +207,13 @@ struct suit_component_s {
     bool run;      /* component is referenced by a run directive */
     uint32_t size; /* image size (bytes) */
 
-    suit_digest_alg_t digest_alg;       /* digest algorithm */
+    suit_digest_alg_t digest_alg;
     suit_archive_alg_t archive_alg;     /* compression algorithm */
 
-    uint8_t * uri; size_t len_uri;              /* NULL if not in manifest */
-    uint8_t * digest; size_t len_digest;        /* NULL if not in manifest */
-    uint8_t * class_id; size_t len_class_id;    /* NULL if not in manifest */
-    uint8_t * vendor_id; size_t len_vendor_id;  /* NULL if not in manifest */
+    uint8_t * uri; size_t len_uri;
+    uint8_t * digest; size_t len_digest;
+    uint8_t * class_id; size_t len_class_id;
+    uint8_t * vendor_id; size_t len_vendor_id;
     
     suit_component_t * source;
 
@@ -221,9 +221,9 @@ struct suit_component_s {
 
 typedef struct {
 
-    uint32_t version;         /* always 1 */
-    uint32_t sequence_number; /* rollback protection */
-    uint32_t component_count; /* may be less than maximum allowed */
+    uint32_t version;  /* always 1 */
+    uint32_t sequence_number;
+    uint32_t component_count;
 
     /* Recipients should specify a maximum number of components (see I-D Section 5.4). */ 
     suit_component_t components[SUIT_MAX_COMPONENTS];
@@ -303,4 +303,3 @@ bool suit_match_vendor_id(suit_context_t * ctx, size_t idx,
  */
 
 #endif /* SUIT_H */
-

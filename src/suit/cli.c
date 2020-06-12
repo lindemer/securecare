@@ -44,9 +44,6 @@
 "%s -k keys/pub.pem -p < manifest.cbor\n"                                               \
 , argv[0], argv[0], argv[0]);
 
-#define SUIT_CLASS_ID   "1492af1425695e48bf429b2d51f2ab45"
-#define SUIT_VENDOR_ID  "fa6b4a53d5ad5fdfbe9de663e4d41ffe"
-
 #define HEAP_BUFFER 2048
 
 #include <stdbool.h>
@@ -59,7 +56,13 @@
 
 void read_stdin(uint8_t * wptr, uint32_t * bytes);
 void hash_firmware(const uint8_t * buffer, const uint32_t len_buffer, suit_component_t * component); 
+void print_bstr(const uint8_t * buffer, const uint32_t len_buffer);
 void xxd(const uint8_t * data, size_t len, int w);
+
+static uint8_t class_id[] =  { 0x14, 0x92, 0xaf, 0x14, 0x25, 0x69, 0x5e, 0x48,
+                               0xbf, 0x42, 0x9b, 0x2d, 0x51, 0xf2, 0xab, 0x45 };
+static uint8_t vendor_id[] = { 0xfa, 0x6b, 0x4a, 0x53, 0xd5, 0xad, 0x5f, 0xdf,
+                               0xbe, 0x9d, 0xe6, 0x63, 0xe4, 0xd4, 0x1f, 0xfe };
 
 int main (int argc, char *argv[])
 {
@@ -104,14 +107,40 @@ int main (int argc, char *argv[])
 
         uint8_t * manifest = malloc(HEAP_BUFFER);
         if (suit_unwrap(pem, buffer, HEAP_BUFFER, (const uint8_t **) &manifest, &obytes)) {
-            fprintf(stderr, "Failed to authenticate manifest.\n");
+            fprintf(stderr, "Signature verification failed.\n");
             exit(EXIT_FAILURE);
         }
     
         suit_context_t ctx;
         if (suit_parse(&ctx, manifest, obytes)) {
-            fprintf(stderr, "Failed to parse manifest.\n");
+            fprintf(stderr, "Parser error.\n");
             exit(EXIT_FAILURE);
+        }
+
+        printf("Signature OK!\n\n");
+        printf("SUIT version\t\t%d\n", ctx.version);
+        printf("Component count\t\t%d\n", ctx.component_count);
+        printf("Sequence number\t\t%d\n", ctx.sequence_number);
+
+        printf("\nComponent details:\n");
+        for (int i = 0; i < ctx.component_count; i++) {
+
+            if (ctx.components[i].uri != NULL) {
+                printf("(%d) Remote URI\t\t", i); 
+                print_bstr(ctx.components[i].uri, ctx.components[i].len_uri);
+            }
+
+            printf("(%d) Class ID\t\t", i); 
+            xxd(ctx.components[i].class_id, ctx.components[i].len_class_id, 32);
+
+            printf("(%d) Vendor ID\t\t", i); 
+            xxd(ctx.components[i].vendor_id, ctx.components[i].len_vendor_id, 32);
+
+            printf("(%d) Image digest\t", i); 
+            xxd(ctx.components[i].digest, ctx.components[i].len_digest, 32);
+
+            printf("(%d) Image size\t\t%d [B]\n", i, ctx.components[i].size);
+        
         }
 
     } else { /* write new manifest */
@@ -130,10 +159,10 @@ int main (int argc, char *argv[])
             ctx.components[0].len_uri = strlen(u);
         }
 
-        ctx.components[0].class_id = SUIT_CLASS_ID;
-        ctx.components[0].len_class_id = strlen(SUIT_CLASS_ID);
-        ctx.components[0].vendor_id = SUIT_VENDOR_ID;
-        ctx.components[0].len_vendor_id = strlen(SUIT_VENDOR_ID); 
+        ctx.components[0].class_id = class_id;
+        ctx.components[0].len_class_id = 16;
+        ctx.components[0].vendor_id = vendor_id;
+        ctx.components[0].len_vendor_id = 16; 
         ctx.components[0].archive_alg = 0;
         ctx.components[0].source = NULL;
 
@@ -170,13 +199,20 @@ void read_stdin(uint8_t * wptr, uint32_t * bytes)
 
 void hash_firmware(const uint8_t * buffer, const uint32_t len_buffer, suit_component_t * component)
 {
-    mbedtls_md_type_t md_type = MBEDTLS_MD_SHA256;
-    const mbedtls_md_info_t * md_info = mbedtls_md_info_from_type(md_type);
+    const mbedtls_md_info_t * md_info = mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
     component->digest = malloc(mbedtls_md_get_size(md_info));
     mbedtls_md(md_info, buffer, len_buffer, component->digest);
     component->len_digest = mbedtls_md_get_size(md_info); 
     component->digest_alg = suit_digest_alg_sha256;
     component->size = len_buffer;
+}
+
+void print_bstr(const uint8_t * buffer, const uint32_t len_buffer)
+{
+   for (int i = 0; i < len_buffer; i++) {
+        printf("%c", buffer[i]);
+   }
+   printf("\n");
 }
 
 void xxd(const uint8_t * data, size_t len, int w)

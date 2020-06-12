@@ -39,6 +39,9 @@
  * in total manifest rejection.
  **/
 
+#define SUIT_STACK_BUFFER 256 /* default size of stack-allocated buffers for serialization */
+#define SUIT_HASH_SIZE 32 /* default size of message digest (SHA-256) */
+
 #define CBOR_ENTER_ARR(nc1, nc2) \
     if (nanocbor_enter_array(&nc1, &nc2) < 0) return 1;
 
@@ -54,17 +57,11 @@
 #define CBOR_GET_TSTR(nc, val, len_val) \
     if (nanocbor_get_tstr(&nc, (const uint8_t **) &val, &len_val) < 0) return 1;
 
-#define CBOR_INIT(nc, buf, len_buf) \
-    nanocbor_encoder_t nc; \
-    nanocbor_encoder_init(&nc, buf, len_buf);
-
 #define CBOR_INIT_ARR(nc, buf, len_buf, items) \
-    nanocbor_encoder_t nc; \
     nanocbor_encoder_init(&nc, buf, len_buf); \
     nanocbor_fmt_array(&nc, items);
 
 #define CBOR_INIT_MAP(nc, buf, len_buf, pairs) \
-    nanocbor_encoder_t nc; \
     nanocbor_encoder_init(&nc, buf, len_buf); \
     nanocbor_fmt_map(&nc, pairs);
 
@@ -72,69 +69,59 @@
  * @section Manifest parser (private)
  **************************************************************************************************/
 
+int _suit_parse_image_digest(suit_component_t * comp, const uint8_t * md, size_t len_md)
+{
+    nanocbor_value_t top, arr;
+    nanocbor_decoder_init(&top, md, len_md);
+    CBOR_ENTER_ARR(top, arr);
+
+    if (nanocbor_get_uint32(&arr, (uint32_t *) &comp->digest_alg) < 0) return 1;
+    CBOR_GET_BSTR(arr, comp->digest, comp->len_digest);
+
+    return 0;
+}
+
 int _suit_parse_parameters(suit_context_t * ctx, size_t idx, nanocbor_value_t * map, bool override)
 {
-    nanocbor_value_t arr;
+    suit_component_t * comp = &ctx->components[idx];
+
     uint32_t map_key; uint32_t map_val;
     while (!nanocbor_at_end(map)) {
         CBOR_GET_INT(*map, map_key);
         switch (map_key) {
 
-            /**
-             * The vendor ID, class ID and URI fields are encoded as CBOR byte strings and are
-             * copied by reference.
-             **/
+            /* The vendor id, class id and uri fields are copied by reference. */
             case suit_param_vendor_id:
-                if (override || ctx->components[idx].vendor_id == NULL)
-                    CBOR_GET_BSTR(*map,
-                            ctx->components[idx].vendor_id,
-                            ctx->components[idx].len_vendor_id);
+                if (override || comp->vendor_id == NULL)
+                    CBOR_GET_BSTR(*map, comp->vendor_id, comp->len_vendor_id);
                 break;
 
             case suit_param_class_id:
-                if (override || ctx->components[idx].class_id == NULL)
-                    CBOR_GET_BSTR(*map,
-                            ctx->components[idx].class_id,
-                            ctx->components[idx].len_class_id);
+                if (override || comp->class_id == NULL)
+                    CBOR_GET_BSTR(*map, comp->class_id, comp->len_class_id);
                 break;
 
             case suit_param_uri:
-                if (override || ctx->components[idx].uri == NULL)
-                    CBOR_GET_TSTR(*map,
-                            ctx->components[idx].uri,
-                            ctx->components[idx].len_uri);
+                if (override || comp->uri == NULL)
+                    CBOR_GET_TSTR(*map, comp->uri, comp->len_uri);
                 break;
 
-            /**
-             * Image digests are stored in a sub-array containing an algorithm identifier (int) and
-             * the digest (bstr). They are copied by reference into the ctx struct.
-             **/
+            /* Image digests are wrapped as follows: bstr(arr(uint, bstr(hash))). */ 
             case suit_param_image_digest:
-                CBOR_ENTER_ARR(*map, arr);
-                if (override || ctx->components[idx].digest == NULL) {
-                    if (nanocbor_get_uint32(&arr,
-                                (uint32_t *) &ctx->components[idx].digest_alg) < 0)
-                        return 1;
-                    CBOR_GET_BSTR(arr,
-                            ctx->components[idx].digest,
-                            ctx->components[idx].len_digest);
+                if (override || comp->digest == NULL) {
+                    uint8_t * md; size_t len_md; CBOR_GET_BSTR(*map, md, len_md);
+                    if (_suit_parse_image_digest(comp, md, len_md)) return 1; 
                 }
-                nanocbor_skip(map); break;
+                break;
 
-            /**
-             * The image size and archive (i.e., compression) information are encoded as CBOR
-             * integers and are copied by value.
-             **/
+            /* The image size and archive (i.e., compression) information are copied by value. */
             case suit_param_image_size:
-                if (override || ctx->components[idx].size == 0)
-                    CBOR_GET_INT(*map, ctx->components[idx].size);
+                if (override || comp->size == 0) CBOR_GET_INT(*map, comp->size);
                 break;
 
             case suit_param_archive_info:
-                if (override || ctx->components[idx].archive_alg == 0)
-                    if (nanocbor_get_uint32(map,
-                                (uint32_t *) &ctx->components[idx].archive_alg) < 0)
-                        return 1;
+                if (override || comp->archive_alg == 0)
+                    if (nanocbor_get_uint32(map, (uint32_t *) &comp->archive_alg) < 0) return 1;
                 break;
 
             /**
@@ -143,8 +130,7 @@ int _suit_parse_parameters(suit_context_t * ctx, size_t idx, nanocbor_value_t * 
              **/
             case suit_param_source_comp:
                 CBOR_GET_INT(*map, map_val);
-                if (override || ctx->components[idx].source == NULL)
-                    ctx->components[idx].source = &ctx->components[map_val];
+                if (override || comp->source == NULL) comp->source = &ctx->components[map_val];
                 break;
 
             /* FAIL if unsupported */
@@ -220,18 +206,18 @@ int _suit_parse_sequence(suit_context_t * ctx, uint32_t idx, const uint8_t * seq
             /**
              * These conditions and directives are not parsed directly. They are implied by the
              * existence of other fields in the manifest.
-             *  - vendor IDs should be checked, if present
-             *  - class IDs should be checked, if present
+             *  - vendor ids should be checked, if present
+             *  - class ids should be checked, if present
              *  - digests should be verified, if present
-             *  - components should be fetched if a URI is present
+             *  - components should be fetched if a uri is present
              *  - components should be copied if a source component is declared
              */
 
-            /* CONDITION check vendor ID */
+            /* CONDITION check vendor id */
             case suit_cond_vendor_id:
                 nanocbor_skip(&arr); break;
 
-            /* CONDITION check class ID */
+            /* CONDITION check class id */
             case suit_cond_class_id:
                 nanocbor_skip(&arr); break;
 
@@ -255,10 +241,10 @@ int _suit_parse_sequence(suit_context_t * ctx, uint32_t idx, const uint8_t * seq
     return 0;
 }
 
-int _suit_parse_common(suit_context_t * ctx, const uint8_t * com, size_t len_com)
+int _suit_parse_common(suit_context_t * ctx, const uint8_t * comm, size_t len_comm)
 {
     nanocbor_value_t top, map, arr, elem;
-    nanocbor_decoder_init(&top, com, len_com);
+    nanocbor_decoder_init(&top, comm, len_comm);
     uint8_t * tmp; size_t len_tmp;
 
     CBOR_ENTER_MAP(top, map);
@@ -270,7 +256,7 @@ int _suit_parse_common(suit_context_t * ctx, const uint8_t * com, size_t len_com
             /**
              * The number of components listed in the manifest must not exceed the recipient's 
              * specified limit (see I-D Section 5.4). The components are referenced by index in the 
-             * manifest. The component IDs can be discarded.
+             * manifest. The component ids can be discarded.
              **/
             case suit_common_comps:
                 CBOR_GET_BSTR(map, tmp, len_tmp);
@@ -408,10 +394,9 @@ bool suit_match_vendor_id(suit_context_t * ctx, size_t idx,
  * @section Manifest encoder (private)
  **************************************************************************************************/
 
-#define STACK_BUFFER 256
-
 int _suit_encode_oneoff(uint32_t val, uint8_t * wptr, size_t * bytes)
 {
+    nanocbor_encoder_t nc;
     CBOR_INIT_ARR(nc, wptr, *bytes, 1);
 
         nanocbor_fmt_uint(&nc, val);
@@ -423,14 +408,15 @@ int _suit_encode_oneoff(uint32_t val, uint8_t * wptr, size_t * bytes)
 
 int _suit_encode_install(suit_component_t * comp, uint8_t * wptr, size_t * bytes)
 {
+    nanocbor_encoder_t nc;
     CBOR_INIT_ARR(nc, wptr, *bytes, 6);
 
-        /* URI */
+        /* remote uri */
         nanocbor_fmt_uint(&nc, suit_dir_set_params);
         nanocbor_fmt_map(&nc, 1);
 
             nanocbor_fmt_uint(&nc, suit_param_uri);
-            nanocbor_put_bstr(&nc, comp->uri, comp->len_uri);
+            nanocbor_put_tstr(&nc, (char *) comp->uri);
 
         /* directives and conditions */
         nanocbor_fmt_uint(&nc, suit_dir_fetch); nanocbor_fmt_null(&nc);
@@ -442,6 +428,7 @@ int _suit_encode_install(suit_component_t * comp, uint8_t * wptr, size_t * bytes
 
 int _suit_encode_image_digest(suit_component_t * comp, uint8_t * wptr, size_t * bytes)
 {
+    nanocbor_encoder_t nc;
     CBOR_INIT_ARR(nc, wptr, *bytes, 2);
 
         nanocbor_fmt_uint(&nc, (uint32_t) comp->digest_alg);
@@ -453,23 +440,24 @@ int _suit_encode_image_digest(suit_component_t * comp, uint8_t * wptr, size_t * 
 
 int _suit_encode_common_sequence(suit_component_t * comp, uint8_t * wptr, size_t * bytes)
 {
+    nanocbor_encoder_t nc;
     CBOR_INIT_ARR(nc, wptr, *bytes, 6);
 
         /* parameter overrides */
         nanocbor_fmt_uint(&nc, suit_dir_override_params);
         nanocbor_fmt_map(&nc, 4);
 
-            /* vendor ID */
+            /* vendor id */
             nanocbor_fmt_uint(&nc, suit_param_vendor_id);
             nanocbor_put_bstr(&nc, comp->vendor_id, comp->len_vendor_id);
 
-            /* class ID */
+            /* class id */
             nanocbor_fmt_uint(&nc, suit_param_class_id);
             nanocbor_put_bstr(&nc, comp->class_id, comp->len_class_id);
 
             /* image digest */
             nanocbor_fmt_uint(&nc, suit_param_image_digest);
-            size_t len_digest = STACK_BUFFER; uint8_t digest[STACK_BUFFER];
+            size_t len_digest = SUIT_STACK_BUFFER; uint8_t digest[SUIT_STACK_BUFFER];
             _suit_encode_image_digest(comp, digest, &len_digest);
             nanocbor_put_bstr(&nc, digest, len_digest);
 
@@ -487,6 +475,7 @@ int _suit_encode_common_sequence(suit_component_t * comp, uint8_t * wptr, size_t
 
 int _suit_encode_common_components(suit_context_t * ctx, uint8_t * wptr, size_t * bytes)
 {
+    nanocbor_encoder_t nc;
     CBOR_INIT_ARR(nc, wptr, *bytes, ctx->component_count);
 
     /* Components are declared in an array of single-element arrays containing single-byte names. */
@@ -503,17 +492,18 @@ int _suit_encode_common_components(suit_context_t * ctx, uint8_t * wptr, size_t 
 
 int _suit_encode_common(suit_context_t * ctx, uint8_t * wptr, size_t * bytes)
 {
+    nanocbor_encoder_t nc;
     CBOR_INIT_MAP(nc, wptr, *bytes, 2);
 
         /* components */
         nanocbor_fmt_uint(&nc, suit_common_comps);
-        size_t len_comps = STACK_BUFFER; uint8_t comps[STACK_BUFFER];
+        size_t len_comps = SUIT_STACK_BUFFER; uint8_t comps[SUIT_STACK_BUFFER];
         _suit_encode_common_components(ctx, comps, &len_comps);
         nanocbor_put_bstr(&nc, comps, len_comps);
 
         /* common sequence */
         nanocbor_fmt_uint(&nc, suit_common_seq);
-        size_t len_seq = STACK_BUFFER; uint8_t seq[STACK_BUFFER];
+        size_t len_seq = SUIT_STACK_BUFFER; uint8_t seq[SUIT_STACK_BUFFER];
         _suit_encode_common_sequence(&ctx->components[0], seq, &len_seq);
         nanocbor_put_bstr(&nc, seq, len_seq);
 
@@ -530,13 +520,14 @@ int suit_encode(suit_context_t * ctx, uint8_t * man, size_t * len_man)
     /**
      * Some parameters are hard-coded here to support a download/install/secure boot scenario. The
      * top-level map contains all fields supported by suit_parse() except payload fetch. The remote
-     * URI should, instead, be encoded in the install sequence (according to Example 2 in the I-D).
+     * uri should, instead, be encoded in the install sequence (according to Example 2 in the I-D).
      **/
 
-    uint8_t buf[STACK_BUFFER];
+    uint8_t buf[SUIT_STACK_BUFFER];
     size_t len_buf;
 
     /* encode top-level map tag*/
+    nanocbor_encoder_t nc;
     CBOR_INIT_MAP(nc, man, *len_man, 6);
 
         /* manifest version */
@@ -549,25 +540,25 @@ int suit_encode(suit_context_t * ctx, uint8_t * man, size_t * len_man)
 
         /* common */
         nanocbor_fmt_uint(&nc, suit_header_common);
-        len_buf = STACK_BUFFER;
+        len_buf = SUIT_STACK_BUFFER;
         _suit_encode_common(ctx, buf, &len_buf);
         nanocbor_put_bstr(&nc, buf, len_buf);
 
         /* install */ 
         nanocbor_fmt_uint(&nc, suit_header_install);
-        len_buf = STACK_BUFFER;
+        len_buf = SUIT_STACK_BUFFER;
         _suit_encode_install(&ctx->components[0], buf, &len_buf);
         nanocbor_put_bstr(&nc, buf, len_buf);
     
         /* validate */
         nanocbor_fmt_uint(&nc, suit_header_validate);
-        len_buf = STACK_BUFFER;
+        len_buf = SUIT_STACK_BUFFER;
         _suit_encode_oneoff((uint32_t) suit_cond_image_match, buf, &len_buf);
         nanocbor_put_bstr(&nc, buf, len_buf);
 
         /* run */
         nanocbor_fmt_uint(&nc, suit_header_run);
-        len_buf = STACK_BUFFER;
+        len_buf = SUIT_STACK_BUFFER;
         _suit_encode_oneoff((uint32_t) suit_dir_run, buf, &len_buf);
         nanocbor_put_bstr(&nc, buf, len_buf);
 
@@ -576,67 +567,78 @@ int suit_encode(suit_context_t * ctx, uint8_t * man, size_t * len_man)
 }
 
 /***************************************************************************************************
- * @section Authentication wrapper encoder/decoder (public)
+ * @section Authentication wrapper (public)
  **************************************************************************************************/
+
+extern void xxd(const uint8_t * data, size_t len, int w);
 
 int suit_unwrap(const char * pem, 
         const uint8_t * env, const size_t len_env,
         const uint8_t ** man, size_t * len_man)
 {
-    /* initialize COSE Sign1 context for authentication wrapper */
+    /* initialize COSE context and verify public key */
     cose_sign_context_t ctx;
     if (cose_sign_init(&ctx, cose_mode_r, pem)) return 1;
 
-    /* seek to beginning of authentication wrapper */
-    uint8_t * auth;
-    size_t len_auth;
-    nanocbor_value_t nc, map, arr;
-    nanocbor_decoder_init(&nc, env, len_env);
-    CBOR_ENTER_MAP(nc, map);
+    /* hash_in is extracted from the manifest; hash_out is computed */
+    const mbedtls_md_info_t * md_info = mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
+    uint8_t hash_out[SUIT_HASH_SIZE];
+
+    /* bytestrings to be extracted */
+    uint8_t * pld, * hash_in, * auth_arr, * auth, * man_start;
+    size_t len_pld, len_hash, len_auth_arr, len_auth;
+
+    /* parse top-level map */
+    nanocbor_value_t top, map, tmp0, tmp1;
+    nanocbor_decoder_init(&top, env, len_env);
+    CBOR_ENTER_MAP(top, map);
+
+
     uint32_t map_key;
     while (!nanocbor_at_end(&map)) {
         CBOR_GET_INT(map, map_key);
-        if (map_key == suit_envelope_authentication_wrapper) {
-            CBOR_GET_BSTR(map, auth, len_auth);
-            break;
+        switch (map_key) {
+
+            case suit_envelope_authentication_wrapper:
+
+                /* unwrap */
+                CBOR_GET_BSTR(map, auth_arr, len_auth_arr);
+                nanocbor_decoder_init(&tmp0, auth_arr, len_auth_arr);
+                CBOR_ENTER_ARR(tmp0, tmp1);
+                CBOR_GET_BSTR(tmp1, auth, len_auth);
+
+                /* get payload */
+                if (cose_sign1_read(&ctx, auth, len_auth, (const uint8_t **) &pld, &len_pld))
+                    return 1;
+
+                /* extract manifest hash */
+                nanocbor_decoder_init(&tmp0, pld, len_pld);
+                CBOR_ENTER_ARR(tmp0, tmp1);
+                uint32_t digest_alg;
+                CBOR_GET_INT(tmp1, digest_alg);
+                if (digest_alg != suit_digest_alg_sha256) return 1;
+                CBOR_GET_BSTR(tmp1, hash_in, len_hash);
+
+                break;
+
+            case suit_envelope_manifest:
+
+                /* get the start address of the bytestring-wrapped manifest */
+                man_start = (uint8_t *) map.cur;
+
+                /* extract manifest */
+                CBOR_GET_BSTR(map, *man, *len_man);
+
+                /* hash the bytestring-wrapped manifest */
+                mbedtls_md(md_info, man_start, (*man + *len_man) - man_start, hash_out); 
+
+                break;
         }
-        nanocbor_skip(&map);
-    }
-    nanocbor_decoder_init(&nc, auth, len_auth);
-    CBOR_ENTER_ARR(nc, arr);
-
-    /* verify signature on authentication wrapper and get payload */ 
-    uint8_t * pld;
-    size_t len_pld;
-    if (cose_sign1_read(&ctx, arr.cur, arr.end - arr.cur, (const uint8_t **) &pld, &len_pld)) 
-        return 1;
-
-    /* extract the manifest hash */
-    uint8_t * hash;
-    size_t len_hash;
-    nanocbor_decoder_init(&nc, pld, len_pld);
-    CBOR_ENTER_ARR(nc, arr);
-    nanocbor_skip(&arr);
-    CBOR_GET_BSTR(arr, hash, len_hash);
-
-    /* extract manifest with CBOR byte string header */
-    while (!nanocbor_at_end(&map)) {
-        CBOR_GET_INT(map, map_key);
-        if (map_key == suit_envelope_manifest) break;
-        nanocbor_skip(&map);
     }
 
-    /* compute hash and write it to the end of the output buffer */
-    const mbedtls_md_info_t * md_info = mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
-    size_t md_size = mbedtls_md_get_size(md_info);
-    uint8_t hash_out[md_size];
-    mbedtls_md(md_info, map.cur, (map.end - map.cur), hash_out);
-    if (memcmp(hash, hash_out, md_size)) return 1;
+    /* extracted and computed hashes must match */
+    if (memcmp(hash_in, hash_out, len_hash)) return 1;
 
-    /* return the manifest contents without the byte string header */
-    CBOR_GET_BSTR(map, *man, *len_man);
-
-    /* clean up */
     cose_sign_free(&ctx);
     return 0;
 }
@@ -645,51 +647,48 @@ int suit_wrap(const char * pem,
         const uint8_t * man, const size_t len_man,
         uint8_t * env, size_t * len_env)
 {
-    /* initialize COSE Sign1 context for authentication wrapper */
+    /* initialize COSE context and verify private key */
     cose_sign_context_t ctx;
     if (cose_sign_init(&ctx, cose_mode_w, pem)) return 1;
 
-    /* generate byte string wrapper for manifest (included in hash) */
+    /* wrap encoded manifest in a bytestring */
+    uint8_t man_bstr[SUIT_STACK_BUFFER];
     nanocbor_encoder_t nc;
-    nanocbor_encoder_init(&nc, env, *len_env);
-    nanocbor_fmt_bstr(&nc, len_man);
+    nanocbor_encoder_init(&nc, man_bstr, SUIT_STACK_BUFFER);
+    nanocbor_put_bstr(&nc, man, len_man);
+    size_t len_man_bstr = nanocbor_encoded_len(&nc);
 
-    /* hash the manifest and write it to the end of the output buffer */
+    /* hash the bytestring-wrapped manifest */
     const mbedtls_md_info_t * md_info = mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
-    size_t md_size = mbedtls_md_get_size(md_info);
-    mbedtls_md_context_t md_ctx;
-    mbedtls_md_setup(&md_ctx, md_info, 0);
-    mbedtls_md_starts(&md_ctx);
-    mbedtls_md_update(&md_ctx, env, nanocbor_encoded_len(&nc));
-    mbedtls_md_update(&md_ctx, man, len_man);
-    mbedtls_md_finish(&md_ctx, env + *len_env - md_size);
+    uint8_t hash[SUIT_HASH_SIZE];
+    mbedtls_md(md_info, man_bstr, len_man_bstr, hash); 
 
-    /* serialize the authentication wrapper payload in place */
-    nanocbor_encoder_init(&nc, env + *len_env - md_size - 4, 4);
-    nanocbor_fmt_array(&nc, 2);
+    /* generate authentication wrapper payload */
+    uint8_t pld[SUIT_STACK_BUFFER];
+    CBOR_INIT_ARR(nc, pld, SUIT_STACK_BUFFER, 2);
     nanocbor_fmt_uint(&nc, suit_digest_alg_sha256);
-    nanocbor_fmt_bstr(&nc, md_size);
+    nanocbor_put_bstr(&nc, hash, mbedtls_md_get_size(md_info));
+    size_t len_pld = nanocbor_encoded_len(&nc);
 
-    /* write the authentication wrapper */
-    size_t len_auth = *len_env - 5;
-    cose_sign1_write(&ctx, env + *len_env - md_size - 4, md_size + 4, env + 5, &len_auth);
+    /* generate the authentication wrapper */
+    uint8_t auth[SUIT_STACK_BUFFER];
+    size_t len_auth = SUIT_STACK_BUFFER;
+    cose_sign1_write(&ctx, pld, len_pld, auth, &len_auth);
 
-    /* encode the envelope header */
-    nanocbor_encoder_init(&nc, env, 5);
-    nanocbor_fmt_map(&nc, 2);
+    /* wrap the encoded authentication wrapper in a bytestring AND an array... */
+    uint8_t auth_arr[SUIT_STACK_BUFFER];
+    CBOR_INIT_ARR(nc, auth_arr, SUIT_STACK_BUFFER, 1);
+    nanocbor_put_bstr(&nc, auth, len_auth);
+    size_t len_auth_arr = nanocbor_encoded_len(&nc);
+
+    /* generate the envelope */
+    CBOR_INIT_MAP(nc, env, *len_env, 2);
     nanocbor_fmt_uint(&nc, suit_envelope_authentication_wrapper);
-    nanocbor_fmt_bstr(&nc, len_auth + 1);  
-    nanocbor_fmt_array(&nc, 1);
-
-    /* skip to end of authentication wrapper and encode the manifest */
-    nanocbor_encoder_init(&nc, env + 5 + len_auth, *len_env - 5 - len_auth);
+    nanocbor_put_bstr(&nc, auth_arr, len_auth_arr);
     nanocbor_fmt_uint(&nc, suit_envelope_manifest);
-    nanocbor_fmt_bstr(&nc, len_man);
-    *len_env = len_auth + 5 + nanocbor_encoded_len(&nc);
-    memcpy(env + *len_env, man, len_man);
-    *len_env += len_man;
+    nanocbor_put_bstr(&nc, man, len_man);
 
-    /* clean up */
-    cose_sign_free(&ctx);
+    /* return envelope length */
+    *len_env = nanocbor_encoded_len(&nc);
     return 0;
 }
