@@ -24,3 +24,6 @@ Component details:
 (0) Image digest	e9a0f5f4c77a4d4c2ee442ff2ef73b60fceee988dd83232dff5479352064e27d
 (0) Image size		1337 [B]
 ```
+
+### Notes
+The CLI tool is catered specifically for a download/install/secure boot use case. It does not generate any other set of instructions at this time.
