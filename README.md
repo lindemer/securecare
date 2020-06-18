@@ -1,5 +1,5 @@
 # SecureCare
-This is an experimental implementation of the [SUIT protocol](https://datatracker.ietf.org/wg/suit/about/) for the SIP-IoT SecureCare project at RISE Research Institutes of Sweden targeting the Nordic Semiconductor nRF52840 DK. The repository contains partial implementations of the following IETF standards and drafts:
+This is an experimental implementation of the [SUIT protocol](https://datatracker.ietf.org/wg/suit/about/) for the SIP-IoT SecureCare project at [RISE Research Institutes of Sweden](ri.se) targeting the Nordic Semiconductor nRF52840 DK. The repository contains partial implementations of the following IETF standards and drafts:
 - [RFC 8152](https://tools.ietf.org/html/rfc8152) CBOR Object Signing and Encryption (COSE)
 - [RFC 8392](https://tools.ietf.org/html/rfc8392/) CBOR Web Token (CWT)
 - [RFC 8747](https://tools.ietf.org/html/rfc8747) Proof-of-Possession Key Semantics for CWTs
