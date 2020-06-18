@@ -259,7 +259,25 @@ int suit_parse(suit_context_t * ctx, const uint8_t * man, size_t len_man);
 int suit_encode(suit_context_t * ctx, uint8_t * man, size_t * len_man);
 
 /**
- * @brief Authenticate a signed SUIT envelope and return the manifest
+ * @brief Verify and and extract signed manifest with a raw public key
+ * 
+ * @param       key     Pointer to key bytes
+ * @param       len_key Length of key
+ * @param       env     Pointer to encoded SUIT envelope
+ * @param       len_env Size of envelope
+ * @param[out]  man     Pointer to manifest within envelope
+ * @param[out]  len_man Size of manifest
+ *
+ * @retval      0       pass
+ * @retval      1       fail 
+ */
+int suit_raw_unwrap(
+        const uint8_t * key, const size_t len_key,
+        const uint8_t * env, const size_t len_env,
+        const uint8_t ** man, size_t * len_man);
+
+/**
+ * @brief Verify and and extract signed manifest with a PEM-formatted key
  * 
  * @param       pem     Pointer to PEM-formatted public key string
  * @param       env     Pointer to encoded SUIT envelope
@@ -270,12 +288,12 @@ int suit_encode(suit_context_t * ctx, uint8_t * man, size_t * len_man);
  * @retval      0       pass
  * @retval      1       fail 
  */
-int suit_unwrap(const char * pem, 
+int suit_pem_unwrap(const char * pem, 
         const uint8_t * env, const size_t len_env,
         const uint8_t ** man, size_t * len_man);
 
 /**
- * @brief Generate a manifest envelope with authenticated wrapper
+ * @brief Sign a manifest with a PEM-formatted key
  *
  * @param       pem     Pointer to PEM-formatted private key string
  * @param       man     Pointer to serialized SUIT manifest
@@ -286,7 +304,7 @@ int suit_unwrap(const char * pem,
  * @retval      0       pass
  * @retval      1       fail
  */
-int suit_wrap(const char * pem,
+int suit_pem_wrap(const char * pem,
         const uint8_t * man, const size_t len_man,
         uint8_t * env, size_t * len_env);
 

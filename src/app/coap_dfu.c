@@ -73,7 +73,13 @@
 #include "background_dfu_block.h"
 #include "openthread/random_noncrypto.h"
 
-#include "cose.h"
+#include "suit.h"
+
+/**
+ * Run 'make keys' from the ../boot directory to generate this key. It will be
+ * placed in the ../../keys directory.
+ **/
+extern const uint8_t pk[64];
 
 #define NRF_LOG_LEVEL 4
 #define NRF_LOG_MODULE_NAME COAP_DFU
@@ -686,50 +692,19 @@ static void trigger_request_callback(coap_resource_t * p_resource, coap_message_
 }
 
 /***************************************************************************************************
- * START OF: COSE tests
- **************************************************************************************************/
-
-#define COSE_TEST_KEY_256_PRV                                                   \
-    "-----BEGIN EC PRIVATE KEY-----\r\n"                                        \
-    "MHcCAQEEIKw78CnaOuvcRE7dcngmKcbM6FbB3Ue3wkPYQbu+hNHeoAoGCCqGSM49\r\n"      \
-    "AwEHoUQDQgAEAWScYjUwMrXA0gAc/LD6EDmJu7Ob7LzngEVn9HJrj4zGUjELTUYf\r\n"      \
-    "Mq2CXK9SpGLX33eRmv9itRcWjWWmqZuh2w==\r\n"                                  \
-    "-----END EC PRIVATE KEY-----\r\n"
-
-static void cose_test(void)
-{
-    uint8_t obj[1024];
-    size_t len_obj = sizeof(obj);
-
-    const uint8_t pld[] = {0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef};
-    size_t len_pld = sizeof(pld);
-
-    const uint8_t kid[] = {0xC0, 0x53};
-    size_t len_kid = sizeof(kid);
-
-    cose_sign_context_t ctx;
-    cose_sign_init(&ctx, cose_mode_w, COSE_TEST_KEY_256_PRV);
-    cose_set_kid(&ctx.key, kid, len_kid);
-    int err_code = cose_sign1_write(&ctx, pld, len_pld, obj, &len_obj);
-
-    NRF_LOG_INFO("COSE Sign1 write returned: %x", err_code);
-}
-
-/***************************************************************************************************
- * END OF: COSE tests
+ * [START] SUIT manifest handler
  **************************************************************************************************/
 
 /**@brief A request callback for /s resource.
  *
- * An implementation of @ref coap_method_callback_t function type.
+ * An implementation of @ref coap_method_callback_t function type. Data received at this endpoint
+ * via PUT will be forwarded to the SUIT manifest parser (maximum 256 B).
  *
  * @param[in] p_resource A pointer to resource.
  * @param[in] p_request  A pointer to request.
  */
 static void suit_request_callback(coap_resource_t * p_resource, coap_message_t * p_request)
 {
-    //NRF_LOG_INFO("ACE token resource accessed.");
-
     // TODO: Handle tokens.
     
     coap_message_t * p_response = NULL;
@@ -744,16 +719,32 @@ static void suit_request_callback(coap_resource_t * p_resource, coap_message_t *
     message_conf.token_len = p_request->header.token_len;
     memcpy(message_conf.token, p_request->token, message_conf.token_len);
     message_conf.id = (p_request->header.type == COAP_TYPE_CON) ? p_request->header.id : message_id_get();
+    
+    const uint8_t * env = p_request->p_payload;
+    size_t len_env = (size_t)p_request->payload_len;
+    uint8_t man[256];
+    size_t len_man = 256;
 
-    cose_test();
+    const char * good = "good";
+    const char * bad = "bad";
+
+    if (suit_raw_unwrap(pk, sizeof(pk), env, len_env, (const uint8_t **) &man, &len_man))
+        p_response = message_create(&message_conf, NULL, (uint8_t *)bad, strlen(bad), &p_request->remote);
+    else p_response = message_create(&message_conf, NULL, (uint8_t *)good, strlen(good), &p_request->remote);
+        
 
     // Placeholder GET request response string.
-    const char * pld = "hello world\0";
-    p_response = message_create(&message_conf, NULL, (uint8_t *)pld, strlen(pld), &p_request->remote);
-    
+    //const char * pld = "hello world";
+    //p_response = message_create(&message_conf, NULL, (uint8_t *)pld, strlen(pld), &p_request->remote);
+    //p_response = message_create(&message_conf, NULL, env, len_env, &p_request->remote);
+
     // Send response, if created.
     if (p_response != NULL) coap_dfu_delayed_message_send(p_response);
 }
+
+/***************************************************************************************************
+ * [END] SUIT manifest handler
+ **************************************************************************************************/
 
 /**@brief A request callback for /i resource.
  *
@@ -983,7 +974,7 @@ static uint32_t endpoints_init(coap_dfu_context_t * p_coap_dfu_ctx)
             break;
         }
 
-        p_coap_dfu_ctx->suit.permission = COAP_PERM_GET;
+        p_coap_dfu_ctx->suit.permission = COAP_PERM_PUT;
         p_coap_dfu_ctx->suit.callback   = suit_request_callback;
 
         err_code = coap_resource_create(&(p_coap_dfu_ctx->suit), SUIT_RESOURCE_NAME);

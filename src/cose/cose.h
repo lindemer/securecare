@@ -35,12 +35,19 @@
 #include <string.h>
 #include "nanocbor/nanocbor.h"
 
+#ifdef NRF_CRYPTO_ENABLED
+#include "nrf_crypto.h"
+#include "nrf_crypto_ecc.h"
+#include "nrf_crypto_error.h"
+#include "nrf_crypto_ecdsa.h"
+#else
 #include <mbedtls/md.h>
 #include <mbedtls/pk.h>
 #include <mbedtls/gcm.h>
 #include <mbedtls/ecp.h>
 #include <mbedtls/ecdsa.h>
 #include <mbedtls/error.h>
+#endif
 
 #define COSE_CONTEXT_SIGN "Signature"
 #define COSE_CONTEXT_SIGN1 "Signature1"
@@ -58,8 +65,8 @@
  * @{
  */
 #define COSE_ERROR_NONE                 0x00
-#define COSE_ERROR_MBEDTLS              0x01
-#define COSE_ERROR_NANOCBOR             0x02
+#define COSE_ERROR_CRYPTO               0x01
+#define COSE_ERROR_CBOR                 0x02
 #define COSE_ERROR_UNSUPPORTED          0x03
 #define COSE_ERROR_ENCODE               0x04
 #define COSE_ERROR_DECODE               0x05
@@ -233,12 +240,22 @@ typedef struct {
 
 typedef struct {
     cose_key_t key;
+    cose_mode_t mode;
 
     /* private */
     size_t len_sig;
     size_t len_hash;
+
+#ifdef NRF_CRYPTO_ENABLED
+    union {
+        nrf_crypto_ecdsa_verify_context_t vctx;
+        nrf_crypto_ecdsa_sign_context_t sctx;
+    } pk;
+#else
     mbedtls_pk_context pk;
     mbedtls_md_type_t md_alg;
+#endif
+
 } cose_sign_context_t;
 
 typedef struct {
@@ -249,25 +266,46 @@ typedef struct {
     size_t len_mac;
     uint8_t * iv;
     size_t len_iv;
+
+#ifdef NRF_CRYPTO_ENABLED
+    nrf_crypto_aead_context_t gcm;
+#else
     mbedtls_gcm_context gcm;
+#endif
+
 } cose_crypt_context_t;
 
 void cose_set_kid(cose_key_t * key, const uint8_t * kid, size_t len_kid);
 void cose_set_aad(cose_key_t * key, const uint8_t * aad, size_t len_aad);
 
 /**
- * @brief Initialize COSE signing context
+ * @brief Initialize COSE signing context with a raw public key
+ *
+ * @param       ctx     Pointer to uninitialized signing context
+ * @param       mode    0 for signature generation, 1 for verification
+ * @param       key     Pointer to key bytes
+ * @param       len_key Length of key
+ *
+ * @retval COSE_ERROR_NONE              Success
+ * @retval COSE_ERROR_CRYPTO            Failed to parse key string 
+ * @retval COSE_ERROR_UNSUPPORTED       Crypto algorithm not supported
+ */
+int cose_sign_raw_init(cose_sign_context_t * ctx, cose_mode_t mode, 
+        cose_curve_t crv, const uint8_t * key, size_t len_key);
+
+/**
+ * @brief Initialize COSE signing context with a PEM-formatted key
  *
  * @param       ctx     Pointer to uninitialized signing context
  * @param       mode    0 for signature generation, 1 for verification
  * @param       pem     PEM-formatted key string
  *
  * @retval COSE_ERROR_NONE              Success
- * @retval COSE_ERROR_MBEDTLS           Failed to parse key string 
+ * @retval COSE_ERROR_CRYPTO            Failed to parse key string 
  * @retval COSE_ERROR_UNSUPPORTED       Crypto algorithm not supported
  */
-int cose_sign_init(cose_sign_context_t * ctx, 
-        cose_mode_t mode, const char * pem);
+int cose_sign_pem_init(cose_sign_context_t * ctx, cose_mode_t mode, 
+        const char * pem);
 
 /**
  * @brief Initialize COSE encryption and MAC context
@@ -352,9 +390,9 @@ int cose_encrypt0_write(cose_crypt_context_t *ctx,
  * @param[out]  len_pld Pointer to length of buffer
  *
  * @retval COSE_ERROR_NONE              Success
- * @retval COSE_ERROR_ENCODE            Failed to encode authenticated data structure 
+ * @retval COSE_ERROR_ENCODE            Failed to encode authenticated data
  * @retval COSE_ERROR_DECODE            Failed to decode COSE object 
- * @retval COSE_ERROR_DECRYPT           Failed to decrypt/authenticate COSE object
+ * @retval COSE_ERROR_DECRYPT           Failed to decrypt data
  */
 int cose_encrypt0_read(cose_crypt_context_t * ctx,
         const uint8_t * obj, const size_t len_obj, 

@@ -64,7 +64,7 @@ static uint8_t class_id[] =  { 0x14, 0x92, 0xaf, 0x14, 0x25, 0x69, 0x5e, 0x48,
 static uint8_t vendor_id[] = { 0xfa, 0x6b, 0x4a, 0x53, 0xd5, 0xad, 0x5f, 0xdf,
                                0xbe, 0x9d, 0xe6, 0x63, 0xe4, 0xd4, 0x1f, 0xfe };
 
-int main (int argc, char *argv[])
+int main(int argc, char *argv[])
 {
     char * k = NULL;  /* PEM key file */
     char * n = NULL;  /* manifest sequence number */
@@ -106,7 +106,7 @@ int main (int argc, char *argv[])
     if (p) { /* parse and decode existing manifest */
 
         uint8_t * manifest = malloc(HEAP_BUFFER);
-        if (suit_unwrap(pem, buffer, HEAP_BUFFER, 
+        if (suit_pem_unwrap(pem, buffer, HEAP_BUFFER, 
                     (const uint8_t **) &manifest, &obytes)) {
             fprintf(stderr, "Signature verification failed.\n");
             exit(EXIT_FAILURE);
@@ -178,7 +178,7 @@ int main (int argc, char *argv[])
         /* sign the manifest */
         size_t len_wrapped = HEAP_BUFFER;
         uint8_t * wrapped = (uint8_t *) malloc(HEAP_BUFFER);
-        if (suit_wrap(pem, buffer, obytes, wrapped, &len_wrapped)) {
+        if (suit_pem_wrap(pem, buffer, obytes, wrapped, &len_wrapped)) {
             fprintf(stderr, "Failed to encode manifest.\n");
             exit(EXIT_FAILURE);
         }

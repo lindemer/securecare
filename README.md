@@ -16,11 +16,12 @@ The [mesh-local EID](https://openthread.io/guides/thread-primer/ipv6-addressing)
 ## Project Structure
 - `keys` key pair for SUIT manifest signing and verification
 - `lib` external libraries 
-- `src/boot` bootloader for the SUIT DFU client
-- `src/app` application code for the SUIT DFU client
-- `src/suit` SUIT manifest parser and encoder
-- `src/cose` COSE parser and encoder
 - `src/ace` ACE client and authorization server
+- `src/app` application code for the SUIT DFU client
+- `src/boot` bootloader for the SUIT DFU client
+- `src/cose` COSE parser and encoder
+- `src/cwt` CWT parser and encoder
+- `src/suit` SUIT manifest parser and encoder
 
 ## Build and Run
 1. Run `make keys` from the `src/boot` directory to generate a key pair.

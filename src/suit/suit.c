@@ -267,8 +267,8 @@ int _suit_parse_common(suit_context_t * ctx,
             /**
              * The number of components listed in the manifest must not exceed
              * the recipient's specified limit (see I-D Section 5.4). The
-             * components are referenced by index in the manifest. The
-             * component ids can be discarded.
+             * components are referenced by index in the manifest. The component
+             * ids can be discarded.
              **/
             case suit_common_comps:
                 CBOR_GET_BSTR(map, tmp, len_tmp);
@@ -587,19 +587,14 @@ int suit_encode(suit_context_t * ctx, uint8_t * man, size_t * len_man)
 }
 
 /*******************************************************************************
- * @section Authentication wrapper (public)
+ * @section Authentication wrapper (private)
  ******************************************************************************/
 
-extern void xxd(const uint8_t * data, size_t len, int w);
-
-int suit_unwrap(const char * pem, 
+int _suit_unwrap(
+        cose_sign_context_t * ctx,
         const uint8_t * env, const size_t len_env,
         const uint8_t ** man, size_t * len_man)
 {
-    /* initialize COSE context and verify public key */
-    cose_sign_context_t ctx;
-    if (cose_sign_init(&ctx, cose_mode_r, pem)) return 1;
-
     /* hash_in is extracted from the manifest; hash_out is computed */
     const mbedtls_md_info_t * md_info = 
         mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
@@ -613,7 +608,6 @@ int suit_unwrap(const char * pem,
     nanocbor_value_t top, map, tmp0, tmp1;
     nanocbor_decoder_init(&top, env, len_env);
     CBOR_ENTER_MAP(top, map);
-
 
     uint32_t map_key;
     while (!nanocbor_at_end(&map)) {
@@ -629,7 +623,7 @@ int suit_unwrap(const char * pem,
                 CBOR_GET_BSTR(tmp1, auth, len_auth);
 
                 /* get payload */
-                if (cose_sign1_read(&ctx, auth, len_auth, 
+                if (cose_sign1_read(ctx, auth, len_auth, 
                             (const uint8_t **) &pld, &len_pld))
                     return 1;
 
@@ -659,18 +653,14 @@ int suit_unwrap(const char * pem,
     /* extracted and computed hashes must match */
     if (memcmp(hash_in, hash_out, len_hash)) return 1;
 
-    cose_sign_free(&ctx);
+    cose_sign_free(ctx);
     return 0;
 }
 
-int suit_wrap(const char * pem,
+int _suit_wrap(cose_sign_context_t * ctx,
         const uint8_t * man, const size_t len_man,
         uint8_t * env, size_t * len_env)
 {
-    /* initialize COSE context and verify private key */
-    cose_sign_context_t ctx;
-    if (cose_sign_init(&ctx, cose_mode_w, pem)) return 1;
-
     /* wrap encoded manifest in a bstr */
     uint8_t man_bstr[SUIT_STACK_BUFFER];
     nanocbor_encoder_t nc;
@@ -694,7 +684,7 @@ int suit_wrap(const char * pem,
     /* generate the authentication wrapper */
     uint8_t auth[SUIT_STACK_BUFFER];
     size_t len_auth = SUIT_STACK_BUFFER;
-    cose_sign1_write(&ctx, pld, len_pld, auth, &len_auth);
+    cose_sign1_write(ctx, pld, len_pld, auth, &len_auth);
 
     /* wrap the encoded authentication wrapper in a bstr AND an array... */
     uint8_t auth_arr[SUIT_STACK_BUFFER];
@@ -711,5 +701,41 @@ int suit_wrap(const char * pem,
 
     /* return envelope length */
     *len_env = nanocbor_encoded_len(&nc);
+
+    cose_sign_free(ctx);
     return 0;
 }
+
+/*******************************************************************************
+ * @section Authentication wrapper (public)
+ ******************************************************************************/
+
+int suit_raw_unwrap(
+        const uint8_t * key, const size_t len_key,
+        const uint8_t * env, const size_t len_env,
+        const uint8_t ** man, size_t * len_man) 
+{
+    cose_sign_context_t ctx;
+    if (cose_sign_raw_init(&ctx, cose_mode_r, cose_curve_p256, key, len_key)) 
+        return 1;
+    return _suit_unwrap(&ctx, env, len_env, man, len_man);
+}
+
+int suit_pem_unwrap(const char * pem, 
+        const uint8_t * env, const size_t len_env,
+        const uint8_t ** man, size_t * len_man)
+{
+    cose_sign_context_t ctx;
+    if (cose_sign_pem_init(&ctx, cose_mode_r, pem)) return 1;
+    return _suit_unwrap(&ctx, env, len_env, man, len_man);
+}
+
+int suit_pem_wrap(const char * pem,
+        const uint8_t * man, const size_t len_man,
+        uint8_t * env, size_t * len_env)
+{
+    cose_sign_context_t ctx;
+    if (cose_sign_pem_init(&ctx, cose_mode_w, pem)) return 1;
+    return _suit_wrap(&ctx, man, len_man, env, len_env); 
+}
+
