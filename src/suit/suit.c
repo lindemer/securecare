@@ -595,13 +595,11 @@ int _suit_unwrap(
         const uint8_t * env, const size_t len_env,
         const uint8_t ** man, size_t * len_man)
 {
-    /* hash_in is extracted from the manifest; hash_out is computed */
-    const mbedtls_md_info_t * md_info = 
-        mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
-    uint8_t hash_out[SUIT_HASH_SIZE];
+    cose_hash_context_t ctx_hash;
+    ctx_hash.type = COSE_SHA256_TYPE;
 
     /* bytestrings to be extracted */
-    uint8_t * pld, * hash_in, * auth_arr, * auth, * man_start;
+    uint8_t * pld, * hash, * auth_arr, * auth, * man_start;
     size_t len_pld, len_hash, len_auth_arr, len_auth;
 
     /* parse top-level map */
@@ -632,7 +630,7 @@ int _suit_unwrap(
                 CBOR_ENTER_ARR(tmp0, tmp1);
                 uint32_t digest_alg; CBOR_GET_INT(tmp1, digest_alg);
                 if (digest_alg != suit_digest_alg_sha256) return 1;
-                CBOR_GET_BSTR(tmp1, hash_in, len_hash);
+                CBOR_GET_BSTR(tmp1, hash, len_hash);
                 break;
 
             case suit_envelope_manifest:
@@ -644,14 +642,14 @@ int _suit_unwrap(
                 CBOR_GET_BSTR(map, *man, *len_man);
 
                 /* hash the bstr-wrapped manifest */
-                mbedtls_md(md_info, man_start, 
-                        (*man + *len_man) - man_start, hash_out); 
+                cose_hash(&ctx_hash, man_start, (*man + *len_man) - man_start);
                 break;
         }
     }
 
     /* extracted and computed hashes must match */
-    if (memcmp(hash_in, hash_out, len_hash)) return 1;
+    if (ctx_hash.len != len_hash) return 1;
+    if (memcmp(hash, ctx_hash.hash, ctx_hash.len)) return 1;
 
     cose_sign_free(ctx);
     return 0;
@@ -669,16 +667,15 @@ int _suit_wrap(cose_sign_context_t * ctx,
     size_t len_man_bstr = nanocbor_encoded_len(&nc);
 
     /* hash the bstr-wrapped manifest */
-    const mbedtls_md_info_t * md_info = 
-        mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
-    uint8_t hash[SUIT_HASH_SIZE];
-    mbedtls_md(md_info, man_bstr, len_man_bstr, hash); 
+    cose_hash_context_t ctx_hash;
+    ctx_hash.type = COSE_SHA256_TYPE;
+    cose_hash(&ctx_hash, man_bstr, len_man_bstr);
 
     /* generate authentication wrapper payload */
     uint8_t pld[SUIT_STACK_BUFFER];
     CBOR_INIT_ARR(nc, pld, SUIT_STACK_BUFFER, 2);
     nanocbor_fmt_uint(&nc, suit_digest_alg_sha256);
-    nanocbor_put_bstr(&nc, hash, mbedtls_md_get_size(md_info));
+    nanocbor_put_bstr(&nc, ctx_hash.hash, ctx_hash.len);
     size_t len_pld = nanocbor_encoded_len(&nc);
 
     /* generate the authentication wrapper */
@@ -710,17 +707,17 @@ int _suit_wrap(cose_sign_context_t * ctx,
  * @section Authentication wrapper (public)
  ******************************************************************************/
 
+#ifdef COSE_BACKEND_NRF
 int suit_raw_unwrap(
         const uint8_t * key, const size_t len_key,
         const uint8_t * env, const size_t len_env,
         const uint8_t ** man, size_t * len_man) 
 {
     cose_sign_context_t ctx;
-    if (cose_sign_raw_init(&ctx, cose_mode_r, cose_curve_p256, key, len_key)) 
-        return 1;
+    if (cose_sign_raw_init(&ctx, cose_mode_r, key, len_key)) return 1;
     return _suit_unwrap(&ctx, env, len_env, man, len_man);
 }
-
+#else
 int suit_pem_unwrap(const char * pem, 
         const uint8_t * env, const size_t len_env,
         const uint8_t ** man, size_t * len_man)
@@ -738,4 +735,4 @@ int suit_pem_wrap(const char * pem,
     if (cose_sign_pem_init(&ctx, cose_mode_w, pem)) return 1;
     return _suit_wrap(&ctx, man, len_man, env, len_env); 
 }
-
+#endif

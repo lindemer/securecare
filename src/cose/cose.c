@@ -31,20 +31,20 @@
 
 #include "cose.h"
 
-#define HASH_TSTR(md_ctx, nc, buf, len_buf, str)                               \
+#define HASH_TSTR(ctx, nc, buf, len_buf, str)                                  \
     nanocbor_encoder_init(&nc, buf, len_buf);                                  \
     nanocbor_fmt_tstr(&nc, strlen((const char *) str));                        \
-    mbedtls_md_update(&md_ctx, buf, nanocbor_encoded_len(&nc));                \
-    mbedtls_md_update(&md_ctx, str, strlen((const char *) str));
+    cose_hash_update(ctx, buf, nanocbor_encoded_len(&nc));                     \
+    cose_hash_update(ctx, str, strlen((const char *) str));
 
-#define HASH_BSTR(md_ctx, nc, buf, len_buf, bstr, len_bstr)                    \
+#define HASH_BSTR(ctx, nc, buf, len_buf, bstr, len_bstr)                       \
     nanocbor_encoder_init(&nc, buf, len_buf);                                  \
     nanocbor_fmt_bstr(&nc, len_bstr);                                          \
-    mbedtls_md_update(&md_ctx, buf, nanocbor_encoded_len(&nc));                \
-    mbedtls_md_update(&md_ctx, bstr, len_bstr);
+    cose_hash_update(ctx, buf, nanocbor_encoded_len(&nc));                     \
+    cose_hash_update(ctx, bstr, len_bstr);
 
 /*******************************************************************************
- * @section COSE shared (private)
+ * @section Miscellaneous (private)
  ******************************************************************************/
 
 int _cose_encode_protected(cose_key_t * key, nanocbor_encoder_t * nc)
@@ -56,32 +56,99 @@ int _cose_encode_protected(cose_key_t * key, nanocbor_encoder_t * nc)
 }
 
 /*******************************************************************************
- * @section COSE shared (public)
+ * @section Miscellaneous (public)
  ******************************************************************************/
 
-void cose_set_kid(cose_key_t * key, const uint8_t * kid, size_t len_kid)
+inline void cose_set_kid(cose_key_t * key, const uint8_t * kid, size_t len_kid)
 {
     key->kid = kid;
     key->len_kid = len_kid;
 }
 
-void cose_set_aad(cose_key_t * key, const uint8_t * aad, size_t len_aad)
+inline void cose_set_aad(cose_key_t * key, const uint8_t * aad, size_t len_aad)
 {
     key->aad = aad;
     key->len_aad = len_aad;
 }
 
 /*******************************************************************************
+ * @section Generic cryptographic message digest API (public)
+ ******************************************************************************/
+
+int cose_hash_init(cose_hash_context_t * ctx)
+{
+#ifdef COSE_BACKEND_NRF
+    if ((ctx->type) != (COSE_SHA256_TYPE)) return COSE_ERROR_UNSUPPORTED;
+    if (nrf_crypto_hash_init(&ctx->ctx, &g_nrf_crypto_hash_sha256_info))
+            return COSE_ERROR_HASH;
+#else
+    mbedtls_md_setup(&ctx->ctx, mbedtls_md_info_from_type(ctx->type), 0);
+    mbedtls_md_starts(&ctx->ctx);
+#endif
+    return COSE_ERROR_NONE;
+}
+
+int cose_hash_update(cose_hash_context_t * ctx, 
+        const uint8_t * data, const size_t len)
+{
+#ifdef COSE_BACKEND_NRF
+    nrf_crypto_hash_update(&ctx->ctx, data, len);
+#else
+    mbedtls_md_update(&ctx->ctx, data, len);
+#endif
+    return COSE_ERROR_NONE;
+}
+
+int cose_hash_finish(cose_hash_context_t * ctx)
+{
+#ifdef COSE_BACKEND_NRF
+    if (nrf_crypto_hash_finalize(&ctx->ctx, ctx->hash, &ctx->len)) 
+        return COSE_ERROR_HASH;
+#else
+    if (mbedtls_md_finish(&ctx->ctx, ctx->hash)) return COSE_ERROR_HASH;
+    switch (ctx->type) {
+        case COSE_SHA256_TYPE:
+            ctx->len = COSE_SHA256_LENGTH; break;
+        case COSE_SHA512_TYPE:
+            ctx->len = COSE_SHA512_LENGTH; break;
+        default:
+            return COSE_ERROR_UNSUPPORTED;
+    }
+#endif
+    return COSE_ERROR_NONE;
+}
+
+int cose_hash(cose_hash_context_t * ctx,
+        const uint8_t * data, const size_t len)
+{
+#ifdef COSE_BACKEND_NRF
+    if ((ctx->type) != (COSE_SHA256_TYPE)) return COSE_ERROR_UNSUPPORTED;
+    if (nrf_crypto_hash_calculate(&ctx->ctx, &g_nrf_crypto_hash_sha256_info,
+            data, len, ctx->hash, &ctx->len))
+        return COSE_ERROR_HASH;
+#else
+    if (mbedtls_md(mbedtls_md_info_from_type(ctx->type), data, len, ctx->hash))
+        return COSE_ERROR_HASH;
+    switch (ctx->type) {
+        case COSE_SHA256_TYPE:
+            ctx->len = COSE_SHA256_LENGTH; break;
+        case COSE_SHA512_TYPE:
+            ctx->len = COSE_SHA512_LENGTH; break;
+        default:
+            return COSE_ERROR_UNSUPPORTED;
+    }
+#endif
+    return COSE_ERROR_NONE;
+}
+
+/*******************************************************************************
  * @section COSE Sign1 (private)
  ******************************************************************************/
 
-int _cose_sign1_hash(
-        cose_sign_context_t * ctx, const uint8_t *pld, const size_t len_pld,
-        uint8_t * hash)
+int _cose_sign1_hash(cose_sign_context_t * ctx,
+        const uint8_t *pld, const size_t len_pld)
 {
-    mbedtls_md_context_t md_ctx;
-    mbedtls_md_setup(&md_ctx, mbedtls_md_info_from_type(ctx->md_alg), 0);
-    mbedtls_md_starts(&md_ctx);
+    cose_hash_init(&ctx->hash);
     nanocbor_encoder_t nc;
 
     /* serialize body_protected */
@@ -107,30 +174,28 @@ int _cose_sign1_hash(
     nanocbor_encoder_init(&nc, buf, len_buf);
     nanocbor_fmt_bstr(&nc, len_str);
     nanocbor_fmt_array(&nc, 4);
-    mbedtls_md_update(&md_ctx, buf, nanocbor_encoded_len(&nc));
+    cose_hash_update(&ctx->hash, buf, nanocbor_encoded_len(&nc));
 
-    HASH_TSTR(md_ctx, nc, buf, len_buf, 
+    HASH_TSTR(&ctx->hash, nc, buf, len_buf, 
             (const unsigned char *) COSE_CONTEXT_SIGN1)
-    HASH_BSTR(md_ctx, nc, buf, len_buf, prot, len_prot)
-    HASH_BSTR(md_ctx, nc, buf, len_buf, ctx->key.aad, ctx->key.len_aad)
-    HASH_BSTR(md_ctx, nc, buf, len_buf, pld, len_pld)
+    HASH_BSTR(&ctx->hash, nc, buf, len_buf, prot, len_prot)
+    HASH_BSTR(&ctx->hash, nc, buf, len_buf, ctx->key.aad, ctx->key.len_aad)
+    HASH_BSTR(&ctx->hash, nc, buf, len_buf, pld, len_pld)
 
-    if (mbedtls_md_finish(&md_ctx, hash)) return COSE_ERROR_HASH;
-    return COSE_ERROR_NONE;
+    return cose_hash_finish(&ctx->hash);
 }
 
 int _cose_sign1_encode(
-        cose_key_t * key,
+        cose_sign_context_t * ctx,
         const uint8_t * pld, const size_t len_pld, 
-        const uint8_t * sig, const size_t len_sig,
         uint8_t * obj, size_t * len_obj) 
 {
     nanocbor_encoder_t nc;
     nanocbor_encoder_init(&nc, NULL, 0);
-    size_t len_prot = _cose_encode_protected(key, &nc);
+    size_t len_prot = _cose_encode_protected(&ctx->key, &nc);
     uint8_t prot[len_prot];
     nanocbor_encoder_init(&nc, prot, len_prot);
-    _cose_encode_protected(key, &nc);
+    _cose_encode_protected(&ctx->key, &nc);
 
     nanocbor_encoder_init(&nc, obj, *len_obj);
     nanocbor_fmt_tag(&nc, cose_tag_sign1);
@@ -138,7 +203,7 @@ int _cose_sign1_encode(
     nanocbor_put_bstr(&nc, prot, len_prot);
     nanocbor_fmt_map(&nc, 0);
     nanocbor_put_bstr(&nc, pld, len_pld);
-    nanocbor_put_bstr(&nc, sig, len_sig);
+    nanocbor_put_bstr(&nc, ctx->sig, ctx->len_sig);
     *len_obj = nanocbor_encoded_len(&nc);
 
     return COSE_ERROR_NONE;
@@ -147,9 +212,7 @@ int _cose_sign1_encode(
 int _cose_sign1_decode(
         cose_sign_context_t * ctx,
         const uint8_t * obj, const size_t len_obj,
-        const uint8_t ** pld, size_t * len_pld,
-        const uint8_t ** sig, size_t * len_sig, 
-        uint8_t * hash)
+        const uint8_t ** pld, size_t * len_pld)
 {
     nanocbor_value_t nc, arr;
     nanocbor_decoder_init(&nc, obj, len_obj);
@@ -159,8 +222,8 @@ int _cose_sign1_decode(
     nanocbor_skip(&arr);
     nanocbor_get_bstr(&arr, pld, len_pld); 
 
-    _cose_sign1_hash(ctx, *pld, *len_pld, hash);
-    nanocbor_get_bstr(&arr, sig, len_sig); 
+    _cose_sign1_hash(ctx, *pld, *len_pld);
+    nanocbor_get_bstr(&arr, (const uint8_t **) &ctx->sig, &ctx->len_sig); 
 
     return COSE_ERROR_NONE;
 }
@@ -169,46 +232,29 @@ int _cose_sign1_decode(
  * @section COSE Sign1 (public)
  ******************************************************************************/
 
+#ifdef COSE_BACKEND_NRF
 int cose_sign_raw_init(cose_sign_context_t * ctx, cose_mode_t mode, 
-        cose_curve_t crv, const uint8_t * key, size_t len_key)
+        const uint8_t * key, size_t len_key)
 {
-    return 0;
-}
+    /**
+     * The user must supply the curve and algorithm to initialize a raw key. 
+     * This information cannot be derived from the key's byte string.
+     */
 
-int cose_sign_pem_init(cose_sign_context_t * ctx, cose_mode_t mode, 
-        const char * pem) 
-{
-    mbedtls_pk_init(&ctx->pk);
+    if (ctx->key.curve != cose_curve_p256) return COSE_ERROR_UNSUPPORTED;
+    if (ctx->key.alg != cose_alg_ecdsa_sha_256) return COSE_ERROR_UNSUPPORTED;
+
+    ctx->len_sig = COSE_P256_LENGTH;
+    ctx->hash.len = COSE_SHA256_LENGTH;
+    ctx->hash.type = COSE_SHA256_TYPE;
 
     if (mode == cose_mode_r) {
         ctx->key.op = cose_key_op_verify;
-        if (mbedtls_pk_parse_public_key(&ctx->pk, 
-                    (const unsigned char *) pem, strlen(pem) + 1)) 
+        if (nrf_crypto_ecc_public_key_from_raw(
+                    &g_nrf_crypto_ecc_secp256r1_curve_info,
+                    &ctx->ctx.pub, key, len_key))
             return COSE_ERROR_CRYPTO;
-
-    } else if (mode == cose_mode_w) {
-        ctx->key.op = cose_key_op_sign;
-        if (mbedtls_pk_parse_key(&ctx->pk, 
-                    (const unsigned char *) pem, strlen(pem) + 1, NULL, 0)) 
-            return COSE_ERROR_CRYPTO;
-
-    } else return COSE_ERROR_UNSUPPORTED;
-
-    ctx->key.kty = cose_kty_ec2;
-    mbedtls_ecp_group_id grp_id = mbedtls_pk_ec(ctx->pk)->grp.id;
-
-    if (grp_id == MBEDTLS_ECP_DP_SECP256R1) {
-        ctx->len_hash = 32;
-        ctx->key.crv = cose_curve_p256;
-        ctx->key.alg = cose_alg_ecdsa_sha_256;
-        ctx->md_alg = MBEDTLS_MD_SHA256;
-        ctx->len_sig = 72;
-    } else if (grp_id == MBEDTLS_ECP_DP_SECP384R1) {
-        ctx->len_hash = 48;
-        ctx->key.crv = cose_curve_p384;
-        ctx->key.alg = cose_alg_ecdsa_sha_384;
-        ctx->md_alg = MBEDTLS_MD_SHA384;
-        ctx->len_sig = 104;
+    
     } else return COSE_ERROR_UNSUPPORTED;
 
     ctx->key.kid = NULL;
@@ -218,22 +264,80 @@ int cose_sign_pem_init(cose_sign_context_t * ctx, cose_mode_t mode,
 
     return COSE_ERROR_NONE;
 }
+#else
+int cose_sign_pem_init(cose_sign_context_t * ctx, cose_mode_t mode, 
+        const char * pem) 
+{
+    mbedtls_pk_init(&ctx->ctx);
+
+    /**
+     * mbedTLS can interpret most key details from a PEM file, but the user
+     * must indicate whether a public or a private key is being parsed.
+     */
+
+    if (mode == cose_mode_r) {
+        ctx->key.op = cose_key_op_verify;
+        if (mbedtls_pk_parse_public_key(&ctx->ctx, 
+                    (const unsigned char *) pem, strlen(pem) + 1)) 
+            return COSE_ERROR_CRYPTO;
+
+    } else if (mode == cose_mode_w) {
+        ctx->key.op = cose_key_op_sign;
+        if (mbedtls_pk_parse_key(&ctx->ctx, 
+                    (const unsigned char *) pem, strlen(pem) + 1, NULL, 0)) 
+            return COSE_ERROR_CRYPTO;
+
+    } else return COSE_ERROR_UNSUPPORTED;
+
+    ctx->key.kty = cose_kty_ec2;
+    mbedtls_ecp_group_id grp_id = mbedtls_pk_ec(ctx->ctx)->grp.id;
+
+    if (grp_id == MBEDTLS_ECP_DP_SECP256R1) {
+        ctx->len_sig = COSE_P256_LENGTH;
+        ctx->hash.len = COSE_SHA256_LENGTH;
+        ctx->hash.type = COSE_SHA256_TYPE;
+        ctx->key.curve = cose_curve_p256;
+        ctx->key.alg = cose_alg_ecdsa_sha_256;
+
+    } else if (grp_id == MBEDTLS_ECP_DP_SECP384R1) {
+        ctx->len_sig = COSE_P384_LENGTH;
+        ctx->hash.len = COSE_SHA384_LENGTH;
+        ctx->hash.type = COSE_SHA512_TYPE;
+        ctx->key.curve = cose_curve_p384;
+        ctx->key.alg = cose_alg_ecdsa_sha_384;
+
+    } else return COSE_ERROR_UNSUPPORTED;
+
+    ctx->key.kid = NULL;
+    ctx->key.len_kid = 0;
+    ctx->key.aad = NULL;
+    ctx->key.len_aad = 0;
+
+    return COSE_ERROR_NONE;
+}
+#endif /* COSE_BACKEND_NRF */
 
 int cose_sign1_write(cose_sign_context_t * ctx, 
         const uint8_t * pld, const size_t len_pld, 
         uint8_t * obj, size_t * len_obj) 
 {
-    uint8_t hash[ctx->len_hash];
-    uint8_t sig[ctx->len_sig];
-    
-    _cose_sign1_hash(ctx, pld, len_pld, hash);
+    uint8_t signature[ctx->len_sig];
+    ctx->sig = signature;
 
-    if (mbedtls_ecdsa_write_signature(ctx->pk.pk_ctx, ctx->md_alg, 
-                hash, ctx->len_hash, sig, &ctx->len_sig, NULL, NULL)) 
+    _cose_sign1_hash(ctx, pld, len_pld);
+
+#ifdef COSE_BACKEND_NRF
+    if (nrf_crypto_ecdsa_sign(NULL, &ctx->ctx.priv, ctx->hash.hash,
+                ctx->hash.len, ctx->sig, &ctx->len_sig))
         return COSE_ERROR_SIGN;
+#else
+    if (mbedtls_ecdsa_write_signature(ctx->ctx.pk_ctx, ctx->hash.type, 
+                ctx->hash.hash, ctx->hash.len, ctx->sig, &ctx->len_sig, 
+                NULL, NULL)) 
+        return COSE_ERROR_SIGN;
+#endif
 
-    if (_cose_sign1_encode(&ctx->key, pld, len_pld, sig, ctx->len_sig, 
-                obj, len_obj))
+    if (_cose_sign1_encode(ctx, pld, len_pld, obj, len_obj))
         return COSE_ERROR_ENCODE;
 
     return COSE_ERROR_NONE;
@@ -243,30 +347,43 @@ int cose_sign1_read(cose_sign_context_t * ctx,
         const uint8_t * obj, const size_t len_obj, 
         const uint8_t ** pld, size_t * len_pld) 
 {
-    uint8_t hash[ctx->len_hash];
-    uint8_t * sig;
-    size_t len_sig;
-
-    if (_cose_sign1_decode(ctx, obj, len_obj, pld, len_pld, 
-                (const uint8_t **) &sig, &len_sig, hash))
+    if (_cose_sign1_decode(ctx, obj, len_obj, pld, len_pld))
         return COSE_ERROR_DECODE;
-    if (mbedtls_pk_verify(&ctx->pk, ctx->md_alg, hash, 0, sig, len_sig))
+
+#ifdef COSE_BACKEND_NRF
+    if (nrf_crypto_ecdsa_verify(NULL, &ctx->ctx.pub, ctx->hash.hash,
+                ctx->hash.len, ctx->sig, ctx->len_sig))
         return COSE_ERROR_AUTHENTICATE;
+#else
+    if (mbedtls_pk_verify(&ctx->ctx, ctx->hash.type, ctx->hash.hash, 0, 
+                ctx->sig, ctx->len_sig))
+        return COSE_ERROR_AUTHENTICATE;
+#endif
 
     return COSE_ERROR_NONE;
 }
 
 void cose_sign_free(cose_sign_context_t * ctx) 
 {
-    mbedtls_pk_free(&ctx->pk);
+#ifdef COSE_BACKEND_NRF
+    switch (ctx->mode) {
+        case (cose_mode_w):
+            nrf_crypto_ecc_private_key_free(&ctx->ctx.priv); break;
+        case (cose_mode_r):
+            nrf_crypto_ecc_public_key_free(&ctx->ctx.pub); break;
+    }
+#else
+    mbedtls_pk_free(&ctx->ctx);
+#endif
 }
 
 /*******************************************************************************
  * @section COSE Encrypt0 (private)
  ******************************************************************************/
 
+#ifndef COSE_BACKEND_NRF
 int _cose_encrypt(
-        cose_crypt_context_t * ctx,
+        cose_aead_context_t * ctx,
         const uint8_t * pld, const size_t len_pld,
         const uint8_t * tbe, const size_t len_tbe,
         uint8_t * enc) 
@@ -275,7 +392,7 @@ int _cose_encrypt(
         ctx->key.alg == cose_alg_aes_gcm_192 ||
         ctx->key.alg == cose_alg_aes_gcm_256) {
 
-        if (mbedtls_gcm_crypt_and_tag(&ctx->gcm, MBEDTLS_GCM_ENCRYPT, len_pld,
+        if (mbedtls_gcm_crypt_and_tag(&ctx->ctx, MBEDTLS_GCM_ENCRYPT, len_pld,
                     ctx->iv, ctx->len_iv, tbe, len_tbe, pld, enc, ctx->len_mac,
                     enc + len_pld))
             return COSE_ERROR_ENCRYPT;
@@ -285,7 +402,7 @@ int _cose_encrypt(
 }
 
 int _cose_decrypt(
-        cose_crypt_context_t * ctx,
+        cose_aead_context_t * ctx,
         const uint8_t * enc, const size_t len_enc,
         const uint8_t * tbe, const size_t len_tbe,
         uint8_t * pld, size_t * len_pld) 
@@ -295,7 +412,7 @@ int _cose_decrypt(
         ctx->key.alg == cose_alg_aes_gcm_256) {
 
         *len_pld = len_enc - ctx->len_mac;
-        if (mbedtls_gcm_auth_decrypt(&ctx->gcm, *len_pld, ctx->iv, ctx->len_iv,
+        if (mbedtls_gcm_auth_decrypt(&ctx->ctx, *len_pld, ctx->iv, ctx->len_iv,
                     tbe, len_tbe, enc + *len_pld, ctx->len_mac, enc, pld))
             return COSE_ERROR_DECRYPT;
             
@@ -304,7 +421,7 @@ int _cose_decrypt(
 }
 
 int _cose_encrypt0_encode(
-        cose_crypt_context_t * ctx,
+        cose_aead_context_t * ctx,
         const uint8_t * enc, const size_t len_enc, 
         uint8_t * obj, size_t * len_obj) 
 {
@@ -331,7 +448,7 @@ int _cose_encrypt0_encode(
 } 
 
 int _cose_encrypt0_decode(
-        cose_crypt_context_t * ctx,
+        cose_aead_context_t * ctx,
         const uint8_t * obj, const size_t len_obj,
         const uint8_t ** enc, size_t * len_enc)
 {
@@ -391,12 +508,14 @@ int _cose_encrypt0_tbe(
 
     return COSE_ERROR_NONE;
 }
+#endif /* COSE_BACKEND_NRF */
 
 /*******************************************************************************
  * @section COSE Encrypt0 (public)
  ******************************************************************************/
 
-int cose_crypt_init(cose_crypt_context_t * ctx,
+#ifndef COSE_BACKEND_NRF
+int cose_aead_init(cose_aead_context_t * ctx,
         const uint8_t * key, cose_alg_t alg,
         uint8_t * iv, const size_t len_iv) 
 {
@@ -418,14 +537,14 @@ int cose_crypt_init(cose_crypt_context_t * ctx,
         ctx->key.alg == cose_alg_aes_gcm_192 ||
         ctx->key.alg == cose_alg_aes_gcm_256) {
         ctx->len_mac = 16;
-        mbedtls_gcm_init(&ctx->gcm);
-        mbedtls_gcm_setkey(&ctx->gcm, ctx->cipher, key, ctx->key.len_key * 8);
+        mbedtls_gcm_init(&ctx->ctx);
+        mbedtls_gcm_setkey(&ctx->ctx, ctx->cipher, key, ctx->key.len_key * 8);
     } else return COSE_ERROR_UNSUPPORTED;
 
     return COSE_ERROR_NONE;
 }
 
-int cose_encrypt0_write(cose_crypt_context_t *ctx,
+int cose_encrypt0_write(cose_aead_context_t *ctx,
         const uint8_t * pld, const size_t len_pld, 
         uint8_t * obj, size_t * len_obj) 
 {
@@ -444,7 +563,7 @@ int cose_encrypt0_write(cose_crypt_context_t *ctx,
     return COSE_ERROR_NONE;
 }
 
-int cose_encrypt0_read(cose_crypt_context_t * ctx,
+int cose_encrypt0_read(cose_aead_context_t * ctx,
         const uint8_t * obj, const size_t len_obj, 
         uint8_t * pld, size_t * len_pld) 
 {
@@ -463,8 +582,9 @@ int cose_encrypt0_read(cose_crypt_context_t * ctx,
     return COSE_ERROR_NONE;
 }
 
-void cose_crypt_free(cose_crypt_context_t * ctx) 
+void cose_aead_free(cose_aead_context_t * ctx) 
 {
-     mbedtls_gcm_free(&ctx->gcm);
+     mbedtls_gcm_free(&ctx->ctx);
 }
+#endif /* COSE_BACKEND_NRF */
 

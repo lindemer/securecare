@@ -35,11 +35,14 @@
 #include <string.h>
 #include "nanocbor/nanocbor.h"
 
-#ifdef NRF_CRYPTO_ENABLED
+#ifdef COSE_BACKEND_NRF
 #include "nrf_crypto.h"
 #include "nrf_crypto_ecc.h"
 #include "nrf_crypto_error.h"
 #include "nrf_crypto_ecdsa.h"
+#include "nrf_crypto_hash.h"
+#include "nrf_crypto_init.h"
+#include "nrf_crypto_shared.h"
 #else
 #include <mbedtls/md.h>
 #include <mbedtls/pk.h>
@@ -49,34 +52,56 @@
 #include <mbedtls/error.h>
 #endif
 
-#define COSE_CONTEXT_SIGN "Signature"
-#define COSE_CONTEXT_SIGN1 "Signature1"
-#define COSE_CONTEXT_COUNTERSIGN "CounterSignature"
-#define COSE_CONTEXT_MAC "MAC"
-#define COSE_CONTEXT_MAC0 "MAC0"
-#define COSE_CONTEXT_ENCRYPT "Encrypt"
-#define COSE_CONTEXT_ENCRYPT0 "Encrypt0"
-#define COSE_CONTEXT_ENC_RECIPIENT "Enc_Recipient"
-#define COSE_CONTEXT_MAC_RECIPIENT "Mac_Recipient"
-#define COSE_CONTEXT_REC_RECIPIENT "Rec_Recipient"
+#define COSE_PREFIX 0xC05E0000
+
+#ifdef COSE_BACKEND_NRF
+#define COSE_SHA256_TYPE COSE_PREFIX | 256
+#define COSE_SHA384_TYPE COSE_PREFIX | 384
+#define COSE_SHA512_TYPE COSE_PREFIX | 512
+#else
+#define COSE_SHA256_TYPE MBEDTLS_MD_SHA256
+#define COSE_SHA384_TYPE MBEDTLS_MD_SHA384
+#define COSE_SHA512_TYPE MBEDTLS_MD_SHA512
+#endif
+
+#define COSE_SHA256_LENGTH 32
+#define COSE_SHA384_LENGTH 48
+#define COSE_SHA512_LENGTH 64
+#define COSE_P256_LENGTH 72
+#define COSE_P384_LENGTH 104
+
+#define COSE_CONTEXT_SIGN               "Signature"
+#define COSE_CONTEXT_SIGN1              "Signature1"
+#define COSE_CONTEXT_COUNTERSIGN        "CounterSignature"
+#define COSE_CONTEXT_MAC                "MAC"
+#define COSE_CONTEXT_MAC0               "MAC0"
+#define COSE_CONTEXT_ENCRYPT            "Encrypt"
+#define COSE_CONTEXT_ENCRYPT0           "Encrypt0"
+#define COSE_CONTEXT_ENC_RECIPIENT      "Enc_Recipient"
+#define COSE_CONTEXT_MAC_RECIPIENT      "Mac_Recipient"
+#define COSE_CONTEXT_REC_RECIPIENT      "Rec_Recipient"
 
 /** 
  * @brief COSE API
  * @{
  */
-#define COSE_ERROR_NONE                 0x00
-#define COSE_ERROR_CRYPTO               0x01
-#define COSE_ERROR_CBOR                 0x02
-#define COSE_ERROR_UNSUPPORTED          0x03
-#define COSE_ERROR_ENCODE               0x04
-#define COSE_ERROR_DECODE               0x05
-#define COSE_ERROR_AUTHENTICATE         0x06
-#define COSE_ERROR_MISMATCH             0x07
-#define COSE_ERROR_HASH                 0x08
-#define COSE_ERROR_ENCRYPT              0x09
-#define COSE_ERROR_DECRYPT              0x0a
-#define COSE_ERROR_SIGN                 0x0b
-#define COSE_ERROR_OVERFLOW             0x0c
+#define COSE_ERROR_NONE                               0x0
+#define COSE_ERROR_CRYPTO               COSE_PREFIX | 0x1
+#define COSE_ERROR_CBOR                 COSE_PREFIX | 0x2
+#define COSE_ERROR_UNSUPPORTED          COSE_PREFIX | 0x3
+#define COSE_ERROR_ENCODE               COSE_PREFIX | 0x4
+#define COSE_ERROR_DECODE               COSE_PREFIX | 0x5
+#define COSE_ERROR_AUTHENTICATE         COSE_PREFIX | 0x6
+#define COSE_ERROR_MISMATCH             COSE_PREFIX | 0x7
+#define COSE_ERROR_HASH                 COSE_PREFIX | 0x8
+#define COSE_ERROR_ENCRYPT              COSE_PREFIX | 0x9
+#define COSE_ERROR_DECRYPT              COSE_PREFIX | 0xa
+#define COSE_ERROR_SIGN                 COSE_PREFIX | 0xb
+#define COSE_ERROR_OVERFLOW             COSE_PREFIX | 0xc
+
+/*******************************************************************************
+ * @section COSE labels
+ ******************************************************************************/
 
 typedef enum {
     cose_tag_sign = 98,
@@ -223,11 +248,16 @@ typedef enum {
     cose_mode_w = 2,    /* write */
 } cose_mode_t;
 
+/*******************************************************************************
+ * @section Cryptographic context structs
+ ******************************************************************************/
+
 typedef struct {
+
     /* private */
     cose_kty_t kty;
     cose_alg_t alg;
-    cose_curve_t crv;
+    cose_curve_t curve;
     cose_key_op_t op;
     size_t len_key;
 
@@ -236,44 +266,65 @@ typedef struct {
     size_t len_kid;
     const uint8_t * aad;
     size_t len_aad;
+
 } cose_key_t;
 
 typedef struct {
-    cose_key_t key;
-    cose_mode_t mode;
 
-    /* private */
-    size_t len_sig;
-    size_t len_hash;
+    /* TODO: dynamically allocate */
+    uint8_t hash[64];
+    size_t len;
 
-#ifdef NRF_CRYPTO_ENABLED
-    union {
-        nrf_crypto_ecdsa_verify_context_t vctx;
-        nrf_crypto_ecdsa_sign_context_t sctx;
-    } pk;
+#ifdef COSE_BACKEND_NRF
+    int type;
+    nrf_crypto_hash_context_t ctx;
 #else
-    mbedtls_pk_context pk;
-    mbedtls_md_type_t md_alg;
+    mbedtls_md_type_t type;
+    mbedtls_md_context_t ctx;
+#endif
+
+} cose_hash_context_t;
+
+typedef struct {
+    
+    /* TODO: dynamically allocate */
+    uint8_t * sig; 
+    size_t len_sig;
+
+    cose_key_t key;
+    cose_mode_t mode; /* read/write */
+    cose_hash_context_t hash;
+
+#ifdef COSE_BACKEND_NRF
+    union {
+        nrf_crypto_ecc_private_key_t priv;
+        nrf_crypto_ecc_public_key_t pub;
+    } ctx;
+#else
+    mbedtls_pk_context ctx;
 #endif
 
 } cose_sign_context_t;
 
 typedef struct {
-    cose_key_t key;
 
-    /* private */
+    cose_key_t key;
     int cipher;
     size_t len_mac;
     uint8_t * iv;
     size_t len_iv;
 
-#ifdef NRF_CRYPTO_ENABLED
-    nrf_crypto_aead_context_t gcm;
+#ifdef COSE_BACKEND_NRF
+    nrf_crypto_aead_context_t ctx;
 #else
-    mbedtls_gcm_context gcm;
+    mbedtls_gcm_context ctx;
 #endif
 
-} cose_crypt_context_t;
+} cose_aead_context_t;
+
+/*******************************************************************************
+ * @section COSE API
+ ******************************************************************************/
 
 void cose_set_kid(cose_key_t * key, const uint8_t * kid, size_t len_kid);
 void cose_set_aad(cose_key_t * key, const uint8_t * aad, size_t len_aad);
@@ -281,24 +332,24 @@ void cose_set_aad(cose_key_t * key, const uint8_t * aad, size_t len_aad);
 /**
  * @brief Initialize COSE signing context with a raw public key
  *
- * @param       ctx     Pointer to uninitialized signing context
- * @param       mode    0 for signature generation, 1 for verification
- * @param       key     Pointer to key bytes
- * @param       len_key Length of key
+ * @param[in]   ctx     Pointer to uninitialized signing context
+ * @param[in]   mode    0 for signature generation, 1 for verification
+ * @param[in]   key     Pointer to key bytes
+ * @param[in]   len_key Length of key
  *
  * @retval COSE_ERROR_NONE              Success
  * @retval COSE_ERROR_CRYPTO            Failed to parse key string 
  * @retval COSE_ERROR_UNSUPPORTED       Crypto algorithm not supported
  */
 int cose_sign_raw_init(cose_sign_context_t * ctx, cose_mode_t mode, 
-        cose_curve_t crv, const uint8_t * key, size_t len_key);
+        const uint8_t * key, size_t len_key);
 
 /**
  * @brief Initialize COSE signing context with a PEM-formatted key
  *
- * @param       ctx     Pointer to uninitialized signing context
- * @param       mode    0 for signature generation, 1 for verification
- * @param       pem     PEM-formatted key string
+ * @param[in]   ctx     Pointer to uninitialized signing context
+ * @param[in]   mode    0 for signature generation, 1 for verification
+ * @param[in]   pem     PEM-formatted key string
  *
  * @retval COSE_ERROR_NONE              Success
  * @retval COSE_ERROR_CRYPTO            Failed to parse key string 
@@ -308,31 +359,31 @@ int cose_sign_pem_init(cose_sign_context_t * ctx, cose_mode_t mode,
         const char * pem);
 
 /**
- * @brief Initialize COSE encryption and MAC context
+ * @brief Initialize COSE AEAD context
  *
- * @param       ctx     Pointer to uninitialized encryption and MAC context
- * @param       key     Pointer to raw key bytes
- * @param       alg     Crypto algorithm allowed for use with this key
- * @param       iv      Initialization vector
- * @param       len_iv  Length of IV
+ * @param[in]   ctx     Pointer to uninitialized encryption and MAC context
+ * @param[in]   key     Pointer to raw key bytes
+ * @param[in]   alg     Crypto algorithm allowed for use with this key
+ * @param[in]   iv      Initialization vector
+ * @param[in]   len_iv  Length of IV
  *
  * @retval COSE_ERROR_NONE              Success
  * @retval COSE_ERROR_UNSUPPORTED       Crypto algorithm not supported
  */
-int cose_crypt_init(cose_crypt_context_t * ctx,
+int cose_aead_init(cose_aead_context_t * ctx,
         const uint8_t * key, cose_alg_t alg,
         uint8_t * iv, const size_t len_iv);
 
-/* free underlying mbedTLS contexts */
+/* free backend cryptographic contexts */
 void cose_sign_free(cose_sign_context_t * ctx);
-void cose_crypt_free(cose_crypt_context_t * ctx);
+void cose_aead_free(cose_aead_context_t * ctx);
 
 /**
  * @brief Encode a COSE Sign1 object
  *
- * @param       ctx     Pointer to the COSE signing context
- * @param       pld     Pointer to the payload to be signed 
- * @param       len_pld Length of the payload
+ * @param[in]   ctx     Pointer to the COSE signing context
+ * @param[in]   pld     Pointer to the payload to be signed 
+ * @param[in]   len_pld Length of the payload
  * @param[out]  obj     Pointer to output buffer for encoded object 
  * @param[out]  len_obj Pointer to length of buffer
  *
@@ -348,9 +399,9 @@ int cose_sign1_write(cose_sign_context_t * ctx,
 /**
  * @brief Decode a COSE Sign1 object
  *
- * @param       ctx     Pointer to the COSE signing context
- * @param       obj     Pointer to the encoded COSE object 
- * @param       len_obj Length of encode COSE object 
+ * @param[in]   ctx     Pointer to the COSE signing context
+ * @param[in]   obj     Pointer to the encoded COSE object 
+ * @param[in]   len_obj Length of encode COSE object 
  * @param[out]  pld     Pointer to payload within COSE object
  * @param[out]  len_pld Payload length
  *
@@ -366,9 +417,9 @@ int cose_sign1_read(cose_sign_context_t * ctx,
 /**
  * @brief Encode a COSE Encrypt0 object
  *
- * @param       ctx     Pointer to the COSE encryption and MAC context
- * @param       pld     Pointer to the payload to be encrypted (and MACed) 
- * @param       len_pld Length of the payload
+ * @param[in]   ctx     Pointer to the COSE encryption context
+ * @param[in]   pld     Pointer to the payload to be encrypted (and MACed) 
+ * @param[in]   len_pld Length of the payload
  * @param[out]  obj     Pointer to output buffer for encoded object 
  * @param[out]  len_obj Pointer to length of buffer
  *
@@ -376,16 +427,16 @@ int cose_sign1_read(cose_sign_context_t * ctx,
  * @retval COSE_ERROR_ENCODE            Failed to encode COSE object
  * @retval COSE_ERROR_ENCRYPT           Failed to encrypt (and MAC) data
  */
-int cose_encrypt0_write(cose_crypt_context_t *ctx,
+int cose_encrypt0_write(cose_aead_context_t *ctx,
         const uint8_t * pld, const size_t len_pld, 
         uint8_t * obj, size_t * len_obj);
 
 /**
  * @brief Decode a COSE Encrypt0 object
  *
- * @param       ctx     Pointer to the COSE encryption and MAC context
- * @param       obj     Pointer to the encoded COSE object 
- * @param       len_obj Length of encode COSE object 
+ * @param[in]   ctx     Pointer to the COSE AEAD context
+ * @param[in]   obj     Pointer to the encoded COSE object 
+ * @param[in]   len_obj Length of encode COSE object 
  * @param[out]  pld     Pointer to the output buffer for decoded payload 
  * @param[out]  len_pld Pointer to length of buffer
  *
@@ -394,23 +445,30 @@ int cose_encrypt0_write(cose_crypt_context_t *ctx,
  * @retval COSE_ERROR_DECODE            Failed to decode COSE object 
  * @retval COSE_ERROR_DECRYPT           Failed to decrypt data
  */
-int cose_encrypt0_read(cose_crypt_context_t * ctx,
+int cose_encrypt0_read(cose_aead_context_t * ctx,
         const uint8_t * obj, const size_t len_obj, 
         uint8_t * pld, size_t * len_pld);
 
 /**
- * @brief Not yet implemented
+ * @brief Generic cryptographic message digest API
+ *
+ * @param[in]   ctx     Pointer to the COSE hash context
+ * @param[in]   data    Pointer to data to be hashed
+ * @param[in]   len     Length of input data
+ *
+ * @retval COSE_ERROR_NONE              Success
+ * @retval COSE_ERROR_HASH              Failed to generate message digest
+ * @retval COSE_ERROR_UNSUPPORTED       Unsupported message digest algorithm
  */
-int cose_mac0_write(cose_crypt_context_t *ctx,
-        const uint8_t * pld, const size_t len_pld, 
-        uint8_t * obj, size_t * len_obj);
+int cose_hash_init(cose_hash_context_t * ctx);
 
-/**
- * @brief Not yet implemented
- */
-int cose_mac0_read(cose_crypt_context_t * ctx,
-        const uint8_t * obj, const size_t len_obj, 
-        uint8_t * pld, size_t * len_pld);
+int cose_hash_update(cose_hash_context_t * ctx, 
+        const uint8_t * data, const size_t len);
+
+int cose_hash_finish(cose_hash_context_t * ctx);
+
+int cose_hash(cose_hash_context_t * ctx,
+        const uint8_t * data, const size_t len);
 
 /**
  * @}

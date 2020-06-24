@@ -256,6 +256,9 @@ CFLAGS += -DNANOCBOR_HTOBE32_FUNC=__builtin_bswap32
 CFLAGS += -DNANOCBOR_HTOBE64_FUNC=__builtin_bswap64
 CFLAGS += -DNANOCBOR_BE64TOH_FUNC=__builtin_bswap64
 
+# C flags for COSE
+CFLAGS += -DCOSE_BACKEND_NRF
+
 # C++ flags common to all targets
 CXXFLAGS += $(OPT)
 # Assembler flags common to all targets
