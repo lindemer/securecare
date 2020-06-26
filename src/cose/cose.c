@@ -404,13 +404,15 @@ int cose_sign1_write(cose_sign_context_t * ctx,
                 ctx->hash.hash, ctx->hash.len, ctx->hash.type);
     if (err) return err;
 
-    err = mbedtls_mpi_write_binary(&r, (uint8_t *) ctx->sig, 32);
+    err = mbedtls_mpi_write_binary(&r, ctx->sig, 32);
     if (err) return err;
-    err = mbedtls_mpi_write_binary(&s, (uint8_t *) ctx->sig + 32, 32);
+    err = mbedtls_mpi_write_binary(&s, ctx->sig + 32, 32);
     if (err) return err;
      
     mbedtls_mpi_free(&r);
     mbedtls_mpi_free(&s);
+
+    ctx->len_sig = 64;
 
     /*
     if (mbedtls_ecdsa_write_signature(ctx->ctx.pk_ctx, ctx->hash.type,
