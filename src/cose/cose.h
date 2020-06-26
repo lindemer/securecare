@@ -68,8 +68,7 @@
 #define COSE_SHA256_LENGTH 32
 #define COSE_SHA384_LENGTH 48
 #define COSE_SHA512_LENGTH 64
-#define COSE_P256_LENGTH 72
-#define COSE_P384_LENGTH 104
+#define COSE_P256_KEY_LENGTH 32
 
 #define COSE_CONTEXT_SIGN               "Signature"
 #define COSE_CONTEXT_SIGN1              "Signature1"
