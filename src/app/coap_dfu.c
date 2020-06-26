@@ -725,18 +725,13 @@ static void suit_request_callback(coap_resource_t * p_resource, coap_message_t *
     uint8_t man[256];
     size_t len_man = 256;
 
-    const char * good = "good";
-    const char * bad = "bad";
+    char msg[128];
+    int err = suit_raw_unwrap(pk, sizeof(pk), env, len_env, 
+            (const uint8_t **) &man, &len_man);
+    sprintf(msg, "0x%x", err);
 
-    if (suit_raw_unwrap(pk, sizeof(pk), env, len_env, (const uint8_t **) &man, &len_man))
-        p_response = message_create(&message_conf, NULL, (uint8_t *)bad, strlen(bad), &p_request->remote);
-    else p_response = message_create(&message_conf, NULL, (uint8_t *)good, strlen(good), &p_request->remote);
-        
-
-    // Placeholder GET request response string.
-    //const char * pld = "hello world";
-    //p_response = message_create(&message_conf, NULL, (uint8_t *)pld, strlen(pld), &p_request->remote);
-    //p_response = message_create(&message_conf, NULL, env, len_env, &p_request->remote);
+    p_response = message_create(&message_conf, NULL, (uint8_t *) msg, strlen(msg),
+            &p_request->remote);
 
     // Send response, if created.
     if (p_response != NULL) coap_dfu_delayed_message_send(p_response);

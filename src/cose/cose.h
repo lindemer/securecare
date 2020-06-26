@@ -44,15 +44,16 @@
 #include "nrf_crypto_init.h"
 #include "nrf_crypto_shared.h"
 #else
+#include <mbedtls/asn1.h>
 #include <mbedtls/md.h>
 #include <mbedtls/pk.h>
 #include <mbedtls/gcm.h>
 #include <mbedtls/ecp.h>
 #include <mbedtls/ecdsa.h>
 #include <mbedtls/error.h>
+#include <mbedtls/entropy.h>
+#include <mbedtls/ctr_drbg.h>
 #endif
-
-#define COSE_PREFIX 0xC05E0000
 
 #ifdef COSE_BACKEND_NRF
 #define COSE_SHA256_TYPE COSE_PREFIX | 256
@@ -85,6 +86,9 @@
  * @brief COSE API
  * @{
  */
+
+#define COSE_PREFIX 0xC05E0000
+
 #define COSE_ERROR_NONE                               0x0
 #define COSE_ERROR_CRYPTO               COSE_PREFIX | 0x1
 #define COSE_ERROR_CBOR                 COSE_PREFIX | 0x2

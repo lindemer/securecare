@@ -64,6 +64,7 @@ SRC_FILES += \
   $(SDK_ROOT)/components/libraries/crypto/nrf_crypto_hash.c \
   $(SDK_ROOT)/components/libraries/crypto/nrf_crypto_init.c \
   $(SDK_ROOT)/components/libraries/crypto/nrf_crypto_shared.c \
+  $(SDK_ROOT)/external/infineon/examples/ecdsa_utils/ecdsa_utils.c \
   $(KEYS_DIR)/pub.c \
   $(PROJ_DIR)/main.c \
   $(PROJ_DIR)/coap_dfu.c \
@@ -109,6 +110,7 @@ SRC_FILES += \
 
 # Include folders common to all targets
 INC_FOLDERS += \
+  $(SDK_ROOT)/external/infineon/examples/ecdsa_utils \
   $(PROJ_DIR)/../../lib/NanoCBOR/include \
   $(PROJ_DIR)/../cose \
   $(PROJ_DIR)/../suit \

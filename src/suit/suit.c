@@ -41,23 +41,24 @@
 /* default size of stack-allocated buffers for serialization */
 #define SUIT_STACK_BUFFER 256
 
-/* default size of message digest (SHA-256) */
-#define SUIT_HASH_SIZE 32
+#define RETURN_ERROR(x) err = x; if (err) return err;
 
 #define CBOR_ENTER_ARR(nc1, nc2) \
-    if (nanocbor_enter_array(&nc1, &nc2) < 0) return 1;
+    if (nanocbor_enter_array(&nc1, &nc2) < 0) return SUIT_ERROR_CBOR;
 
 #define CBOR_ENTER_MAP(nc1, nc2) \
-    if (nanocbor_enter_map(&nc1, &nc2) < 0) return 1;
+    if (nanocbor_enter_map(&nc1, &nc2) < 0) return SUIT_ERROR_CBOR;
 
 #define CBOR_GET_INT(nc, val) \
-    if (nanocbor_get_uint32(&nc, &val) < 0) return 1;
+    if (nanocbor_get_uint32(&nc, &val) < 0) return SUIT_ERROR_CBOR;
 
 #define CBOR_GET_BSTR(nc, val, len_val) \
-    if (nanocbor_get_bstr(&nc, (const uint8_t **) &val, &len_val) < 0) return 1;
+    if (nanocbor_get_bstr(&nc, (const uint8_t **) &val, &len_val) < 0) \
+        return SUIT_ERROR_CBOR;
 
 #define CBOR_GET_TSTR(nc, val, len_val) \
-    if (nanocbor_get_tstr(&nc, (const uint8_t **) &val, &len_val) < 0) return 1;
+    if (nanocbor_get_tstr(&nc, (const uint8_t **) &val, &len_val) < 0) \
+        return SUIT_ERROR_CBOR;
 
 #define CBOR_INIT_ARR(nc, buf, len_buf, items) \
     nanocbor_encoder_init(&nc, buf, len_buf); \
@@ -78,10 +79,11 @@ int _suit_parse_image_digest(suit_component_t * comp,
     nanocbor_decoder_init(&top, md, len_md);
     CBOR_ENTER_ARR(top, arr);
 
-    if (nanocbor_get_uint32(&arr, (uint32_t *) &comp->digest_alg) < 0) return 1;
+    if (nanocbor_get_uint32(&arr, (uint32_t *) &comp->digest_alg) < 0)
+        return SUIT_ERROR_CBOR;
     CBOR_GET_BSTR(arr, comp->digest, comp->len_digest);
 
-    return 0;
+    return SUIT_ERROR_NONE;
 }
 
 int _suit_parse_parameters(suit_context_t * ctx,
@@ -89,7 +91,7 @@ int _suit_parse_parameters(suit_context_t * ctx,
 {
     suit_component_t * comp = &ctx->components[idx];
 
-    uint32_t map_key; uint32_t map_val;
+    uint32_t map_key; uint32_t map_val; int err;
     while (!nanocbor_at_end(map)) {
         CBOR_GET_INT(*map, map_key);
         switch (map_key) {
@@ -115,7 +117,7 @@ int _suit_parse_parameters(suit_context_t * ctx,
                 if (override || comp->digest == NULL) {
                     uint8_t * md; size_t len_md;
                     CBOR_GET_BSTR(*map, md, len_md);
-                    if (_suit_parse_image_digest(comp, md, len_md)) return 1; 
+                    RETURN_ERROR(_suit_parse_image_digest(comp, md, len_md));
                 }
                 break;
 
@@ -128,7 +130,7 @@ int _suit_parse_parameters(suit_context_t * ctx,
                 if (override || comp->archive_alg == 0)
                     if (nanocbor_get_uint32(
                                 map, (uint32_t *) &comp->archive_alg) < 0)
-                        return 1;
+                        return SUIT_ERROR_CBOR;
                 break;
 
             /**
@@ -142,11 +144,11 @@ int _suit_parse_parameters(suit_context_t * ctx,
                 break;
 
             /* FAIL if unsupported */
-            default: return 1;
+            default: return SUIT_ERROR_UNSUPPORTED;
 
         }
     }
-    return 0;
+    return SUIT_ERROR_NONE;
 }
 
 int _suit_parse_sequence(suit_context_t * ctx,
@@ -157,7 +159,7 @@ int _suit_parse_sequence(suit_context_t * ctx,
     uint8_t * tmp; size_t len_tmp; bool pass;
 
     CBOR_ENTER_ARR(top, arr);
-    uint32_t arr_key;
+    uint32_t arr_key; int err;
     while (!nanocbor_at_end(&arr)) {
         CBOR_GET_INT(arr, arr_key);
         switch (arr_key) {
@@ -165,13 +167,13 @@ int _suit_parse_sequence(suit_context_t * ctx,
             /* DIRECTIVE override parameters */
             case suit_dir_override_params:
                 CBOR_ENTER_MAP(arr, map);
-                if (_suit_parse_parameters(ctx, idx, &map, true)) return 1;
+                RETURN_ERROR(_suit_parse_parameters(ctx, idx, &map, true));
                 nanocbor_skip(&arr); break;
 
             /* DIRECTIVE set parameters */
             case suit_dir_set_params:
                 CBOR_ENTER_MAP(arr, map);
-                if (_suit_parse_parameters(ctx, idx, &map, false)) return 1;
+                RETURN_ERROR(_suit_parse_parameters(ctx, idx, &map, false));
                 nanocbor_skip(&arr); break;
 
             /* DIRECTIVE run this component */
@@ -182,7 +184,8 @@ int _suit_parse_sequence(suit_context_t * ctx,
             /* DIRECTIVE set component index */
             case suit_dir_set_comp_idx:
                 CBOR_GET_INT(arr, idx);
-                if (idx > ctx->component_count - 1) return 1;
+                if (idx > ctx->component_count - 1)
+                    return SUIT_ERROR_COMPONENTS;
                 break;
 
             /**
@@ -244,11 +247,11 @@ int _suit_parse_sequence(suit_context_t * ctx,
                 nanocbor_skip(&arr); break;
 
             /* FAIL if unsupported */
-            default: return 1;
+            default: return SUIT_ERROR_UNSUPPORTED;
 
         }
     }
-    return 0;
+    return SUIT_ERROR_NONE;
 }
 
 int _suit_parse_common(suit_context_t * ctx,
@@ -259,7 +262,7 @@ int _suit_parse_common(suit_context_t * ctx,
     uint8_t * tmp; size_t len_tmp;
 
     CBOR_ENTER_MAP(top, map);
-    uint32_t map_key;
+    uint32_t map_key; int err;
     while (!nanocbor_at_end(&map)) {
         CBOR_GET_INT(map, map_key);
         switch (map_key) {
@@ -275,21 +278,20 @@ int _suit_parse_common(suit_context_t * ctx,
                 nanocbor_decoder_init(&arr, tmp, len_tmp);
                 CBOR_ENTER_ARR(arr, elem);
                 ctx->component_count = elem.remaining;
-                if (ctx->component_count > SUIT_MAX_COMPONENTS) return 1;
+                if (ctx->component_count > SUIT_MAX_COMPONENTS)
+                    return SUIT_ERROR_COMPONENTS;
                 break;
 
             case suit_common_seq:
                 CBOR_GET_BSTR(map, tmp, len_tmp);
-                if (_suit_parse_sequence(ctx, 0, tmp, len_tmp)) return 1;
+                RETURN_ERROR(_suit_parse_sequence(ctx, 0, tmp, len_tmp));
                 break;
 
             /* CONTINUE if unsupported */
-            default:
-                nanocbor_skip(&map);
-                break;
+            default: nanocbor_skip(&map); break;
         }
     }
-    return 0;
+    return SUIT_ERROR_NONE;
 }
 
 /*******************************************************************************
@@ -320,19 +322,19 @@ int suit_parse(suit_context_t * ctx, const uint8_t * man, size_t len_man)
 
     /* parse top-level map */
     CBOR_ENTER_MAP(top, map);
-    uint32_t map_key;
+    uint32_t map_key; int err;
     while (!nanocbor_at_end(&map)) {
         CBOR_GET_INT(map, map_key);
         switch (map_key) {
 
             case suit_header_common:
                 CBOR_GET_BSTR(map, tmp, len_tmp);
-                if (_suit_parse_common(ctx, tmp, len_tmp)) return 1;
+                RETURN_ERROR(_suit_parse_common(ctx, tmp, len_tmp));
                 break;
 
             case suit_header_manifest_version:
                 CBOR_GET_INT(map, ctx->version);
-                if (ctx->version != 1) return 1;
+                if (ctx->version != 1) return SUIT_ERROR_VERSION;
                 break;
 
             case suit_header_manifest_seq_num:
@@ -341,35 +343,35 @@ int suit_parse(suit_context_t * ctx, const uint8_t * man, size_t len_man)
 
             case suit_header_payload_fetch:
                 CBOR_GET_BSTR(map, tmp, len_tmp);
-                if (_suit_parse_sequence(ctx, 0, tmp, len_tmp)) return 1;
+                RETURN_ERROR(_suit_parse_sequence(ctx, 0, tmp, len_tmp));
                 break;
 
             case suit_header_install:
                 CBOR_GET_BSTR(map, tmp, len_tmp);
-                if (_suit_parse_sequence(ctx, 0, tmp, len_tmp)) return 1;
+                RETURN_ERROR(_suit_parse_sequence(ctx, 0, tmp, len_tmp));
                 break;
 
             case suit_header_validate:
                 CBOR_GET_BSTR(map, tmp, len_tmp);
-                if (_suit_parse_sequence(ctx, 0, tmp, len_tmp)) return 1;
+                RETURN_ERROR(_suit_parse_sequence(ctx, 0, tmp, len_tmp));
                 break;
 
             case suit_header_load:
                 CBOR_GET_BSTR(map, tmp, len_tmp);
-                if (_suit_parse_sequence(ctx, 0, tmp, len_tmp)) return 1;
+                RETURN_ERROR(_suit_parse_sequence(ctx, 0, tmp, len_tmp));
                 break;
 
             case suit_header_run:
                 CBOR_GET_BSTR(map, tmp, len_tmp);
-                if (_suit_parse_sequence(ctx, 0, tmp, len_tmp)) return 1;
+                RETURN_ERROR(_suit_parse_sequence(ctx, 0, tmp, len_tmp));
                 break;
 
             /* FAIL if unsupported */
-            default: return 1;
+            default: return SUIT_ERROR_UNSUPPORTED;
 
         }
     }
-    return 0;
+    return SUIT_ERROR_NONE;
 }
 
 bool suit_match_digest(suit_context_t * ctx, size_t idx, 
@@ -417,7 +419,7 @@ int _suit_encode_oneoff(uint32_t val, uint8_t * wptr, size_t * bytes)
         nanocbor_fmt_null(&nc);
 
     *bytes = nanocbor_encoded_len(&nc);
-    return 0;
+    return SUIT_ERROR_NONE;
 }
 
 int _suit_encode_install(suit_component_t * comp,
@@ -438,7 +440,7 @@ int _suit_encode_install(suit_component_t * comp,
         nanocbor_fmt_uint(&nc, suit_cond_image_match); nanocbor_fmt_null(&nc);
 
     *bytes = nanocbor_encoded_len(&nc);
-    return 0;
+    return SUIT_ERROR_NONE;
 }
 
 int _suit_encode_image_digest(suit_component_t * comp,
@@ -451,7 +453,7 @@ int _suit_encode_image_digest(suit_component_t * comp,
         nanocbor_put_bstr(&nc, comp->digest, comp->len_digest);
 
     *bytes = nanocbor_encoded_len(&nc);
-    return 0;
+    return SUIT_ERROR_NONE;
 }
 
 int _suit_encode_common_sequence(suit_component_t * comp,
@@ -488,7 +490,7 @@ int _suit_encode_common_sequence(suit_component_t * comp,
         nanocbor_fmt_uint(&nc, suit_cond_class_id); nanocbor_fmt_null(&nc);
 
     *bytes = nanocbor_encoded_len(&nc);
-    return 0;
+    return SUIT_ERROR_NONE;
 }
 
 int _suit_encode_common_components(suit_context_t * ctx,
@@ -506,7 +508,7 @@ int _suit_encode_common_components(suit_context_t * ctx,
     }
 
     *bytes = nanocbor_encoded_len(&nc);
-    return 0;
+    return SUIT_ERROR_NONE;
 }
 
 int _suit_encode_common(suit_context_t * ctx, uint8_t * wptr, size_t * bytes)
@@ -527,7 +529,7 @@ int _suit_encode_common(suit_context_t * ctx, uint8_t * wptr, size_t * bytes)
         nanocbor_put_bstr(&nc, seq, len_seq);
 
     *bytes = nanocbor_encoded_len(&nc);
-    return 0;
+    return SUIT_ERROR_NONE;
 }
 
 /*******************************************************************************
@@ -583,7 +585,7 @@ int suit_encode(suit_context_t * ctx, uint8_t * man, size_t * len_man)
         nanocbor_put_bstr(&nc, buf, len_buf);
 
     *len_man = nanocbor_encoded_len(&nc);
-    return 0;
+    return SUIT_ERROR_NONE;
 }
 
 /*******************************************************************************
@@ -607,7 +609,7 @@ int _suit_unwrap(
     nanocbor_decoder_init(&top, env, len_env);
     CBOR_ENTER_MAP(top, map);
 
-    uint32_t map_key;
+    uint32_t map_key; int err;
     while (!nanocbor_at_end(&map)) {
         CBOR_GET_INT(map, map_key);
         switch (map_key) {
@@ -621,15 +623,16 @@ int _suit_unwrap(
                 CBOR_GET_BSTR(tmp1, auth, len_auth);
 
                 /* get payload */
-                if (cose_sign1_read(ctx, auth, len_auth, 
-                            (const uint8_t **) &pld, &len_pld))
-                    return 1;
+                err = cose_sign1_read(ctx, auth, len_auth, 
+                        (const uint8_t **) &pld, &len_pld);
+                if (err) return err;
 
                 /* extract manifest hash */
                 nanocbor_decoder_init(&tmp0, pld, len_pld);
                 CBOR_ENTER_ARR(tmp0, tmp1);
                 uint32_t digest_alg; CBOR_GET_INT(tmp1, digest_alg);
-                if (digest_alg != suit_digest_alg_sha256) return 1;
+                if (digest_alg != suit_digest_alg_sha256) 
+                    return SUIT_ERROR_UNSUPPORTED;
                 CBOR_GET_BSTR(tmp1, hash, len_hash);
                 break;
 
@@ -648,11 +651,11 @@ int _suit_unwrap(
     }
 
     /* extracted and computed hashes must match */
-    if (ctx_hash.len != len_hash) return 1;
-    if (memcmp(hash, ctx_hash.hash, ctx_hash.len)) return 1;
+    if (ctx_hash.len != len_hash) return SUIT_ERROR_HASH;
+    if (memcmp(hash, ctx_hash.hash, ctx_hash.len)) return SUIT_ERROR_HASH;
 
     cose_sign_free(ctx);
-    return 0;
+    return SUIT_ERROR_NONE;
 }
 
 int _suit_wrap(cose_sign_context_t * ctx,
@@ -681,7 +684,8 @@ int _suit_wrap(cose_sign_context_t * ctx,
     /* generate the authentication wrapper */
     uint8_t auth[SUIT_STACK_BUFFER];
     size_t len_auth = SUIT_STACK_BUFFER;
-    cose_sign1_write(ctx, pld, len_pld, auth, &len_auth);
+    int err = cose_sign1_write(ctx, pld, len_pld, auth, &len_auth);
+    if (err) return err;
 
     /* wrap the encoded authentication wrapper in a bstr AND an array... */
     uint8_t auth_arr[SUIT_STACK_BUFFER];
@@ -700,7 +704,7 @@ int _suit_wrap(cose_sign_context_t * ctx,
     *len_env = nanocbor_encoded_len(&nc);
 
     cose_sign_free(ctx);
-    return 0;
+    return SUIT_ERROR_NONE;
 }
 
 /*******************************************************************************
@@ -714,7 +718,12 @@ int suit_raw_unwrap(
         const uint8_t ** man, size_t * len_man) 
 {
     cose_sign_context_t ctx;
-    if (cose_sign_raw_init(&ctx, cose_mode_r, key, len_key)) return 1;
+    ctx.key.curve = cose_curve_p256;
+    ctx.key.alg = cose_alg_ecdsa_sha_256;
+    
+    int err = cose_sign_raw_init(&ctx, cose_mode_r, key, len_key);
+    if (err) return err;
+
     return _suit_unwrap(&ctx, env, len_env, man, len_man);
 }
 #else
@@ -723,7 +732,10 @@ int suit_pem_unwrap(const char * pem,
         const uint8_t ** man, size_t * len_man)
 {
     cose_sign_context_t ctx;
-    if (cose_sign_pem_init(&ctx, cose_mode_r, pem)) return 1;
+
+    int err = cose_sign_pem_init(&ctx, cose_mode_r, pem);
+    if (err) return err;
+
     return _suit_unwrap(&ctx, env, len_env, man, len_man);
 }
 
@@ -732,7 +744,10 @@ int suit_pem_wrap(const char * pem,
         uint8_t * env, size_t * len_env)
 {
     cose_sign_context_t ctx;
-    if (cose_sign_pem_init(&ctx, cose_mode_w, pem)) return 1;
+
+    int err = cose_sign_pem_init(&ctx, cose_mode_w, pem);
+    if (err) return err;
+
     return _suit_wrap(&ctx, man, len_man, env, len_env); 
 }
 #endif

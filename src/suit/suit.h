@@ -41,6 +41,15 @@
  * @{
  */
 
+#define SUIT_PREFIX 0xDEAD0000
+
+#define SUIT_ERROR_NONE                               0x0
+#define SUIT_ERROR_CBOR                 SUIT_PREFIX | 0x1
+#define SUIT_ERROR_HASH                 SUIT_PREFIX | 0x2
+#define SUIT_ERROR_UNSUPPORTED          SUIT_PREFIX | 0x3
+#define SUIT_ERROR_COMPONENTS           SUIT_PREFIX | 0x4
+#define SUIT_ERROR_VERSION              SUIT_PREFIX | 0x5
+
 typedef enum {
     suit_digest_alg_sha224 = 1,
     suit_digest_alg_sha256 = 2,

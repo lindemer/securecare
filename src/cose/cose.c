@@ -55,6 +55,65 @@ int _cose_encode_protected(cose_key_t * key, nanocbor_encoder_t * nc)
     return nanocbor_encoded_len(nc);
 }
 
+#ifndef COSE_BACKEND_NRF
+/**
+ * Many cryptographic libraries encode ECDSA signatures in ASN.1 DER form; some
+ * require the raw integers as inputs for verification.
+ *
+ *   0x30  len(z)  0x02  len(r)    r    0x02  len(s)    s     ht     <-- value
+ * +------+------+------+------+------+------+------+------+------+ 
+ *     1      1      1      1    32-33    1      1    32-33    1     <-- length
+ **/
+int _cose_decode_ecdsa_der(unsigned char ** p, size_t len,
+        mbedtls_mpi * r,  mbedtls_mpi * s)
+{
+    int err;
+    unsigned char * end = *p + len;
+
+    /*
+    mbedtls_asn1_sequence cur;
+    err = mbedtls_asn1_get_sequence_of(p, end, &cur, MBEDTLS_ASN1_INTEGER);
+    if (err) return err;
+    */
+    
+    err = mbedtls_asn1_get_len(p, end, &len);
+    printf("%x\n", err);
+    if (err) return err;
+    printf("%lx\n", len);
+
+    /*
+    printf("%lx\n", (long unsigned int) (end - cur.buf.p));
+    printf("%lx\n", (long unsigned int) (end - cur.next->buf.p));
+    */
+
+    err = mbedtls_asn1_get_mpi(p, end, r);
+    printf("%x\n", err);
+    if (err) return err;
+
+    /*
+    uint8_t * ptr = *sig;
+    uint8_t len_r_tag, len_s_tag;
+
+    if (*ptr++ != 0x30) return COSE_ERROR_DECODE;
+    ptr++;
+    if (*ptr++ != 0x02) return COSE_ERROR_DECODE;
+   
+    len_r_tag = *ptr++;
+    *len_r = (size_t) len_r_tag;
+    *r = ptr; 
+    ptr += len_r_tag;
+
+    if (*ptr++ != 0x02) return COSE_ERROR_DECODE;
+
+    len_s_tag = *ptr++;
+    *len_s = (size_t) len_s_tag;
+    *s = ptr; 
+    */
+
+    return COSE_ERROR_NONE;
+}
+#endif /* COSE_BACKEND_NRF */
+
 /*******************************************************************************
  * @section Miscellaneous (public)
  ******************************************************************************/
@@ -327,14 +386,74 @@ int cose_sign1_write(cose_sign_context_t * ctx,
     _cose_sign1_hash(ctx, pld, len_pld);
 
 #ifdef COSE_BACKEND_NRF
+
     if (nrf_crypto_ecdsa_sign(NULL, &ctx->ctx.priv, ctx->hash.hash,
                 ctx->hash.len, ctx->sig, &ctx->len_sig))
         return COSE_ERROR_SIGN;
+
 #else
-    if (mbedtls_ecdsa_write_signature(ctx->ctx.pk_ctx, ctx->hash.type, 
+
+    int err;
+    mbedtls_mpi r, s;
+
+    mbedtls_mpi_init(&r);
+    mbedtls_mpi_init(&s);
+
+    mbedtls_ecdsa_context * ecdsa = ctx->ctx.pk_ctx;
+    err = mbedtls_ecdsa_sign_det(&ecdsa->grp, &r, &s, &ecdsa->d,
+                ctx->hash.hash, ctx->hash.len, ctx->hash.type);
+    if (err) return err;
+
+    err = mbedtls_mpi_write_binary(&r, (uint8_t *) ctx->sig, 32);
+    if (err) return err;
+    err = mbedtls_mpi_write_binary(&s, (uint8_t *) ctx->sig + 32, 32);
+    if (err) return err;
+     
+    mbedtls_mpi_free(&r);
+    mbedtls_mpi_free(&s);
+
+    /*
+    if (mbedtls_ecdsa_write_signature(ctx->ctx.pk_ctx, ctx->hash.type,
+                ctx->hash.hash, ctx->hash.len, ctx->sig, &ctx->len_sig,
+                NULL, NULL))
+        return COSE_ERROR_SIGN;
+
+    if (mbedtls_pk_sign(&ctx->ctx, ctx->hash.type, 
                 ctx->hash.hash, ctx->hash.len, ctx->sig, &ctx->len_sig, 
                 NULL, NULL)) 
         return COSE_ERROR_SIGN;
+    */
+
+    /*
+    int err;
+    mbedtls_mpi r, s;
+    err = _cose_decode_ecdsa_der(&ctx->sig, ctx->len_sig, &r, &s);
+    if (err) return err;
+
+    mbedtls_ecdsa_context * ecdsa_ctx =
+        (mbedtls_ecdsa_context *) &ctx->ctx.pk_ctx;
+    mbedtls_ecp_keypair * keypair = (mbedtls_ecp_keypair *) ecdsa_ctx;
+
+    mbedtls_mpi r, s;
+    mbedtls_mpi_init(&r);
+    mbedtls_mpi_init(&s);
+
+    mbedtls_ctr_drbg_context ctr_drbg;
+    mbedtls_ctr_drbg_init( &ctr_drbg );
+    mbedtls_entropy_context entropy;
+    mbedtls_entropy_init( &entropy );
+    const char * seed = "abcdef";
+
+    err = mbedtls_ctr_drbg_seed(&ctr_drbg, mbedtls_entropy_func, &entropy,
+                (const unsigned char *) seed, strlen( seed ) );
+    if (err) return err;
+
+
+    err = mbedtls_ecdsa_sign(&keypair->grp, &r, &s, &keypair->d,
+            ctx->hash.hash, ctx->hash.len, mbedtls_ctr_drbg_random, &ctr_drbg);
+    if (err) return err;
+    */
+
 #endif
 
     if (_cose_sign1_encode(ctx, pld, len_pld, obj, len_obj))
@@ -351,13 +470,24 @@ int cose_sign1_read(cose_sign_context_t * ctx,
         return COSE_ERROR_DECODE;
 
 #ifdef COSE_BACKEND_NRF
-    if (nrf_crypto_ecdsa_verify(NULL, &ctx->ctx.pub, ctx->hash.hash,
-                ctx->hash.len, ctx->sig, ctx->len_sig))
-        return COSE_ERROR_AUTHENTICATE;
+#include "ecdsa_utils.h"
+
+    size_t rs_len = 64;
+    uint8_t rs[rs_len];
+    if (asn1_to_ecdsa_rs(ctx->sig, ctx->len_sig, rs, rs_len)) 
+            return COSE_ERROR_DECODE;
+
+    int err;
+    err = nrf_crypto_ecdsa_verify(NULL, &ctx->ctx.pub, ctx->hash.hash,
+                ctx->hash.len, rs, rs_len);
+    if (err) return err;
+
 #else
+
     if (mbedtls_pk_verify(&ctx->ctx, ctx->hash.type, ctx->hash.hash, 0, 
                 ctx->sig, ctx->len_sig))
         return COSE_ERROR_AUTHENTICATE;
+
 #endif
 
     return COSE_ERROR_NONE;
