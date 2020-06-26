@@ -371,12 +371,6 @@ int cose_sign1_read(cose_sign_context_t * ctx,
         return COSE_ERROR_DECODE;
 
 #ifdef COSE_BACKEND_NRF
-#include "ecdsa_utils.h"
-
-    size_t rs_len = 64;
-    uint8_t rs[rs_len];
-    if (asn1_to_ecdsa_rs(ctx->sig, ctx->len_sig, rs, rs_len)) 
-            return COSE_ERROR_DECODE;
 
     int err;
     err = nrf_crypto_ecdsa_verify(NULL, &ctx->ctx.pub, ctx->hash.hash,
