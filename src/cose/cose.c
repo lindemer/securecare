@@ -31,6 +31,8 @@
 
 #include "cose.h"
 
+#define RETURN_ERROR(x) err = x; if (err) return err;
+
 #define HASH_TSTR(ctx, nc, buf, len_buf, str)                                  \
     nanocbor_encoder_init(&nc, buf, len_buf);                                  \
     nanocbor_fmt_tstr(&nc, strlen((const char *) str));                        \
@@ -77,13 +79,15 @@ inline void cose_set_aad(cose_key_t * key, const uint8_t * aad, size_t len_aad)
 
 int cose_hash_init(cose_hash_context_t * ctx)
 {
+    int err;
 #ifdef COSE_BACKEND_NRF
     if ((ctx->type) != (COSE_SHA256_TYPE)) return COSE_ERROR_UNSUPPORTED;
-    if (nrf_crypto_hash_init(&ctx->ctx, &g_nrf_crypto_hash_sha256_info))
-            return COSE_ERROR_HASH;
+    RETURN_ERROR(nrf_crypto_hash_init(&ctx->ctx, 
+                &g_nrf_crypto_hash_sha256_info));
 #else
-    mbedtls_md_setup(&ctx->ctx, mbedtls_md_info_from_type(ctx->type), 0);
-    mbedtls_md_starts(&ctx->ctx);
+    RETURN_ERROR(mbedtls_md_setup(&ctx->ctx, 
+                mbedtls_md_info_from_type(ctx->type), 0));
+    RETURN_ERROR(mbedtls_md_starts(&ctx->ctx));
 #endif
     return COSE_ERROR_NONE;
 }
@@ -101,11 +105,11 @@ int cose_hash_update(cose_hash_context_t * ctx,
 
 int cose_hash_finish(cose_hash_context_t * ctx)
 {
+    int err;
 #ifdef COSE_BACKEND_NRF
-    if (nrf_crypto_hash_finalize(&ctx->ctx, ctx->hash, &ctx->len)) 
-        return COSE_ERROR_HASH;
+    RETURN_ERROR(nrf_crypto_hash_finalize(&ctx->ctx, ctx->hash, &ctx->len));
 #else
-    if (mbedtls_md_finish(&ctx->ctx, ctx->hash)) return COSE_ERROR_HASH;
+    RETURN_ERROR(mbedtls_md_finish(&ctx->ctx, ctx->hash));
     if (ctx->type != COSE_SHA256_TYPE) return COSE_ERROR_UNSUPPORTED;
     ctx->len = COSE_SHA256_LENGTH;
 #endif
@@ -115,14 +119,15 @@ int cose_hash_finish(cose_hash_context_t * ctx)
 int cose_hash(cose_hash_context_t * ctx,
         const uint8_t * data, const size_t len)
 {
+    int err;
 #ifdef COSE_BACKEND_NRF
     if ((ctx->type) != (COSE_SHA256_TYPE)) return COSE_ERROR_UNSUPPORTED;
-    if (nrf_crypto_hash_calculate(&ctx->ctx, &g_nrf_crypto_hash_sha256_info,
-            data, len, ctx->hash, &ctx->len))
-        return COSE_ERROR_HASH;
+    RETURN_ERROR(nrf_crypto_hash_calculate(&ctx->ctx, 
+                &g_nrf_crypto_hash_sha256_info, 
+                data, len, ctx->hash, &ctx->len));
 #else
-    if (mbedtls_md(mbedtls_md_info_from_type(ctx->type), data, len, ctx->hash))
-        return COSE_ERROR_HASH;
+    RETURN_ERROR(mbedtls_md(mbedtls_md_info_from_type(ctx->type), data, len, 
+                ctx->hash))
     if (ctx->type != COSE_SHA256_TYPE) return COSE_ERROR_UNSUPPORTED;
     ctx->len = COSE_SHA256_LENGTH;
 #endif
@@ -236,12 +241,12 @@ int cose_sign_raw_init(cose_sign_context_t * ctx, cose_mode_t mode,
     ctx->hash.len = COSE_SHA256_LENGTH;
     ctx->hash.type = COSE_SHA256_TYPE;
 
+    int err;
     if (mode == cose_mode_r) {
         ctx->key.op = cose_key_op_verify;
-        if (nrf_crypto_ecc_public_key_from_raw(
+        RETURN_ERROR(nrf_crypto_ecc_public_key_from_raw(
                     &g_nrf_crypto_ecc_secp256r1_curve_info,
-                    &ctx->ctx.pub, key, len_key))
-            return COSE_ERROR_CRYPTO;
+                    &ctx->ctx.pub, key, len_key));
     
     } else return COSE_ERROR_UNSUPPORTED;
 
@@ -263,17 +268,16 @@ int cose_sign_pem_init(cose_sign_context_t * ctx, cose_mode_t mode,
      * must indicate whether a public or a private key is being parsed.
      */
 
+    int err;
     if (mode == cose_mode_r) {
         ctx->key.op = cose_key_op_verify;
-        if (mbedtls_pk_parse_public_key(&ctx->ctx, 
-                    (const unsigned char *) pem, strlen(pem) + 1)) 
-            return COSE_ERROR_CRYPTO;
+        RETURN_ERROR(mbedtls_pk_parse_public_key(&ctx->ctx, 
+                    (const unsigned char *) pem, strlen(pem) + 1)); 
 
     } else if (mode == cose_mode_w) {
         ctx->key.op = cose_key_op_sign;
-        if (mbedtls_pk_parse_key(&ctx->ctx, 
-                    (const unsigned char *) pem, strlen(pem) + 1, NULL, 0)) 
-            return COSE_ERROR_CRYPTO;
+        RETURN_ERROR(mbedtls_pk_parse_key(&ctx->ctx, 
+                    (const unsigned char *) pem, strlen(pem) + 1, NULL, 0));
 
     } else return COSE_ERROR_UNSUPPORTED;
 
@@ -304,38 +308,32 @@ int cose_sign1_write(cose_sign_context_t * ctx,
 
     _cose_sign1_hash(ctx, pld, len_pld);
 
+    int err;
 #ifdef COSE_BACKEND_NRF
 
-    if (nrf_crypto_ecdsa_sign(NULL, &ctx->ctx.priv, ctx->hash.hash,
-                ctx->hash.len, ctx->sig, &ctx->len_sig))
-        return COSE_ERROR_SIGN;
+    RETURN_ERROR(nrf_crypto_ecdsa_sign(NULL, &ctx->ctx.priv, ctx->hash.hash,
+                ctx->hash.len, ctx->sig, &ctx->len_sig));
 
 #else
 
-    int err;
     mbedtls_mpi r, s;
 
     mbedtls_mpi_init(&r);
     mbedtls_mpi_init(&s);
 
     mbedtls_ecdsa_context * ecdsa = ctx->ctx.pk_ctx;
-    err = mbedtls_ecdsa_sign_det(&ecdsa->grp, &r, &s, &ecdsa->d,
-                ctx->hash.hash, ctx->hash.len, ctx->hash.type);
-    if (err) return err;
-
-    err = mbedtls_mpi_write_binary(&r, ctx->sig, COSE_P256_KEY_LENGTH);
-    if (err) return err;
-    err = mbedtls_mpi_write_binary(&s, ctx->sig + COSE_P256_KEY_LENGTH,
-            COSE_P256_KEY_LENGTH);
-    if (err) return err;
+    RETURN_ERROR(mbedtls_ecdsa_sign_det(&ecdsa->grp, &r, &s, &ecdsa->d,
+                ctx->hash.hash, ctx->hash.len, ctx->hash.type));
+    RETURN_ERROR(mbedtls_mpi_write_binary(&r, ctx->sig, COSE_P256_KEY_LENGTH));
+    RETURN_ERROR(mbedtls_mpi_write_binary(&s, ctx->sig + COSE_P256_KEY_LENGTH,
+            COSE_P256_KEY_LENGTH));
      
     mbedtls_mpi_free(&r);
     mbedtls_mpi_free(&s);
 
-    ctx->len_sig = 64;
+    ctx->len_sig = COSE_P256_KEY_LENGTH * 2;
 
 #endif
-
     if (_cose_sign1_encode(ctx, pld, len_pld, obj, len_obj))
         return COSE_ERROR_ENCODE;
 
@@ -352,9 +350,8 @@ int cose_sign1_read(cose_sign_context_t * ctx,
     int err;
 #ifdef COSE_BACKEND_NRF
 
-    err = nrf_crypto_ecdsa_verify(NULL, &ctx->ctx.pub, ctx->hash.hash,
-                ctx->hash.len, ctx->sig, ctx->len_sig);
-    if (err) return err;
+    RETURN_ERROR(nrf_crypto_ecdsa_verify(NULL, &ctx->ctx.pub, ctx->hash.hash,
+                ctx->hash.len, ctx->sig, ctx->len_sig));
 
 #else
 
@@ -365,21 +362,16 @@ int cose_sign1_read(cose_sign_context_t * ctx,
 
     mbedtls_ecdsa_context * ecdsa = ctx->ctx.pk_ctx;
 
-    err = mbedtls_mpi_read_binary(&r, ctx->sig, COSE_P256_KEY_LENGTH);
-    if (err) return err;
-    err = mbedtls_mpi_read_binary(&s, ctx->sig + COSE_P256_KEY_LENGTH,
-            COSE_P256_KEY_LENGTH);
-    if (err) return err;
-
-    err = mbedtls_ecdsa_verify(&ecdsa->grp, ctx->hash.hash, ctx->hash.len, 
-            &ecdsa->Q, &r, &s);
-    if (err) return err;
+    RETURN_ERROR(mbedtls_mpi_read_binary(&r, ctx->sig, COSE_P256_KEY_LENGTH));
+    RETURN_ERROR(mbedtls_mpi_read_binary(&s, ctx->sig + COSE_P256_KEY_LENGTH,
+            COSE_P256_KEY_LENGTH));
+    RETURN_ERROR(mbedtls_ecdsa_verify(&ecdsa->grp, ctx->hash.hash, 
+                ctx->hash.len, &ecdsa->Q, &r, &s));
      
     mbedtls_mpi_free(&r);
     mbedtls_mpi_free(&s);
 
 #endif
-
     return COSE_ERROR_NONE;
 }
 

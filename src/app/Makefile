@@ -23,6 +23,12 @@ SRC_FILES += \
   $(SDK_ROOT)/components/libraries/crypto/backend/micro_ecc/micro_ecc_backend_ecc.c \
   $(SDK_ROOT)/components/libraries/crypto/backend/micro_ecc/micro_ecc_backend_ecdh.c \
   $(SDK_ROOT)/components/libraries/crypto/backend/micro_ecc/micro_ecc_backend_ecdsa.c \
+  $(SDK_ROOT)/components/libraries/crypto/backend/mbedtls/mbedtls_backend_ecc.c \
+  $(SDK_ROOT)/components/libraries/crypto/backend/mbedtls/mbedtls_backend_ecdh.c \
+  $(SDK_ROOT)/components/libraries/crypto/backend/mbedtls/mbedtls_backend_ecdsa.c \
+  $(SDK_ROOT)/components/libraries/crypto/backend/cc310/cc310_backend_ecc.c \
+  $(SDK_ROOT)/components/libraries/crypto/backend/cc310/cc310_backend_ecdh.c \
+  $(SDK_ROOT)/components/libraries/crypto/backend/cc310/cc310_backend_ecdsa.c \
   $(SDK_ROOT)/components/libraries/button/app_button.c \
   $(SDK_ROOT)/components/libraries/util/app_error.c \
   $(SDK_ROOT)/components/libraries/util/app_error_handler_gcc.c \
@@ -110,11 +116,11 @@ SRC_FILES += \
 
 # Include folders common to all targets
 INC_FOLDERS += \
-  $(SDK_ROOT)/external/infineon/examples/ecdsa_utils \
   $(PROJ_DIR)/../../lib/NanoCBOR/include \
   $(PROJ_DIR)/../cose \
   $(PROJ_DIR)/../suit \
   $(SDK_ROOT)/components/libraries/crypto/backend/cc310 \
+  $(SDK_ROOT)/external/nrf_cc310/include \
   $(SDK_ROOT)/external/nrf_security/include \
   $(SDK_ROOT)/components/libraries/crypto/backend/cifra \
   $(SDK_ROOT)/external/openthread/include \
