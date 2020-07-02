@@ -79,7 +79,7 @@
  * Run 'make keys' from the ../boot directory to generate this key. It will be
  * placed in the ../../keys directory.
  **/
-extern const uint8_t pk[64];
+__ALIGN(4) extern const uint8_t pk[64];
 
 #define NRF_LOG_LEVEL 4
 #define NRF_LOG_MODULE_NAME COAP_DFU
@@ -718,15 +718,20 @@ static void suit_request_callback(coap_resource_t * p_resource, coap_message_t *
     message_conf.port.port_number = DFU_UDP_PORT;
     message_conf.token_len = p_request->header.token_len;
     memcpy(message_conf.token, p_request->token, message_conf.token_len);
-    message_conf.id = (p_request->header.type == COAP_TYPE_CON) ? p_request->header.id : message_id_get();
+    message_conf.id = (p_request->header.type == COAP_TYPE_CON) ? 
+        p_request->header.id : message_id_get();
     
     const uint8_t * env = p_request->p_payload;
     size_t len_env = (size_t)p_request->payload_len;
     uint8_t man[256];
     size_t len_man = 256;
 
+    // Convert public key to big-endian format for use in nrf_crypto.
+    uint8_t    pk_copy[sizeof(pk)];
+    nrf_crypto_internal_double_swap_endian(pk_copy, pk, sizeof(pk) / 2);
+
     char msg[128];
-    int err = suit_raw_unwrap(pk, sizeof(pk), env, len_env, 
+    int err = suit_raw_unwrap(pk_copy, sizeof(pk), env, len_env, 
             (const uint8_t **) &man, &len_man);
     sprintf(msg, "0x%x", err);
 

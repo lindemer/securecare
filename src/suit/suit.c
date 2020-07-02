@@ -599,6 +599,7 @@ int _suit_unwrap(
 {
     cose_hash_context_t ctx_hash;
     ctx_hash.type = COSE_SHA256_TYPE;
+    ctx_hash.len = COSE_SHA256_LENGTH;
 
     /* bytestrings to be extracted */
     uint8_t * pld, * hash, * auth_arr, * auth, * man_start;
@@ -623,9 +624,8 @@ int _suit_unwrap(
                 CBOR_GET_BSTR(tmp1, auth, len_auth);
 
                 /* get payload */
-                err = cose_sign1_read(ctx, auth, len_auth, 
-                        (const uint8_t **) &pld, &len_pld);
-                if (err) return err;
+                RETURN_ERROR(cose_sign1_read(ctx, auth, len_auth, 
+                        (const uint8_t **) &pld, &len_pld));
 
                 /* extract manifest hash */
                 nanocbor_decoder_init(&tmp0, pld, len_pld);
@@ -645,7 +645,8 @@ int _suit_unwrap(
                 CBOR_GET_BSTR(map, *man, *len_man);
 
                 /* hash the bstr-wrapped manifest */
-                cose_hash(&ctx_hash, man_start, (*man + *len_man) - man_start);
+                RETURN_ERROR(cose_hash(&ctx_hash, man_start, 
+                            (*man + *len_man) - man_start));
                 break;
         }
     }
