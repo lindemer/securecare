@@ -4,7 +4,7 @@ OUTPUT_DIRECTORY := build
 
 SDK_ROOT := ${NRF5_SDK}
 PROJ_DIR := .
-KEYS_DIR := ../../keys
+KEYS_DIR := ../../key
 
 $(OUTPUT_DIRECTORY)/boot.out: \
   LINKER_SCRIPT  := main.ld
@@ -190,6 +190,9 @@ CFLAGS += -DNANOCBOR_HTOBE32_FUNC=__builtin_bswap32
 CFLAGS += -DNANOCBOR_HTOBE64_FUNC=__builtin_bswap64
 CFLAGS += -DNANOCBOR_BE64TOH_FUNC=__builtin_bswap64
 
+# C flags for COSE
+CFLAGS += -DCOSE_BACKEND_NRF
+
 # C++ flags common to all targets
 CXXFLAGS += $(OPT)
 # Assembler flags common to all targets
@@ -250,7 +253,7 @@ include $(TEMPLATE_PATH)/Makefile.common
 
 $(foreach target, $(TARGETS), $(call define_target, $(target)))
 
-.PHONY: flash mbr keys erase
+.PHONY: flash mbr erase
 
 flash:  default
 	@echo Flashing: $(OUTPUT_DIRECTORY)/boot.hex
@@ -261,12 +264,6 @@ mbr:
 	@echo Flashing: mbr_nrf52_2.4.1_mbr.hex
 	nrfjprog -f nrf52 --program $(SDK_ROOT)/components/softdevice/mbr/hex/mbr_nrf52_2.4.1_mbr.hex --chiperase
 	nrfjprog -f nrf52 --reset
-
-keys:
-	@echo Generating key pair.
-	nrfutil keys generate $(KEYS_DIR)/priv.pem
-	nrfutil keys display --key pk --format code $(KEYS_DIR)/priv.pem --out_file $(KEYS_DIR)/pub.c 
-	nrfutil keys display --key pk --format pem  $(KEYS_DIR)/priv.pem --out_file $(KEYS_DIR)/pub.pem 
 
 erase:
 	nrfjprog -f nrf52 --eraseall

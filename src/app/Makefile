@@ -4,7 +4,7 @@ OUTPUT_DIRECTORY := build
 
 SDK_ROOT := ${NRF5_SDK}
 PROJ_DIR := .
-KEYS_DIR := ../../keys
+KEYS_DIR := ../../key
 
 $(OUTPUT_DIRECTORY)/app.out: \
   LINKER_SCRIPT  := main.ld

@@ -1,5 +1,5 @@
 # SecureCare
-This is an experimental implementation of the [SUIT protocol](https://datatracker.ietf.org/wg/suit/about/) for the SIP-IoT SecureCare project at [RISE Research Institutes of Sweden](https://www.ri.se/) targeting the Nordic Semiconductor nRF52840 DK. The repository contains partial implementations of the following IETF standards and drafts:
+This is an experimental implementation of the [SUIT protocol](https://datatracker.ietf.org/wg/suit/about/) for the SIP-IoT SecureCare project at [RISE Research Institutes of Sweden](https://www.ri.se/) targeting the Nordic Semiconductor nRF52840. The repository contains partial implementations of the following IETF standards and drafts:
 - [RFC 8152](https://tools.ietf.org/html/rfc8152) CBOR Object Signing and Encryption (COSE)
 - [RFC 8392](https://tools.ietf.org/html/rfc8392/) CBOR Web Token (CWT)
 - [RFC 8747](https://tools.ietf.org/html/rfc8747) Proof-of-Possession Key Semantics for CWTs
@@ -23,16 +23,17 @@ The [mesh-local EID](https://openthread.io/guides/thread-primer/ipv6-addressing)
 - `src/cwt` CWT parser and encoder
 - `src/suit` SUIT manifest parser and encoder
 
-## Build and Run
-1. Run `make keys` from the `src/boot` directory to generate a key pair.
-2. Run `make mbr` from the `src/boot` directory to flash the master boot record to the nRF52840.
-3. Run `make flash` from the `src/boot` directory to flash the bootloader to the nRF52840.
-4. Run `make flash` from the `src/app` directory to flash the application code to the nRF52840.
-5. Run `make` from the `src/suit` directory to compile the SUIT CLI encoder.
-6. Run `make client` from the `src/ace` directory to compile the ACE client.
-7. Run `make server` from the `src/ace` directory to compile the ACE authorization server.
+## Build
+1. Run `make` from `key` to generate a new key pair.
+2. Run `make mbr` from `src/boot` to flash the master boot record to the nRF52840.
+3. Run `make flash` from `src/boot` to flash the bootloader to the nRF52840.
+4. Run `make flash` from `src/app` to flash the application code to the nRF52840.
+5. Run `make` from `src/suit` to compile the SUIT manifest CLI.
+6. Run `make` from `src/fs` to compile the firmware server. [WIP]
+7. Run `make client` from `src/ace` to compile the ACE client CLI. [WIP]
+8. Run `make as` from `src/ace` to compile the ACE authorization server. [WIP]
 
 ## Toolchain Installation
 This code has been built and tested on an nRF52840 DK using the [nRF5 SDK for Thread v4.1.0](https://www.nordicsemi.com/Software-and-tools/Software/nRF5-SDK-for-Thread-and-Zigbee/Download). Create an environment variable called `$NRF5_SDK` pointing to the SDK directory before running `make`. The SDK expects to find a copy of the [Arm GCC Embedded Toolchain v7-2018-q2-update](https://developer.arm.com/open-source/gnu-toolchain/gnu-rm/downloads) in the `/usr/local` directory.
 
-The SUIT CLI encoder depends on [mbedTLS](https://github.com/ARMmbed/mbedtls) which can be installed with the command `sudo make install`. 
+The Linux-native components of this project depend on a local installation of [libcoap](https://github.com/obgm/libcoap) and [mbedTLS](https://github.com/ARMmbed/mbedtls), both of which can be found in `lib`. 

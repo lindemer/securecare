@@ -39,8 +39,8 @@
 "\t-p parses a manifest from stdin and decodes it\n"                                   \
 "\t-u [remote firmware URI]\n"                                                         \
 "\nExamples:\n"                                                                        \
-"%s -k keys/priv.pem -n 0 -u coaps://[::1]/firmware > manifest.cbor < firmware.exe\n"  \
-"%s -k keys/pub.pem -p < manifest.cbor\n"                                              \
+"%s -k key/priv.pem -n 0 -u coaps://[::1]/firmware > manifest.cbor < firmware.exe\n"   \
+"%s -k key/pub.pem -p < manifest.cbor\n"                                               \
 , argv[0], argv[0], argv[0]);
 
 #define HEAP_BUFFER 2048

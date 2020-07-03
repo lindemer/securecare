@@ -29,7 +29,7 @@ INCLUDES += -I$(COSE)
 INCLUDES += -I.
 LIBS = -lmbedtls -lmbedcrypto
 
-default: mkdir suit
+default: mkdir cli
 
 mkdir:
 	@mkdir -p $(BUILD)
@@ -49,7 +49,7 @@ $(BUILD)/suit.o: $(SUIT)/suit.c
 $(BUILD)/cli.o: $(SUIT)/cli.c 
 	$(CC) -c -o $@ $< $(CLFAGS) $(INCLUDES)
 
-suit: $(OBJS)
+cli: $(OBJS)
 	$(CC) -o $(BUILD)/$@ $^ $(CFLAGS) $(LIBS)
 
 .PHONY: clean
