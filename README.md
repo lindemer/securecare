@@ -18,18 +18,15 @@ The [mesh-local EID](https://openthread.io/guides/thread-primer/ipv6-addressing)
 - `lib` external libraries 
 - `src/ace` ACE client and authorization server
 - `src/cose` COSE, CWT and SUIT parser/encoder sources
-- `src/demo/app` nRF52840 application
-- `src/demo/boot` nRF52830 bootloader
+- `src/demo` example code for the nRF52840 SoC
 - `src/est` EST-CoAPs sources
 - `src/util` command line utilities
 
 ## Build Components
 1. Run `make` from `key` to generate keys. (This will overwrite existing keys).
-2. Run `make mbr` from `src/demo/boot` to flash the master boot record to the nRF52840.
-3. Run `make flash` from `src/demo/boot` to flash the bootloader to the nRF52840.
-4. Run `make flash` from `src/demo/app` to flash the application code to the nRF52840.
-6. Run `make` from `src/util` to compile CLI utilities.
-7. Run `make` from `src/ace` to compile the ACE client and authorization server.
+2. Run `make` from `src/demo` to flash the example code to an nRF52840 SoC.
+3. Run `make` from `src/util` to compile CLI utilities.
+4. Run `make` from `src/ace` to compile the ACE client and authorization server.
 
 ## Toolchain Installation
 This code has been built and tested on an nRF52840 DK using the [nRF5 SDK for Thread v4.1.0](https://www.nordicsemi.com/Software-and-tools/Software/nRF5-SDK-for-Thread-and-Zigbee/Download). Create an environment variable called `$NRF5_SDK` pointing to the SDK directory before running `make`. The SDK expects to find a copy of the [Arm GCC Embedded Toolchain v7-2018-q2-update](https://developer.arm.com/open-source/gnu-toolchain/gnu-rm/downloads) in the `/usr/local` directory.
