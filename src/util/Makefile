@@ -19,7 +19,7 @@ OBJS ?= \
     $(BUILD)/suit.o \
     $(BUILD)/suit-cli.o \
 
-CFLAGS += -Wall -Werror -g -O0
+CFLAGS += -Wall -Werror -g
 CBOR_FLAGS += -DNANOCBOR_BYTEORDER_HEADER=\"nanocbor/nanocbor.h\"
 CBOR_FLAGS += -DNANOCBOR_HTOBE32_FUNC=__builtin_bswap32
 CBOR_FLAGS += -DNANOCBOR_HTOBE64_FUNC=__builtin_bswap64
