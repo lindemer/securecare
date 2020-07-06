@@ -82,55 +82,56 @@ static int quit = 0;
 
 static int resource_flags = COAP_RESOURCE_FLAGS_NOTIFY_CON;
 
-static char *cert_file = NULL; /* Combined certificate and private key in PEM */
-static char *ca_file = NULL;  /* CA for cert_file - for cert checking in PEM */
-static char *root_ca_file = NULL; /* List of trusted Root CAs in PEM */
+static char * fsdir = "."; /* Files in this directory are accessible with GET */
+static char * cert_file = NULL; /* Combined certificate and private key in PEM */
+static char * ca_file = NULL;  /* CA for cert_file - for cert checking in PEM */
+static char * root_ca_file = NULL; /* List of trusted Root CAs in PEM */
 static int use_pem_buf = 0; /* Map these cert/key files into memory to test PEM_BUF logic if set */
-static uint8_t *cert_mem = NULL; /* certificate and private key in PEM_BUF */
-static uint8_t *ca_mem = NULL; /* CA for cert checking in PEM_BUF */
+static uint8_t * cert_mem = NULL; /* certificate and private key in PEM_BUF */
+static uint8_t * ca_mem = NULL; /* CA for cert checking in PEM_BUF */
 static size_t cert_mem_len = 0;
 static size_t ca_mem_len = 0;
 static int require_peer_cert = 1; /* By default require peer cert */
-#define MAX_KEY   64 /* Maximum length of a pre-shared key in bytes. */
+#define MAX_KEY 64 /* Maximum length of a pre-shared key in bytes. */
 static uint8_t key[MAX_KEY];
 static ssize_t key_length = 0;
 int key_defined = 0;
-static const char *hint = "CoAP";
+static const char * hint = "CoAP";
 
 typedef struct psk_sni_def_t {
     char* sni_match;
-    coap_bin_const_t *new_key;
-    coap_bin_const_t *new_hint;
+    coap_bin_const_t * new_key;
+    coap_bin_const_t * new_hint;
 } psk_sni_def_t;
 
 typedef struct valid_psk_snis_t {
     size_t count;
-    psk_sni_def_t *psk_sni_list;
+    psk_sni_def_t * psk_sni_list;
 } valid_psk_snis_t;
 
 static valid_psk_snis_t valid_psk_snis = {0, NULL};
 
 typedef struct id_def_t {
-    char *hint_match;
-    coap_bin_const_t *identity_match;
-    coap_bin_const_t *new_key;
+    char * hint_match;
+    coap_bin_const_t * identity_match;
+    coap_bin_const_t * new_key;
 } id_def_t;
 
 typedef struct valid_ids_t {
     size_t count;
-    id_def_t *id_list;
+    id_def_t * id_list;
 } valid_ids_t;
 
 static valid_ids_t valid_ids = {0, NULL};
 typedef struct pki_sni_def_t {
     char* sni_match;
-    char *new_cert;
-    char *new_ca;
+    char * new_cert;
+    char * new_ca;
 } pki_sni_def_t;
 
 typedef struct valid_pki_snis_t {
     size_t count;
-    pki_sni_def_t *pki_sni_list;
+    pki_sni_def_t * pki_sni_list;
 } valid_pki_snis_t;
 
 static valid_pki_snis_t valid_pki_snis = {0, NULL};
@@ -208,22 +209,18 @@ static void hnd_get(coap_context_t *ctx UNUSED_PARAM,
         coap_string_t *query UNUSED_PARAM,
         coap_pdu_t *response)
 {
-    coap_str_const_t *uri_path;
-    coap_str_const_t value = { 0, NULL };
-    /*
-    * request will be NULL if an Observe triggered request, so the uri_path,
-    * if needed, must be abstracted from the resource.
-    * The uri_path string is a const pointer
-    */
-
-    uri_path = coap_resource_get_uri_path(resource);
+    coap_str_const_t * uri_path = coap_resource_get_uri_path(resource);
     if (!uri_path) {
         response->code = COAP_RESPONSE_CODE(404);
         return;
     }
 
     size_t len;
-    uint8_t * buf = read_file_mem(uri_path->s, &len);
+    char * full_path = malloc(strlen(uri_path->s) + strlen(fsdir));
+    sprintf(full_path, "%s/%s", fsdir, uri_path->s);
+    uint8_t * buf = read_file_mem(full_path, &len);
+    free(full_path);
+
     if (buf == NULL) printf("%s does not exist.\n", uri_path->s);
     else printf("%ld bytes read from %s.\n", len, uri_path->s);
     //free(buf);
@@ -273,7 +270,7 @@ static void init_resources(coap_context_t * ctx)
     coap_add_attr(r, coap_make_str_const("title"), coap_make_str_const("\"General Info\""), 0);
     coap_add_resource(ctx, r);
 
-    load_directory(".", ctx);
+    load_directory(fsdir, ctx);
 }
 
 /*******************************************************************************
@@ -497,16 +494,14 @@ static void usage(const char *program, const char *version)
     fprintf( stderr, "%s v%s -- a small CoAP implementation\n"
         "(c) 2010,2011,2015-2020 Olaf Bergmann <bergmann@tzi.org> and others\n\n"
         "%s\n\n"
-        "Usage: %s [-d max] [-g group] [-l loss] [-p port] [-v num]\n"
+        "Usage: %s [-d directory] [-g group] [-l loss] [-p port] [-v num]\n"
         "\t\t[-A address] [-N]\n"
         "\t\t[[-h hint] [-i match_identity_file] [-k key]\n"
         "\t\t[-s match_psk_sni_file]]\n"
         "\t\t[[-c certfile] [-C cafile] [-m] [-n] [-R root_cafile]]\n"
         "\t\t[-S match_pki_sni_file]]\n"
         "General Options\n"
-        "\t-d max \t\tAllow dynamic creation of up to a total of max\n"
-        "\t       \t\tresources. If max is reached, a 4.06 code is returned\n"
-        "\t       \t\tuntil one of the dynamic resources has been deleted\n"
+        "\t-d directory\tLoad files from this directory as GET resources.\n"
         "\t-g group\tJoin the given multicast group\n"
         "\t-l list\t\tFail to send some datagrams specified by a comma\n"
         "\t       \t\tseparated list of numbers or number ranges\n"
@@ -852,7 +847,7 @@ int main(int argc, char **argv)
             ca_file = optarg;
             break;
         case 'd' :
-            /* TODO */
+            fsdir = optarg;
             break;
         case 'g' :
             group = optarg;
