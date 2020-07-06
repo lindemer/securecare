@@ -221,12 +221,10 @@ static void hnd_get(coap_context_t *ctx UNUSED_PARAM,
     uint8_t * buf = read_file_mem(full_path, &len);
     free(full_path);
 
-    if (buf == NULL) printf("%s does not exist.\n", uri_path->s);
-    else printf("%ld bytes read from %s.\n", len, uri_path->s);
-    //free(buf);
-
     coap_add_data_blocked_response(resource, session, request, response, token,
             COAP_MEDIATYPE_ANY, -1, len, buf);
+    
+    free(buf);
 }
 
 /*******************************************************************************
@@ -234,7 +232,7 @@ static void hnd_get(coap_context_t *ctx UNUSED_PARAM,
  ******************************************************************************/
 
 /**
- * Add all regular files in path as listed CoAP GET resources.
+ * Add all regular files in path as CoAP GET resources.
  **/
 static void load_directory(char * path, coap_context_t * ctx)
 {
