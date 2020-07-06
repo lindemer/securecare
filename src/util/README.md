@@ -1,12 +1,12 @@
-### CLI Usage
-To generate a new SUIT manifest:
+## SUIT Command Line Interface
+The `suit-cli` tool is catered specifically to a secure download/install/reboot use case. It does not generate any other instruction sequences at this time. To generate a new SUIT manifest:
 ```
-./build/suit -k keys/priv.pem -n 0 -u coaps://[::1]/firmware > manifest.cbor < firmware.exe
+./build/suit-cli -k keys/priv.pem -n 0 -u coaps://[::1]/firmware > manifest.cbor < firmware.exe
 ```
 
 To verify the contents of a SUIT manifest:
 ```
-./build/suit -k keys/pub.pem -p < manifest.cbor
+./build/suit-cli -k keys/pub.pem -p < manifest.cbor
 ```
 
 This should produce output similar to the following:
@@ -25,5 +25,5 @@ Component details:
 (0) Image size		1337 [B]
 ```
 
-### Notes
-The CLI tool is catered specifically for a download/install/secure boot use case. It does not generate any other set of instructions at this time.
+## CoAPs File Server
+This directory contains a modified version of the example server from the `libcoap` source code, which will host all files (non-recursively) in a specified directory as CoAP GET resources. Use the `-d` flag to specify that directory. Refer to the help text for a complete list of options, including certificate and key configuration.
