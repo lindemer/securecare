@@ -1,4 +1,4 @@
-SUIT  := $(CURDIR)
+SUIT  := $(CURDIR)/../cose
 COSE  := $(CURDIR)/../cose
 CBOR  := $(CURDIR)/../../lib/NanoCBOR
 BUILD := $(CURDIR)/build
@@ -10,14 +10,14 @@ SRCS = \
     $(CBOR)/src/decoder.c \
     $(COSE)/cose.c \
     $(SUIT)/suit.c \
-    $(SUIT)/cli.c \
+    $(CURDIR)/suit-cli.c \
 
 OBJS ?= \
     $(BUILD)/encoder.o \
     $(BUILD)/decoder.o \
     $(BUILD)/cose.o \
     $(BUILD)/suit.o \
-    $(BUILD)/cli.o \
+    $(BUILD)/suit-cli.o \
 
 CFLAGS += -Wall -Werror -g -O0
 CBOR_FLAGS += -DNANOCBOR_BYTEORDER_HEADER=\"nanocbor/nanocbor.h\"
@@ -27,9 +27,9 @@ CBOR_FLAGS += -DNANOCBOR_BE64TOH_FUNC=__builtin_bswap64
 INCLUDES += -I$(CBOR)/include
 INCLUDES += -I$(COSE)
 INCLUDES += -I.
-LIBS = -lmbedtls -lmbedcrypto
+LIBS = -lmbedtls -lmbedcrypto -lcoap-2-openssl
 
-default: mkdir cli
+default: mkdir suit-cli file-server
 
 mkdir:
 	@mkdir -p $(BUILD)
@@ -46,10 +46,16 @@ $(BUILD)/cose.o: $(COSE)/cose.c
 $(BUILD)/suit.o: $(SUIT)/suit.c
 	$(CC) -c -o $@ $< $(CFLAGS) $(INCLUDES)
 
-$(BUILD)/cli.o: $(SUIT)/cli.c 
+$(BUILD)/suit-cli.o: $(CURDIR)/suit-cli.c 
 	$(CC) -c -o $@ $< $(CLFAGS) $(INCLUDES)
 
-cli: $(OBJS)
+suit-cli: $(OBJS)
+	$(CC) -o $(BUILD)/$@ $^ $(CFLAGS) $(LIBS)
+
+$(BUILD)/file-server.o: $(CURDIR)/file-server.c 
+	$(CC) -c -o $@ $< $(CLFAGS) $(INCLUDES)
+
+file-server: $(BUILD)/file-server.o
 	$(CC) -o $(BUILD)/$@ $^ $(CFLAGS) $(LIBS)
 
 .PHONY: clean

@@ -54,6 +54,10 @@ dkms.conf
 # Build directories
 build
 *.cbor
+img/*.bin
+img/*.hex
+img/*.exe
+img/*.elf
 
 # Vim
 *.*.swp
