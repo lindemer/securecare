@@ -7,6 +7,6 @@ flash:
 	$(MAKE) -C boot flash
 	$(MAKE) -C app flash
 
-claen:
+clean:
 	$(MAKE) -C boot clean
 	$(MAKE) -C app clean
