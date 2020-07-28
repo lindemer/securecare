@@ -26,28 +26,49 @@
  * SUCH DAMAGE.
  */
 
-#ifndef DTLS_SETTING_H_
-#define DTLS_SETTING_H_
+#ifndef MBEDTLS_WRAPPER_H_
+#define MBEDTLS_WRAPPER_H_
 
 #include <coap2/coap.h>
 #include "est-x509.h"
 
+/*
+ * MBED includes
+ */
+#include "mbedtls/pk.h"
+#include <mbedtls/x509_crt.h>
+/*
+ * Bigint defines that are still used
+ */
+#define WORD_LEN_BYTES 4 /**<-- Length of a word in bytes */
+
+/**
+ * MBED flags
+ */
+#define DFL_USE_DEV_RANDOM      0
+
+/**
+ * File flags
+ */
+#define PEM_HEADER_AND_FOOTER_LEN	28
+
 struct pki_info_t {
-  unsigned char *fts_cert_buf; //[2048];
+  unsigned char *fts_cert_buf; //Factory trust store [2048];
+  mbedtls_x509_crt *mbedtls_truststore_certs;
   unsigned char *ets_cert_buf; //[PKI_ENROLLED_TS_LEN];
   unsigned char *factory_cert_buf; //[512];
   unsigned char *enrolled_cert_buf; //[PKI_ENROLLED_CERT_LEN];
   x509_certificate *ca_cert;
   x509_certificate *factory_cert;
-  x509_certificate *enrolled_cert;
-  unsigned char *factory_key;
-  unsigned char *enrollment_key;
   int fts_cert_buf_len;
   int ets_cert_buf_len;
   int factory_cert_buf_len;
   int enrolled_cert_buf_len;
   uint8_t factory_key_len;
   uint8_t enrollment_key_len;
+  mbedtls_pk_context *enrollment_key_ctx;
+  mbedtls_pk_context *verify_key_ctx;
+
 };
 
 struct libcoap_info_t {
@@ -60,61 +81,6 @@ struct libcoap_info_t {
  */
 #define SOL_TLS 282
 #define SOL_TLS_CREDENTIALS 283
-
-
-/**
- *  @defgroup secure_sockets_options Socket options for TLS
- *  @{
- */
-
-/** Socket option to select TLS credentials to use. It accepts and returns an
- *  array of sec_tag_t that indicate which TLS credentials should be used with
- *  specific socket.
- */
-#define TLS_SEC_TAG_LIST 1
-/** Write-only socket option to set hostname. It accepts a string containing
- *  the hostname (may be NULL to disable hostname verification). By default,
- *  hostname check is enforced for TLS clients.
- */
-#define TLS_HOSTNAME 2
-/** Socket option to select ciphersuites to use. It accepts and returns an array
- *  of integers with IANA assigned ciphersuite identifiers.
- *  If not set, socket will allow all ciphersuites available in the system
- *  (mebdTLS default behavior).
- */
-#define TLS_CIPHERSUITE_LIST 3
-/** Read-only socket option to read a ciphersuite chosen during TLS handshake.
- *  It returns an integer containing an IANA assigned ciphersuite identifier
- *  of chosen ciphersuite.
- */
-#define TLS_CIPHERSUITE_USED 4
-/** Write-only socket option to set peer verification level for TLS connection.
- *  This option accepts an integer with a peer verification level, compatible
- *  with mbedTLS values:
- *    - 0 - none
- *    - 1 - optional
- *    - 2 - required
- *
- *  If not set, socket will use mbedTLS defaults (none for servers, required
- *  for clients).
- */
-#define TLS_PEER_VERIFY 5
-/** Write-only socket option to set role for DTLS connection. This option
- *  is irrelevant for TLS connections, as for them role is selected based on
- *  connect()/listen() usage. By default, DTLS will assume client role.
- *  This option accepts an integer with a TLS role, compatible with
- *  mbedTLS values:
- *    - 0 - client
- *    - 1 - server
- */
-#define TLS_DTLS_ROLE 6
-
-/** @} */
-
-/* Valid values for TLS_PEER_VERIFY option */
-#define TLS_PEER_VERIFY_NONE 0 /**< Peer verification disabled. */
-#define TLS_PEER_VERIFY_OPTIONAL 1 /**< Peer verification optional. */
-#define TLS_PEER_VERIFY_REQUIRED 2 /**< Peer verification required. */
 
 /*
  * Compare with:
@@ -187,18 +153,19 @@ enum tls_credential_type {
   TLS_CREDENTIAL_PSK_ID
 };
 
-typedef enum {
-  COAP_GET = 1,
-  COAP_POST,
-  COAP_PUT,
-  COAP_DELETE
-} coap_method_t;
 
-int tls_credential_add(enum tls_credential_type type, void *cred, uint16_t credlen);
+int est_dtls_wrapper_init(const char* ca_certs_path);
+int est_dtls_wrapper_free();
 /*---------------------------------------------------------------------------*/
+int create_ecc_signature(const unsigned char *buffer, size_t data_len, unsigned char *r_buf, const size_t r_len, unsigned char *s_buf, const size_t s_len);
+int verify_ecc_signature(x509_key_context *pk_ctx, const unsigned char *buffer, size_t data_len, const unsigned char *r_buf, const size_t r_len, const unsigned char *s_buf, const size_t s_len);
+int generate_enrollment_keys(x509_key_context *key_ctx);
+/*---------------------------------------------------------------------------*/
+int tls_credential_add(enum tls_credential_type type, void *cred, uint16_t credlen);
 int tls_credential_get(enum tls_credential_type type, void *cred, uint16_t *credlen);
+/*---------------------------------------------------------------------------*/
 
 int libcoap_save_setting(int coap_setting_type, void *setting);
 int libcoap_get_setting(int coap_setting_type, void *setting);
 
-#endif /* PROJECT_CONF_H_ */
+#endif /* MBEDTLS_WRAPPER_H_ */

@@ -40,11 +40,11 @@
  *         Tómas Þór Helgason   <helgas@kth.se>
  */
 
-#include "est.h"
-
 #include <stdio.h>
 #include <string.h>
 
+
+#include "est.h"
 #include "est-cms.h"
 #include "est-pkcs10.h"
 #include "est-x509.h"
@@ -52,10 +52,8 @@
 //#include "os/net/security/other-ecc/other-ecc.h"
 
 
-#include "dtls-settings.h"
-//#include "client.h"
-
 #include "../util/log.h"
+#include "mbedtls-wrapper.h"
 #define LOG_MODULE "est"
 #ifdef LOG_CONF_LEVEL_EST
 #define LOG_LEVEL LOG_CONF_LEVEL_EST
@@ -142,81 +140,6 @@ est_cert_to_coffee(x509_certificate *cert_in, uint8_t is_ca_cert)
 }
 #endif //was further below
 
-//#else
-/*----------------------------------------------------------------------------*/
-//static int
-//est_cert_to_session_buffer(x509_certificate *cert_in, uint8_t is_ca_cert)
-//{
-//
-//  /* Verify the provided certificate pointer */
-//  if(cert_in == NULL) {
-//    LOG_ERR("EST ERROR - est_cert_to_session_buffer: NULL pointer cert_in\n");
-//    return -1;
-//  }
-//
-//  /* Set pointer to correct session buffer and remove old data */
-//  x509_certificate *tmp_cert = NULL;
-//  tmp_cert = cert_in;
-//  uint8_t *buffer;
-//  uint16_t buf_len;
-//  uint16_t offset = 0;
-//  if(is_ca_cert) {
-//    buffer = session_data->ca_buffer;
-//    buf_len = sizeof(session_data->ca_buffer);
-//    x509_memb_remove_certificates(session_data->ca_head);
-//  } else {
-//    buffer = session_data->cert_buffer;
-//    buf_len = sizeof(session_data->cert_buffer);
-//    x509_memb_remove_certificates(session_data->cert_head);
-//  }
-//  memset(buffer, 0, buf_len);
-//
-//  /* Write all the new certificate data to the session buffer */
-//  while(tmp_cert != NULL) {
-//    int cert_length = asn1_get_tlv_encoded_length(&tmp_cert->cert_tlv);
-//    if(cert_length < 0) {
-//      LOG_ERR("EST ERROR - est_cert_to_session_buffer: certificate tlv encoded length\n");
-//      return cert_length;
-//    }
-//    if((offset + cert_length) > buf_len) {
-//      LOG_ERR("EST ERROR - est_cert_to_session_buffer: buffer to small for all certificates\n");
-//      return -1;
-//    }
-//    uint8_t *tmp_cert_start = tmp_cert->cert_tlv.value -
-//      (cert_length - tmp_cert->cert_tlv.length);
-//    memcpy(buffer + offset, tmp_cert_start, cert_length);
-//    offset += cert_length;
-//    tmp_cert = tmp_cert->next;
-//  }
-//  x509_memb_remove_certificates(cert_in);
-//#if EST_DEBUG_EST
-//  LOG_DBG("REMOVE - Certificate data saved to memory ");
-//  EST_HEXDUMP(buffer, offset);
-//#endif
-//
-//  /* Decode the new certificate data in the session buffer */
-//  uint8_t *pos = buffer;
-//  tmp_cert = NULL;
-//  int res = x509_decode_certificate_sequence(&pos, buffer + offset, &tmp_cert);
-//  if(res < 0) {
-//    LOG_ERR("EST ERROR - est_cert_to_session_buffer: Cloud not decode certificate saved in memory\n");
-//    return res;
-//  }
-//
-//  /* Set correct pointers to the new decoded certificate data */
-//  if(tmp_cert != NULL) {
-//    if(is_ca_cert) {
-//      session_data->ca_head = tmp_cert;
-//    } else {
-//      session_data->cert_head = tmp_cert;
-//    }
-//  } else {
-//    LOG_ERR("EST ERROR - est_cert_to_session_buffer: NULL pointer session cert\n");
-//    return -1;
-//  }
-//  return 0;
-//}
-//#endif
 /*----------------------------------------------------------------------------*/
 static int
 est_check_cacerts_order(cms_signed_data *cms)
@@ -266,161 +189,41 @@ static int
 est_generate_session_keys(x509_key_context *key_ctx)
 {
   /* Check if session already has generated keys*/
-  uint8_t has_keys = 0;
-  int res = 0;
+  int has_keys = 0;
 
-#if EST_WITH_COFFEE
+  uint16_t optlen;
+  has_keys = tls_credential_get(TLS_CREDENTIAL_ENROLLMENT_KEY, key_ctx, &optlen); //getsockopt(SOL_TLS_CREDENTIALS, TLS_CREDENTIAL_CA_CERTIFICATE, ptr_cert, &optlen);
 
-  res = cert_store_certificate_size_by_type(MY_PRIVATE_KEY, 0);
-  res += cert_store_certificate_size_by_type(MY_PUBLIC_KEY, 0);
-  if((3 * ECC_DEFAULT_KEY_LEN) == res) {
-    has_keys = 1;
-  }
-#else
-  has_keys = 0; //session_data->has_key;
-#endif
-
-  if(!has_keys) {
+  if(0 < has_keys) {
 
     LOG_DBG("est_generate_session_keys - SESSION HAS NO KEYS, GEN NEW\n");
+    //TODO - test
+    generate_enrollment_keys(key_ctx);
 
-    /* Generate new private and public keys */
-    u_word private[NUMWORDS];
-    ecc_point_a public;
-    bigint_null(private, NUMWORDS);
-    bigint_null(public.x, NUMWORDS);
-    bigint_null(public.y, NUMWORDS);
-    ecc_generate_private_key(private);
-    ecc_generate_public_key(private, &public);
-
-#if LATER
-    mbedtls_pk_context key;
-        mbedtls_entropy_context entropy;
-        mbedtls_ctr_drbg_context ctr_drbg;
-
-        mbedtls_pk_type_t pk_alg = MBEDTLS_PK_ECKEY;
-
-        mbedtls_pk_init(&key);
-        mbedtls_entropy_init( &entropy );
-        mbedtls_ctr_drbg_init(&ctr_drbg);
-
-
-        ret = mbedtls_pk_setup(&key, mbedtls_pk_info_from_type(pk_alg));
-
-        ret = mbedtls_ctr_drbg_seed(&ctr_drbg, mbedtls_entropy_func,
-                                   &entropy,
-                                   (const unsigned char *) "ecdsa",
-                                   strlen(pers)
-        );
-
-        ret = mbedtls_ecp_gen_key(<KEY TYPE>,
-                                  mbedtls_pk_ec(key),
-                                  mbedtls_ctr_drbg_random,
-                                  &ctr_drbg
-        );
-    Where <KEY_TYPE> can be found at: https://tls.mbed.org/api/ecp_8h.html#af79e530ea8f8416480f805baa20b1a2d and in your case should be MBEDTLS_ECP_DP_SECP256R1.
-#endif
-
-
-    if(bigint_is_zero(private, NUMWORDS) || bigint_is_zero(public.x, NUMWORDS)
-       || bigint_is_zero(public.y, NUMWORDS)) {
-      LOG_ERR("est_generate_session_keys: One or more key was not generated\n");
-      return -1;
-    }
-
-#if EST_WITH_COFFEE
-    /* Store private key in flash storage and set to key context */
-    bigint_encode((unsigned char *)key_ctx->priv, ECC_DEFAULT_KEY_LEN,
-                  private, NUMWORDS);
-    res = cert_store_save_certificate_by_type(key_ctx->priv, ECC_DEFAULT_KEY_LEN, MY_PRIVATE_KEY);
-    if(res < 0) {
-      LOG_ERR("est_generate_session_keys: Could not write private key to flash\n");
-      return -1;
-    }
-
-    /* Store public key in flash storage and set to key context */
-    bigint_encode((unsigned char *)key_ctx->pub_x, ECC_DEFAULT_KEY_LEN,
-                  public.x, NUMWORDS);
-    bigint_encode((unsigned char *)key_ctx->pub_y,
-                  ECC_DEFAULT_KEY_LEN, public.y, NUMWORDS);
-    uint8_t public_key_tmp[2 * ECC_DEFAULT_KEY_LEN];
-    memcpy(public_key_tmp, key_ctx->pub_x, ECC_DEFAULT_KEY_LEN);
-    memcpy(public_key_tmp + ECC_DEFAULT_KEY_LEN, key_ctx->pub_y, ECC_DEFAULT_KEY_LEN);
-    res = cert_store_save_certificate_by_type(public_key_tmp,
-                                              2 * ECC_DEFAULT_KEY_LEN, MY_PUBLIC_KEY);
-    if(res < 0) {
-      LOG_ERR("est_generate_session_keys: Could not write public key to flash\n");
-      return -1;
-    }
-
-#else
-    /* Set keys to context for the session */
-    bigint_encode((unsigned char *)key_ctx->priv, ECC_DEFAULT_KEY_LEN,
-                  private, NUMWORDS);
-    bigint_encode((unsigned char *)key_ctx->pub_x, ECC_DEFAULT_KEY_LEN,
-                  public.x, NUMWORDS);
-    bigint_encode((unsigned char *)key_ctx->pub_y, ECC_DEFAULT_KEY_LEN,
-                  public.y, NUMWORDS);
-    //session_data->has_key = 1;
-#endif
-
-
-    LOG_DBG("est_generate_session_keys - Private key, save to session\n");
-    res = tls_credential_add(TLS_CREDENTIAL_ENROLLMENT_KEY, key_ctx->priv, ECC_DEFAULT_KEY_LEN);
-    if(res < 0) {
-      LOG_ERR("Could not store new private key\n");
-    }
-    //EST_HEXDUMP(key_ctx->priv, ECC_DEFAULT_KEY_LEN);
-    LOG_DBG("est_generate_session_keys - Public key, save to session\n");
-
-
-    /* Set other key context attributes */
-    key_ctx->sign = ECDSA_WITH_SHA256;
-    key_ctx->curve = SECP256R1_CURVE;
-    key_ctx->pk_alg = ECC_PUBLIC_KEY;
   } else {
 
     LOG_DBG("est_generate_session_keys - SESSION HAS KEYS, USE TO ENROLL\n");
+  }
 
-
-#if EST_WITH_COFFEE
-    /* Load private key from flash to context */
-    res = cert_store_load_certificate_by_type(key_ctx->priv,
-                                              ECC_DEFAULT_KEY_LEN, MY_PRIVATE_KEY, 0);
-    if(res < 0) {
-      LOG_DBG("est_create_enroll_request - Error: Could not load private key from flash\n");
-      return res;
-    }
-
-    /* Load publiv key from flash to context */
-    uint8_t public_key_tmp[2 * ECC_DEFAULT_KEY_LEN];
-    res = cert_store_load_certificate_by_type(public_key_tmp,
-                                              ECC_DEFAULT_KEY_LEN * 2, MY_PUBLIC_KEY, 0);
-    if(res < 0) {
-      LOG_DBG("est_create_enroll_request - Error: Could not load public key from flash\n");
-      return res;
-    }
-    memcpy(key_ctx->pub_x, public_key_tmp, ECC_DEFAULT_KEY_LEN);
-    memcpy(key_ctx->pub_y, public_key_tmp + ECC_DEFAULT_KEY_LEN, ECC_DEFAULT_KEY_LEN);
-
-    /* Set other key context attributes */
+    /*
+     * The key context we get from settings will only contain raw key values,
+     * hence we need to fill the rest here
+     * */
     key_ctx->sign = ECDSA_WITH_SHA256;
     key_ctx->curve = SECP256R1_CURVE;
     key_ctx->pk_alg = ECC_PUBLIC_KEY;
-#endif
-  }
 
   return 0;
 }
 /*----------------------------------------------------------------------------*/
 int
-est_process_cacerts_response(uint8_t *buffer, uint16_t buf_len, unsigned char *path, uint8_t *result_buffer)
+est_process_cacerts_response(uint8_t *buffer, uint16_t buf_len, unsigned char *path, uint8_t *result_buffer, int *result_len)
 {
   int res;
   cms_signed_data sdata;
   /* CMS decode the response */
   cms_init(&sdata);
-  res = cms_decode_content_info(buffer, buf_len, &sdata);
+  res = cms_decode_content_info(buffer, buf_len, result_buffer, result_len, &sdata);
   if(res < 0) {
     LOG_ERR("est_process_cacerts_response: Could not decode cms\n");
     return res;
@@ -470,14 +273,14 @@ est_process_cacerts_response(uint8_t *buffer, uint16_t buf_len, unsigned char *p
 }
 /*----------------------------------------------------------------------------*/
 int
-est_process_enroll_response(uint8_t *buffer, uint16_t buf_len, unsigned char *path, uint8_t *result_buffer)
+est_process_enroll_response(uint8_t *buffer, uint16_t buf_len, unsigned char *path, uint8_t *raw_certificate_buffer, int *cert_len)
 {
   int res;
   cms_signed_data sdata;
 
   /* CMS decode the response */
   cms_init(&sdata);
-  res = cms_decode_content_info(buffer, buf_len, &sdata);
+  res = cms_decode_content_info(buffer, buf_len, raw_certificate_buffer, cert_len, &sdata);
   if(res < 0) {
     LOG_ERR("EST ERROR - est_process_enroll_response: Could not decode cms\n");
     return res;
@@ -494,58 +297,7 @@ est_process_enroll_response(uint8_t *buffer, uint16_t buf_len, unsigned char *pa
     return res;
   }
 
-#if EST_WITH_COFFEE
-  x509_certificate *ca_cert, *path = NULL, *tmp_cert;
-  uint8_t buf[1024];
-  uint8_t *pos = buf;
-  uint16_t len = sizeof(buf);
-  uint16_t ca_len = 0;
-
-  LOG_DBG("est_process_enroll_response - Loading certificates from flash\n");
-
-  ca_cert = x509_decode_certificate_from_file(pos, len, EXPLICIT_TA);
-
-  if(ca_cert != NULL) {
-    ca_len = asn1_get_tlv_encoded_length(&ca_cert->cert_tlv);
-    pos += ca_len;
-    len -= ca_len;
-    path = x509_decode_certificate_from_file(pos, len, EXPLICIT_PATH);
-  }
-  LOG_DBG("Certificate path validation\n");
-
-  tmp_cert = path;
-
-  /* Find the end of the ca path */
-  while(tmp_cert->next != NULL) {
-    tmp_cert = tmp_cert->next;
-  }
-  tmp_cert->next = sdata.head;
-
-  /* res = x509_verify_certificate_path(path, ca_cert, &x509_ctime); */
-  res = x509_verify_certificate_path(tmp_cert, ca_cert, x509_get_ctime());
-
-  if(res < 0) {
-    /* TODO: return if there is an error in path validation */
-    LOG_ERR("EST ERROR - COULD NOT VERIFY ENROLLED Certificate\n");
-  } else {
-    LOG_DBG("Enrolled certificate verified\n");
-  }
-  tmp_cert->next = NULL;
-
-  /* Write certificate to coffee filesystem */
-  res = est_cert_to_coffee(sdata.head, EST_CERT_IS_NOT_CA);
-  if(res < 0) {
-    LOG_ERR("est_process_enroll_response: Could not write to coffee file system\n");
-    return res;
-  }
-  x509_memb_remove_certificates(ca_cert);
-  x509_memb_remove_certificates(path);
-
-#else
-  /* Temporary certificate verification */
-  //struct cng_socket * mysock = socket_get(fd);
-
-  //static x509_certificate target_cert; // = internal_get_signing_cert(mysock->conn.dtls);
+  /* Certificate verification */
   x509_certificate *ptr_cert = malloc(sizeof(x509_certificate)); //&target_cert;
 
   uint16_t optlen;
@@ -554,7 +306,6 @@ est_process_enroll_response(uint8_t *buffer, uint16_t buf_len, unsigned char *pa
     LOG_ERR("est_process_enroll_response: could not retrieve CA cert for verification\n");
     return -1;
   }
-  //x509_print_certificate(ptr_cert);
 
   /* Find the end of the ca path */
   while(ptr_cert->next != NULL) {
@@ -576,13 +327,14 @@ est_process_enroll_response(uint8_t *buffer, uint16_t buf_len, unsigned char *pa
 
   /* Write certificate to session buffer */
   //res = est_cert_to_session_buffer(sdata.head, EST_CERT_IS_NOT_CA);
-  res = tls_credential_add(TLS_CREDENTIAL_ENROLLED_CERTIFICATE, sdata.head, sizeof(sdata.head)); //setsockopt(SOL_TLS_CREDENTIALS, TLS_CREDENTIAL_ENROLLED_CERTIFICATE, sdata.head, sizeof(sdata.head));
-  if(res < 0) {
-    LOG_ERR("EST ERROR - est_process_enroll_response: Could not write new certificate to memory\n");
-    return res;
-  }
+//  res = tls_credential_add(TLS_CREDENTIAL_ENROLLED_CERTIFICATE, sdata.head, sizeof(sdata.head)); //setsockopt(SOL_TLS_CREDENTIALS, TLS_CREDENTIAL_ENROLLED_CERTIFICATE, sdata.head, sizeof(sdata.head));
+//  if(res < 0) {
+//    LOG_ERR("EST ERROR - est_process_enroll_response: Could not write new certificate to memory\n");
+//    return res;
+//  }
+  //
 
-#endif
+
   memset(buffer, 0, buf_len);
   return 0;
 }

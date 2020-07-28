@@ -44,16 +44,8 @@
 #ifndef EST_CSR_H
 #define EST_CSR_H
 
-#include "../est/est-asn1.h"
-#include "../est/est-x509.h"
-
-#if EST_WITH_ECC
-//#include "apps/ecc/ecc.h"
-//#include "apps/ecc/bigint.h"
-#include "../other-ecc/other-ecc.h"
-#include "bigint.h"
-
-#endif
+#include "est-asn1.h"
+#include "est-x509.h"
 
 
 #define PKCS10_DBG(...)

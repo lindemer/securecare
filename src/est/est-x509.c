@@ -50,14 +50,15 @@
 #include "est-oid.h"
 
 #include "../util/memb.h"
-#include "../other-ecc/bigint.h"
-#include "../other-ecc/other-ecc.h"
+//#include "../other-ecc/bigint.h"
+//#include "../other-ecc/other-ecc.h"
 
 //#include <mbedtls/md.h> //mbetdtls_md_info_t
 //#include "uip.h" /* For EUI-64 identifier */
 //#include "net-debug.h" /* For PRINTLLADDR */
 //#include "bigint.h"
 #include "est-client.h" //settings
+#include "mbedtls-wrapper.h" //crypto
 
 #if EST_WITH_COFFEE
 #include "cert-store.h"
@@ -330,149 +331,6 @@ x509_memb_create_certificate()
   return cert;
 }
 /*----------------------------------------------------------------------------*/
-#if EST_WITH_COFFEE
-x509_certificate *
-x509_get_trust_anchor_from_file(uint8_t *buf, uint16_t buf_len)
-{
-  int res = 0;
-  uint8_t *pos, *end;
-
-  /* Get the stored trust anchor */
-  res = cert_store_get_trust_anchor(buf, buf_len);
-  if(res < 0) {
-    return NULL;
-  }
-  /* Update pointers */
-  end = buf + res;
-  pos = buf;
-
-  return x509_decode_certificate(&pos, end);
-}
-/*---------------------------------------------------------------------------*/
-x509_certificate *
-x509_get_trust_anchor_path_from_file(uint8_t *buf, uint16_t buf_len)
-{
-  int res = 0;
-  uint8_t *pos, *end;
-  x509_certificate *cert = NULL;
-  x509_certificate *tmp_cert = NULL;
-
-  /* Get the stored path */
-  res = cert_store_get_path(buf, buf_len);
-  if(res < 0) {
-    return NULL;
-  }
-
-  /* Update pointers */
-  end = buf + res;
-  pos = buf;
-
-  /* Decode the certificate in the buffer */
-  while(pos < end) {
-    tmp_cert = x509_decode_certificate(&pos, end);
-
-    if(tmp_cert == NULL) {
-      LOG_ERR("X.509 ERROR - x509_get_trust_anchor_path_from_file: Could not read certificate path from file\n");
-    }
-
-    if(cert == NULL) {
-      cert = tmp_cert;
-    }
-    tmp_cert = tmp_cert->next;
-  }
-
-  return cert;
-}
-/*---------------------------------------------------------------------------*/
-x509_certificate *
-x509_decode_certificate_from_file(uint8_t *buf, uint16_t buf_len, cert_file_type type)
-{
-  int res = 0;
-  uint8_t *pos = buf;
-  uint8_t *end;
-  uint16_t len = 0;
-  uint8_t num = 1;
-  x509_certificate *cert = NULL;
-  x509_certificate *tmp = NULL;
-  x509_certificate *cert_pos = NULL;
-
-  /* Get the path or a certificate stored on the device */
-  if((type == IMPLICIT_PATH) || (type == EXPLICIT_PATH)) {
-    while(res >= 0) {
-      /* Load the next certificate in path from file */
-      res = cert_store_load_certificate_by_type(buf, buf_len, type, num);
-      if(res >= 0) {
-        len = res;
-        num++;
-        end = pos + len;
-
-        /* Decode the certificate */
-        tmp = x509_decode_certificate(&pos, end);
-
-        /* Update pointers */
-        if(cert == NULL) {
-          cert = tmp;
-          cert_pos = tmp;
-        } else {
-          cert_pos->next = tmp;
-          cert_pos = tmp;
-        }
-      }
-    }
-  } else {
-    /* Load the certificate from file */
-    res = cert_store_load_certificate_by_type(buf, buf_len, type, 0);
-    if(res >= 0) {
-      /* Update pointers and decode the certificate */
-      len = res;
-      end = pos + len;
-      cert = x509_decode_certificate(&pos, end);
-    }
-  }
-
-  if(cert == NULL) {
-    LOG_ERR("X.509 ERROR - Could not allocate memory for certificate\n");
-    LOG_DBG("x509_decode_certificate_from_file. cert type %d\n", type);
-    return NULL;
-  }
-
-  return cert;
-}
-/*----------------------------------------------------------------------------*/
-int
-x509_write_certificate_to_file(x509_certificate *cert, cert_file_type type)
-{
-  int res = 0;
-  x509_certificate *tmp = cert;
-  uint16_t buf_len = 0;
-  uint8_t *buf = NULL;
-
-  /* Calculate the length of the certificate */
-  buf_len = (uint16_t)asn1_get_tlv_encoded_length(&cert->cert_tlv);
-  buf = cert->cert_tlv.value - (buf_len - cert->cert_tlv.length);
-
-  if((type == IMPLICIT_PATH) || (type == EXPLICIT_PATH)) {
-	  /* Delete exisisting path first */
-	  cert_store_delete_certificate_by_type(type);
-    /* Save the path to file */
-    while((res >= 0) && (tmp != NULL)) {
-      res = cert_store_save_certificate_by_type(buf, buf_len, type);
-
-      /* Update pointers */
-      tmp = tmp->next;
-      if(tmp != NULL) {
-        buf_len = (uint16_t)asn1_get_tlv_encoded_length(&tmp->cert_tlv);
-        buf = tmp->cert_tlv.value - (buf_len - tmp->cert_tlv.length);
-      }
-    }
-  } else {
-    /* Save the certificate to file */
-    res = cert_store_save_certificate_by_type(buf, buf_len, type);
-  }
-
-  return res;
-}
-#endif
 /*----------------------------------------------------------------------------*/
 int
 x509_memb_remove_certificates(x509_certificate *cert)
@@ -747,7 +605,7 @@ x509_encode_pk_info(uint8_t **pos, uint8_t *start, x509_key_context *pk_ctx)
     alg_params.tag = ASN1_TAG_OID;
     alg_params.value = (uint8_t *)OID_CURVE_NAME_SECP256R1;
     alg_params.length = OID_LENGTH(OID_CURVE_NAME_SECP256R1);
-    key_len = 32;         /* TODO: Use a predefined variable */
+    key_len = ECC_DEFAULT_KEY_LEN;         /* TODO: Use a predefined variable */
     break;
   default:
     LOG_ERR("X.509 ERROR: x509_encode_pk_info - Unknown Curve\n");
@@ -858,14 +716,15 @@ x509_verify_signature(uint8_t *buffer, uint16_t buf_len, uint8_t *sign_start,
 /*----------------------------------------------------------------------------*/
 int
 x509_encode_signature_component(uint8_t **sign_pos, uint8_t *sign_start,
-                                uint16_t num_words, u_word *component)
+		uint8_t *component, size_t component_len)
 {
   int res = 0;
   uint16_t length = 0;
+  int num_words = 8;
 
   /* Encode the signature components r and s as integers */
   (*sign_pos) -= (num_words * WORD_LEN_BYTES);
-  bigint_encode(*sign_pos, (num_words * WORD_LEN_BYTES), component, num_words);
+  memcpy(*sign_pos, component, component_len);
   length += (num_words * WORD_LEN_BYTES);
 
   /* We need to put 0x00 in front of integers if the sign bit is set */
@@ -887,6 +746,7 @@ x509_encode_signature_component(uint8_t **sign_pos, uint8_t *sign_start,
 
   return length;
 }
+/*----------------------------------------------------------------------------*/
 /*----------------------------------------------------------------------------*/
 int
 x509_encode_ecdsa_signature(uint8_t **sign_pos, uint8_t *sign_start,
@@ -925,26 +785,18 @@ x509_encode_ecdsa_signature(uint8_t **sign_pos, uint8_t *sign_start,
 
 #endif
 
-  u_word r[num_words];
-  u_word s[num_words];
-  u_word priv_key[num_words];
-
-  bigint_null(r, num_words);
-  bigint_null(s, num_words);
-  bigint_null(priv_key, num_words);
-
-  /* Set the private key */
-  bigint_decode(priv_key, num_words, private_key, num_words * WORD_LEN_BYTES);
 
   /* Generate the signature */
-  //work is here!
-  ecc_generate_signature(priv_key, buffer, data_length, s, r);
 
-  if(!bigint_is_zero(r, num_words) && !bigint_is_zero(s, num_words)) {
+  unsigned char r_buf[ECC_DEFAULT_KEY_LEN];
+  unsigned char s_buf[ECC_DEFAULT_KEY_LEN];
+  res = create_ecc_signature(buffer, data_length, r_buf, ECC_DEFAULT_KEY_LEN, s_buf, ECC_DEFAULT_KEY_LEN);
+
+  if(0 < res) {
     /* Encode the signature components r and s as integers */
 
     /* Encode the s signature component */
-    res = x509_encode_signature_component(sign_pos, sign_start, num_words, s);
+	res = x509_encode_signature_component(sign_pos, sign_start, s_buf, ECC_DEFAULT_KEY_LEN);
     if(res < 0) {
       LOG_ERR("X.509 ERROR - x509_encode_ecdsa_signature: Could not encode the s integer tag\n");
       return res;
@@ -953,7 +805,7 @@ x509_encode_ecdsa_signature(uint8_t **sign_pos, uint8_t *sign_start,
     }
 
     /* Encode the r signature component */
-    res = x509_encode_signature_component(sign_pos, sign_start, num_words, r);
+    res = x509_encode_signature_component(sign_pos, sign_start, r_buf, ECC_DEFAULT_KEY_LEN);
     if(res < 0) {
       LOG_ERR("X.509 ERROR - x509_encode_ecdsa_signature: Could not encode the r integer tag\n");
       return res;
@@ -995,29 +847,28 @@ x509_encode_ecdsa_signature(uint8_t **sign_pos, uint8_t *sign_start,
 /*----------------------------------------------------------------------------*/
 int
 x509_decode_signature_component(uint8_t **sign_pos, uint8_t *sign_end,
-                                uint16_t num_words, u_word *component)
+                                uint16_t num_words, asn1_tlv *component_tlv) //u_word *component)
 {
   int res = 0;
-  asn1_tlv component_tlv;
+  //asn1_tlv component_tlv;
 
-  component_tlv.tag = ASN1_TAG_INTEGER;
+  component_tlv->tag = ASN1_TAG_INTEGER;
 
   /* */
-  res = asn1_decode_tag(sign_pos, sign_end, &component_tlv.length, component_tlv.tag);
+  res = asn1_decode_tag(sign_pos, sign_end, &component_tlv->length, component_tlv->tag);
   if(res < 0) {
     LOG_ERR("X.509 ERROR - x509_decode_signature_component: Could not decode the signature component\n");
     return res;
   }
 
-  if(component_tlv.length == ((num_words * WORD_LEN_BYTES) + 1)) {
-    component_tlv.value = (*sign_pos) + 1;
-    (*sign_pos) += component_tlv.length;
-    component_tlv.length -= 1;
+  if(component_tlv->length == ((num_words * WORD_LEN_BYTES) + 1)) {
+    component_tlv->value = (*sign_pos) + 1;
+    (*sign_pos) += component_tlv->length;
+    component_tlv->length -= 1;
   } else {
-    component_tlv.value = (*sign_pos);
-    (*sign_pos) += component_tlv.length;
+    component_tlv->value = (*sign_pos);
+    (*sign_pos) += component_tlv->length;
   }
-  bigint_decode(component, num_words, component_tlv.value, component_tlv.length);
 
   return 0;
 }
@@ -1035,17 +886,9 @@ x509_verify_ecdsa_signature(uint8_t *buffer, uint16_t buf_len, uint8_t *sign_sta
   uint8_t *sign_pos = sign_start;
   uint8_t *end = sign_start + sign_len;
 
-  /* ECC objects */
-  u_word r[num_words];
-  u_word s[num_words];
-  ecc_point_a pub_key_point;
-
   /* ASN.1 objects */
   asn1_bitstring signature;
 
-  /* Initialize r and s */
-  bigint_null(r, num_words);
-  bigint_null(s, num_words);
 
   /* Decode bit-string */
   res = asn1_decode_bit_string(&sign_pos, end, &signature);
@@ -1062,72 +905,56 @@ x509_verify_ecdsa_signature(uint8_t *buffer, uint16_t buf_len, uint8_t *sign_sta
   /* Update the pointer to the sequence inside the bit-string */
   sequence_pos = signature.bit_string;
 
-  /* Decode sequence tag and verify that the signature contains at two
+  /* Decode sequence tag and verify that the signature contains two
      ASN.1 integers of length (key_len) bytes*/
   res = asn1_decode_tag(&sequence_pos, end, &length, (ASN1_TAG_SEQUENCE | ASN1_P_C_BIT));
   if((res < 0) || (length < (2 * num_words * WORD_LEN_BYTES + 4))) {
-    LOG_ERR("X.509 ERROR - x509_verify_ecdsa_signature: Malformed ecdsa-sig-valu sequence\n");
+    LOG_ERR("X.509 ERROR - x509_verify_ecdsa_signature: Malformed ecdsa-sig-value sequence\n");
     return res;
   }
 
   /* Decode r signature component */
-  res = x509_decode_signature_component(&sequence_pos, end, num_words, r);
+
+  asn1_tlv r_component_tlv;
+  res = x509_decode_signature_component(&sequence_pos, end, num_words, &r_component_tlv);
   if(res < 0) {
     LOG_ERR("X.509 ERROR - x509_verify_ecdsa_signature: Could not decode the r component\n");
     return res;
   }
 
   /* Decode s signature component*/
-  res = x509_decode_signature_component(&sequence_pos, end, num_words, s);
+  asn1_tlv s_component_tlv;
+  res = x509_decode_signature_component(&sequence_pos, end, num_words, &s_component_tlv);
   if(res < 0) {
     LOG_ERR("X.509 ERROR - x509_verify_ecdsa_signature: Could not decode the s component\n");
     return res;
   }
+//  bigint_decode(s, num_words, s_component_tlv.value, s_component_tlv.length);
+  //store-r-s(component_tlv.value)
 
   if(sequence_pos != end) {
     LOG_ERR("X.509 ERROR - x509_verify_ecdsa_signature: Signature not aligned with end of buffer\n");
     return -1;
   }
 
-  /* Put the public key into a ECC point */
-  bigint_decode(pub_key_point.x, num_words, pk_ctx->pub_x, (num_words * WORD_LEN_BYTES));
-  bigint_decode(pub_key_point.y, num_words, pk_ctx->pub_y, (num_words * WORD_LEN_BYTES));
-
   /* Verify the signature */
-  uint8_t ecc_res = 0;
+
 #if 0 < WITH_COMPRESSION && EST_DEBUG_X509
   LOG_DBG("Content of buffer to check:\n");
   hdumps(buffer, data_len);
 #endif
 
+	int st = verify_ecc_signature(pk_ctx, buffer, data_len, r_component_tlv.value, r_component_tlv.length, s_component_tlv.value, s_component_tlv.length);
+	if (st < 0) {
+		LOG_ERR("X.509 ERROR - x509_verify_ecdsa_signature: The ECDSA signature could not be verified\n");
+		return -1;
+	}
 
-//
-//mbedtls_ecp_keypair *ecp = mbedtls_pk_ec( pk );
-// 	mbedtls_pk_context *ctx
-//
-//	mbetdtls_md_info_t *mdinfo = mbedtls_md_info_from_type(MBEDTLS_MD_SHA1);
-//	char *md = malloc(mdinfo->size);
-//	// Calculate the message digest for the data
-//	mbedtls_md(mdinfo, buffer, data_len, md);
-//
-//	// Now verify the signature for the given hash of the data
-//	int st = mbedtls_pk_verify(&public_key_context,
-//							   mdinfo->type, md, mdinfo->size,
-//							   signature, 32 /*signature_length*/);
-//	if (st != 0) {
-//		  // Signature invalid!
-//	} else {
-//		  // Signature valid
-//	}
-
-  ecc_res = ecc_check_signature(&pub_key_point, buffer, data_len, s, r);
-  if(ecc_res == 0) {
-    LOG_ERR("X.509 ERROR - x509_verify_ecdsa_signature: The ECDSA signature could not be verified\n");
-    return -1;
-  }
+	LOG_DBG("x509_verify_ecdsa_signature: ECDSA signature verified\n");
 
   /* The signature is valid */
   return 0;
+
 }
 
 /*----------------------------------------------------------------------------*/
@@ -1201,7 +1028,7 @@ x509_decode_certificate_sequence(uint8_t **pos, uint8_t *end, x509_certificate *
     tmp = x509_decode_certificate(&cert_pos, cert_end);
 
     if(tmp == NULL) {
-      LOG_ERR("X.509 ERROR - x509_decode_certificate_sequence: Could not decode certificate\n");
+      LOG_ERR("x509_decode_certificate_sequence: Could not decode certificate\n");
       /* Remove the certificates */
       x509_memb_remove_certificates((*head));
       return -1;
@@ -1487,7 +1314,7 @@ x509_pk_info_to_pk_ctx(x509_subject_pk_info *pk_info, x509_key_context *pk_ctx)
              pk_info->public_key_algorithm.parameters.value,
              pk_info->public_key_algorithm.parameters.length) == 0) {
     pk_ctx->curve = SECP256R1_CURVE;
-    key_length = 32;
+    key_length = ECC_DEFAULT_KEY_LEN;
   } else {
     LOG_ERR("X.509 ERROR - x509_pk_info_to_pk_ctx: Unsupported ECC curve\n");
     return -1;
@@ -1816,7 +1643,7 @@ x509_verify_public_key(asn1_tlv *algorithm_oid, asn1_tlv *parameters, asn1_bitst
 
   if(oid_cmp(OID_ID_EC_PUBLIC_KEY, algorithm_oid->value, algorithm_oid->length) == 0) {
     if(oid_cmp(OID_CURVE_NAME_SECP256R1, parameters->value, parameters->length) == 0) {
-      key_length = 32;
+      key_length = ECC_DEFAULT_KEY_LEN;
     } else {
       LOG_ERR("X.509 ERROR - x509_verify_public_key: Unknown ECC CURVE\n");
       return -1;

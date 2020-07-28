@@ -30,15 +30,16 @@
  */
 /**
  * \file
- *    Main EST client functions
+ *    EST client functions
  * \author
- *    Runar Mar Magnusson <rmma@kth.se>
- *    Tomas Thor Helgason <helgas@kth.se>
  */
 
-#ifndef EST_CLIENT_OLD_H
-#define EST_CLIENT_OLD_H
+#ifndef EST_CLIENT_H
+#define EST_CLIENT_H
 
+/*
+ * EST path info
+ */
 #define CRTS_PATH "crts"
 #define SEN_PATH "sen"
 #define SKG_PATH "skg"
@@ -48,25 +49,14 @@ static uint8_t client_mac_id[] = { 0xe,0x9,0xa,0xc,0x8,0x7,0xb,0x1 }; //TODO rea
 #define FACTORY_CERT_PATH		"../../certs/factory_cert.pem"
 #define CA_CERT_PATH		"../../certs/ca_cert.pem"
 
-//#define TRUSTSTORE_PATH	"../../certs/truststore/"
-//#include "est-debug.h.ignore"
-//#include "er-coap.h"
-//#include "../est/est-dtls.h"
+#define COAP_CONTENT_FORMAT_CRTS 280
+#define COAP_CONTENT_FORMAT_PKCS10 286
 
-
-/**
- * Print CA certificates
+/*
+ * Settings we might need to trim to smallest possible
  */
-//void est_client_print_cacerts(void);
+#define TRUSTSTORE_PARSE_BUFFER_SIZE 1024
 
-/**
- * Print enrolled client certificate
- */
-//void est_client_print_cert(void);
-
-/**
- * Set client callbacks
- */
 
 enum est_client_state {
   EST_WAITING_FOR_CONNECTION,
@@ -76,6 +66,13 @@ enum est_client_state {
   EST_HAS_SENT_SEN,
   EST_SEN_DONE,
 };
+
+typedef enum {
+  COAP_GET = 1,
+  COAP_POST,
+  COAP_PUT,
+  COAP_DELETE
+} coap_method_t;
 
 
 #endif /* EST_CLIENT_H */

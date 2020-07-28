@@ -120,7 +120,8 @@ void cms_init(cms_signed_data *cms);
  * @param cms the structure to store the decoded ContentInfo
  * @return 0 if successful, -1 otherwise
  */
-int cms_decode_content_info(uint8_t *buffer, uint16_t buf_len, cms_signed_data *cms);
+//int cms_decode_content_info(uint8_t *buffer, uint16_t buf_len, cms_signed_data *cms);
+int cms_decode_content_info(uint8_t *buffer, uint16_t buf_len, uint8_t *cert_buf, int *cert_len, cms_signed_data *cms);
 
 /**
  * Function to decode SignedData and stores the decoded information in cms
@@ -135,10 +136,11 @@ int cms_decode_content_info(uint8_t *buffer, uint16_t buf_len, cms_signed_data *
  *                         (NOT USED)
  * @param pos the start of the SignedData
  * @param end the end of the SignedData
+ * @param certificates_start the start of the certificate data
  * @param cms the structure to store the decoded information
  * @return 0 if successful, -1 otherwise
  */
-int cms_decode_signed_data(uint8_t **pos, uint8_t *end, cms_signed_data *cms);
+int cms_decode_signed_data(uint8_t **pos, uint8_t *end, uint8_t *cert_buf, int *cert_len, cms_signed_data *cms);
 
 /**
  * Verifies CMSVersion

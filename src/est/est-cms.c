@@ -70,7 +70,7 @@ cms_init(cms_signed_data *cms)
 }
 /*----------------------------------------------------------------------------*/
 int
-cms_decode_content_info(uint8_t *buffer, uint16_t buf_len, cms_signed_data *cms)
+cms_decode_content_info(uint8_t *buffer, uint16_t buf_len, uint8_t *cert_buffer, int *certificate_len, cms_signed_data *cms)
 {
   int res = 0;
   uint8_t *pos;
@@ -116,7 +116,7 @@ cms_decode_content_info(uint8_t *buffer, uint16_t buf_len, cms_signed_data *cms)
       LOG_WARN("Explicit tag missing, try to continue\n");
     }
 
-    res = cms_decode_signed_data(&pos, end, cms);
+    res = cms_decode_signed_data(&pos, end, cert_buffer, certificate_len, cms);
 
     if(res < 0) {
       LOG_ERR("cms_decode_content_info - Could not decode signed data\n");
@@ -145,7 +145,7 @@ cms_decode_content_info(uint8_t *buffer, uint16_t buf_len, cms_signed_data *cms)
 }
 /*----------------------------------------------------------------------------*/
 int
-cms_decode_signed_data(uint8_t **pos, uint8_t *end, cms_signed_data *cms)
+cms_decode_signed_data(uint8_t **pos, uint8_t *end, uint8_t *cert_buf, int *certificates_len, cms_signed_data *cms)
 {
   LOG_DBG("cms_decode_signed_data START\n");
   int res = 0;
@@ -199,7 +199,11 @@ cms_decode_signed_data(uint8_t **pos, uint8_t *end, cms_signed_data *cms)
 
   /* Update and initalize */
   uint8_t *certificates_end;
+
   certificates_end = *pos + length;
+  size_t clen = certificates_end-*pos;
+  memcpy(cert_buf, *pos, clen);
+  *certificates_len = (int)clen;
 
   /* Instead of end here we use pos + length so we know when we have reached
      the end of the list of certificates */

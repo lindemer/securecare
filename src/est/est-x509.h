@@ -45,27 +45,16 @@
 
 #include "est-asn1.h"
 #include "est.h"
-#include "bigint.h"
+//#include "bigint.h"
 
-
-#if EST_WITH_ECC
-//#include "apps/ecc/ecc.h"
-//#include "apps/ecc/bigint.h"
-//#include "../other-ecc/other-ecc.h"
-//#include "../other-ecc/bigint.h"
 
 #define SECP256R1_KEY_LEN_WORDS 8 /** Number of 32-bit words in a SECP256R1 key */
-#define ECC_DEFAULT_KEY_LEN (SECP256R1_KEY_LEN_WORDS * 4)
+#define ECC_DEFAULT_KEY_LEN 32 // = (SECP256R1_KEY_LEN_WORDS * 4)
 
 /* Compression types - RFC 5480 */
 #define ECC_POINT_UNCOMPRESSED  0x04 /* MUST be supported */
 #define ECC_POINT_COMPRESSED1   0x02 /* NOT SUPPORTED */
 #define ECC_POINT_COMPRESSED2   0x03 /* NOT SUPPORTED */
-#endif
-
-#if EST_WITH_COFFEE
-#include "apps/cert-store/cert-store.h"
-#endif
 
 #ifdef X509_CONF_MAX_STORED_CERTIFICATES
 #define X509_MAX_STORED_CERTIFICATES X509_CONF_MAX_STORED_CERTIFICATES
@@ -619,9 +608,11 @@ int x509_encode_ecdsa_signature(uint8_t **sign_pos, uint8_t *sign_start,
  * @param component the signature component
  * @return the encoded length if successful, -1 otherwise
  */
-int x509_encode_signature_component(uint8_t **sign_pos, uint8_t *sign_start,
-                                    uint16_t num_words, u_word *component);
+//int x509_encode_signature_component_old(uint8_t **sign_pos, uint8_t *sign_start,
+//                                    uint16_t num_words, u_word *component);
 
+int x509_encode_signature_component(uint8_t **sign_pos, uint8_t *sign_start,
+		uint8_t *component, size_t component_len);
 /**
  * Decodes a ASN.1 TLV Intger to a signature component
  * @param sign_pos the start of the integer signature component
@@ -631,7 +622,7 @@ int x509_encode_signature_component(uint8_t **sign_pos, uint8_t *sign_start,
  * @return 0 if successful, -1 otherwise
  */
 int x509_decode_signature_component(uint8_t **sign_pos, uint8_t *sign_end,
-                                    uint16_t num_words, u_word *component);
+                                    uint16_t num_words, asn1_tlv *component_tlv);
 
 /**
  * Verify an ECDSA signature

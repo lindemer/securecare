@@ -119,7 +119,7 @@
  * @param buf_len the length of the buffer
  * @return 0 if successful, -1 otherwise
  */
-int est_process_cacerts_response(uint8_t *buffer, uint16_t buf_len, unsigned char *path, uint8_t *result_buffer);
+int est_process_cacerts_response(uint8_t *buffer, uint16_t buf_len, unsigned char *path, uint8_t *result_buffer, int *result_len);
 
 /**
  * Function processes enroll response that is in the buffer
@@ -127,7 +127,7 @@ int est_process_cacerts_response(uint8_t *buffer, uint16_t buf_len, unsigned cha
  * @param buf_len the length of the buffer
  * @return 0 if successful, -1 otherwise
  */
-int est_process_enroll_response(uint8_t *buffer, uint16_t buf_len, unsigned char *path, uint8_t *result_buffer);
+int est_process_enroll_response(uint8_t *buffer, uint16_t buf_len, unsigned char *path, uint8_t *cert_buffer, int *cert_len);
 
 /**
  * Function creates enroll request into the buffer
