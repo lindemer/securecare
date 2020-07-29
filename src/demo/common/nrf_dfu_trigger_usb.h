@@ -37,55 +37,38 @@
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  */
+#ifndef NRF_DFU_TRIGGER_USB_H
+#define NRF_DFU_TRIGGER_USB_H
 
-/** @file
+#include "sdk_errors.h"
+
+/**
+ * @defgroup nrf_dfu_trigger_usb USB DFU trigger library
+ * @ingroup app_common
  *
- * @defgroup background_dfu_transport background_dfu_state.h
+ * @brief @tagAPI52840 USB DFU trigger library is used to enter the bootloader and read the firmware version.
+ *
+ * @details See @ref lib_dfu_trigger_usb for additional documentation.
  * @{
- * @ingroup background_dfu
- * @brief Background DFU transport API.
- *
  */
 
-#ifndef BACKGROUND_DFU_TRANSPORT_H_
-#define BACKGROUND_DFU_TRANSPORT_H_
-
-#include "background_dfu_state.h"
-
-/**@brief Create and send DFU block request with missing blocks.
+/**
+ * @brief Function for initializing the USB DFU trigger library.
  *
- * This function is used in multicast DFU.
+ * @note  If the USB is also used for other purposes, then this function must be called after USB is
+ *        initialized but before it is enabled. In this case, the configuration flag @ref
+ *        NRF_DFU_TRIGGER_USB_USB_SHARED must be set to 1.
  *
- * @param[in] p_dfu_ctx A pointer to the background DFU context.
- * @param[in] p_req_bmp A pointer to the bitmap structure that shall be sent.
+ * @note  Calling this again after the first success has no effect and returns @ref NRF_SUCCESS.
+ *
+ * @note  If @ref APP_USBD_CONFIG_EVENT_QUEUE_ENABLE is on (1), USB events must be handled manually.
+ *        See @ref app_usbd_event_queue_process.
+ *
+ * @retval NRF_SUCCESS  On successful initialization.
+ * @return An error code on failure, for example if called at a wrong time.
  */
-void background_dfu_transport_block_request_send(background_dfu_context_t        * p_dfu_ctx,
-                                                 background_dfu_request_bitmap_t * p_req_bmp);
-
-/**@brief Send background DFU request, based on DFU state.
- *
- * @param[in] p_dfu_ctx A pointer to the background DFU context.
- */
-void background_dfu_transport_send_request(background_dfu_context_t * p_dfu_ctx);
-
-/**@brief Update background DFU transport state.
- *
- * @param[in] p_dfu_ctx A pointer to the background DFU context.
- */
-void background_dfu_transport_state_update(background_dfu_context_t * p_dfu_ctx);
-
-/**@brief Get random value.
- *
- * @returns A random value of uint32_t type.
- */
-uint32_t background_dfu_random(void);
-
-/** @brief Handle DFU error.
- *
- *  Notify transport about DFU error.
- */
-void background_dfu_handle_error(void);
-
-#endif /* BACKGROUND_DFU_COAP_H_ */
+ret_code_t nrf_dfu_trigger_usb_init(void);
 
 /** @} */
+
+#endif //NRF_DFU_TRIGGER_USB_H

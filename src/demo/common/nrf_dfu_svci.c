@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2017 - 2020, Nordic Semiconductor ASA
+ * Copyright (c) 2016 - 2020, Nordic Semiconductor ASA
  *
  * All rights reserved.
  *
@@ -38,54 +38,50 @@
  *
  */
 
-/** @file
- *
- * @defgroup background_dfu_transport background_dfu_state.h
- * @{
- * @ingroup background_dfu
- * @brief Background DFU transport API.
- *
- */
+#include <stdint.h>
+#include <stdbool.h>
+#include "nrf_log.h"
+#include "nrf_sdm.h"
+#include "app_util.h"
 
-#ifndef BACKGROUND_DFU_TRANSPORT_H_
-#define BACKGROUND_DFU_TRANSPORT_H_
+#define APP_START_ADDR CODE_START
 
-#include "background_dfu_state.h"
 
-/**@brief Create and send DFU block request with missing blocks.
- *
- * This function is used in multicast DFU.
- *
- * @param[in] p_dfu_ctx A pointer to the background DFU context.
- * @param[in] p_req_bmp A pointer to the bitmap structure that shall be sent.
- */
-void background_dfu_transport_block_request_send(background_dfu_context_t        * p_dfu_ctx,
-                                                 background_dfu_request_bitmap_t * p_req_bmp);
+uint32_t nrf_dfu_svci_vector_table_set(void)
+{
+    uint32_t err_code;
+    uint32_t bootloader_addr = BOOTLOADER_ADDRESS;
 
-/**@brief Send background DFU request, based on DFU state.
- *
- * @param[in] p_dfu_ctx A pointer to the background DFU context.
- */
-void background_dfu_transport_send_request(background_dfu_context_t * p_dfu_ctx);
+    if (bootloader_addr != 0xFFFFFFFF)
+    {
+        NRF_LOG_INFO("Setting vector table to bootloader: 0x%08x", bootloader_addr);
+        err_code = sd_softdevice_vector_table_base_set(bootloader_addr);
+        if (err_code != NRF_SUCCESS)
+        {
+            NRF_LOG_ERROR("Failed running sd_softdevice_vector_table_base_set");
+            return err_code;
+        }
 
-/**@brief Update background DFU transport state.
- *
- * @param[in] p_dfu_ctx A pointer to the background DFU context.
- */
-void background_dfu_transport_state_update(background_dfu_context_t * p_dfu_ctx);
+        return NRF_SUCCESS;
+    }
 
-/**@brief Get random value.
- *
- * @returns A random value of uint32_t type.
- */
-uint32_t background_dfu_random(void);
+    NRF_LOG_ERROR("No bootloader was found");
+    return NRF_ERROR_NO_MEM;
+}
 
-/** @brief Handle DFU error.
- *
- *  Notify transport about DFU error.
- */
-void background_dfu_handle_error(void);
 
-#endif /* BACKGROUND_DFU_COAP_H_ */
+uint32_t nrf_dfu_svci_vector_table_unset(void)
+{
+    uint32_t err_code;
 
-/** @} */
+    NRF_LOG_INFO("Setting vector table to main app: 0x%08x", APP_START_ADDR);
+    err_code = sd_softdevice_vector_table_base_set(APP_START_ADDR);
+    if (err_code != NRF_SUCCESS)
+    {
+        NRF_LOG_ERROR("Failed running sd_softdevice_vector_table_base_set");
+        return err_code;
+    }
+
+    return NRF_SUCCESS;
+}
+

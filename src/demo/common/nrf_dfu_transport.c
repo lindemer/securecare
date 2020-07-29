@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2017 - 2020, Nordic Semiconductor ASA
+ * Copyright (c) 2016 - 2020, Nordic Semiconductor ASA
  *
  * All rights reserved.
  *
@@ -37,55 +37,55 @@
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  */
+#include "nrf_dfu_transport.h"
+#include "nrf_log.h"
 
-/** @file
- *
- * @defgroup background_dfu_transport background_dfu_state.h
- * @{
- * @ingroup background_dfu
- * @brief Background DFU transport API.
- *
- */
 
-#ifndef BACKGROUND_DFU_TRANSPORT_H_
-#define BACKGROUND_DFU_TRANSPORT_H_
+#define DFU_TRANS_SECTION_ITEM_GET(i)       NRF_SECTION_ITEM_GET(dfu_trans, nrf_dfu_transport_t, (i))
+#define DFU_TRANS_SECTION_ITEM_COUNT        NRF_SECTION_ITEM_COUNT(dfu_trans, nrf_dfu_transport_t)
 
-#include "background_dfu_state.h"
+NRF_SECTION_DEF(dfu_trans, const nrf_dfu_transport_t);
 
-/**@brief Create and send DFU block request with missing blocks.
- *
- * This function is used in multicast DFU.
- *
- * @param[in] p_dfu_ctx A pointer to the background DFU context.
- * @param[in] p_req_bmp A pointer to the bitmap structure that shall be sent.
- */
-void background_dfu_transport_block_request_send(background_dfu_context_t        * p_dfu_ctx,
-                                                 background_dfu_request_bitmap_t * p_req_bmp);
 
-/**@brief Send background DFU request, based on DFU state.
- *
- * @param[in] p_dfu_ctx A pointer to the background DFU context.
- */
-void background_dfu_transport_send_request(background_dfu_context_t * p_dfu_ctx);
+uint32_t nrf_dfu_transports_init(nrf_dfu_observer_t observer)
+{
+    uint32_t const num_transports = DFU_TRANS_SECTION_ITEM_COUNT;
+    uint32_t ret_val = NRF_SUCCESS;
 
-/**@brief Update background DFU transport state.
- *
- * @param[in] p_dfu_ctx A pointer to the background DFU context.
- */
-void background_dfu_transport_state_update(background_dfu_context_t * p_dfu_ctx);
+    NRF_LOG_DEBUG("Initializing transports (found: %d)", num_transports);
 
-/**@brief Get random value.
- *
- * @returns A random value of uint32_t type.
- */
-uint32_t background_dfu_random(void);
+    for (uint32_t i = 0; i < num_transports; i++)
+    {
+        nrf_dfu_transport_t * const trans = DFU_TRANS_SECTION_ITEM_GET(i);
+        ret_val = trans->init_func(observer);
+        if (ret_val != NRF_SUCCESS)
+        {
+            NRF_LOG_DEBUG("Failed to initialize transport %d, error %d", i, ret_val);
+            break;
+        }
+    }
 
-/** @brief Handle DFU error.
- *
- *  Notify transport about DFU error.
- */
-void background_dfu_handle_error(void);
+    return ret_val;
+}
 
-#endif /* BACKGROUND_DFU_COAP_H_ */
 
-/** @} */
+uint32_t nrf_dfu_transports_close(nrf_dfu_transport_t const * p_exception)
+{
+    uint32_t const num_transports = DFU_TRANS_SECTION_ITEM_COUNT;
+    uint32_t ret_val = NRF_SUCCESS;
+
+    NRF_LOG_DEBUG("Shutting down transports (found: %d)", num_transports);
+
+    for (uint32_t i = 0; i < num_transports; i++)
+    {
+        nrf_dfu_transport_t * const trans = DFU_TRANS_SECTION_ITEM_GET(i);
+        ret_val = trans->close_func(p_exception);
+        if (ret_val != NRF_SUCCESS)
+        {
+            NRF_LOG_DEBUG("Failed to shutdown transport %d, error %d", i, ret_val);
+            break;
+        }
+    }
+
+    return ret_val;
+}

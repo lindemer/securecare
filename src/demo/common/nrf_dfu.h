@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2017 - 2020, Nordic Semiconductor ASA
+ * Copyright (c) 2016 - 2020, Nordic Semiconductor ASA
  *
  * All rights reserved.
  *
@@ -37,55 +37,49 @@
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  */
-
-/** @file
+/**@file
  *
- * @defgroup background_dfu_transport background_dfu_state.h
+ * @defgroup nrf_dfu DFU modules
  * @{
- * @ingroup background_dfu
- * @brief Background DFU transport API.
+ * @ingroup  nrf_bootloader
+ * @brief Modules providing Device Firmware Update (DFU) functionality.
  *
+ * The DFU module, in combination with the @ref nrf_bootloader module,
+ * can be used to implement a bootloader that supports Device Firmware Updates.
  */
 
-#ifndef BACKGROUND_DFU_TRANSPORT_H_
-#define BACKGROUND_DFU_TRANSPORT_H_
+#ifndef NRF_DFU_H__
+#define NRF_DFU_H__
 
-#include "background_dfu_state.h"
+#include <stdint.h>
+#include <stdbool.h>
+#include "nrf_dfu_types.h"
+#include "nrf_dfu_req_handler.h"
 
-/**@brief Create and send DFU block request with missing blocks.
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+
+#define NRF_DFU_SCHED_EVENT_DATA_SIZE (sizeof(nrf_dfu_request_t))
+
+
+/** @brief Function for initializing a DFU operation.
  *
- * This function is used in multicast DFU.
+ * This function initializes a DFU operation and any transports that are registered
+ * in the system.
  *
- * @param[in] p_dfu_ctx A pointer to the background DFU context.
- * @param[in] p_req_bmp A pointer to the bitmap structure that shall be sent.
+ * @param[in] observer  Callback function for receiving DFU notifications.
+ *
+ * @retval  NRF_SUCCESS     If the DFU operation was successfully initialized.
  */
-void background_dfu_transport_block_request_send(background_dfu_context_t        * p_dfu_ctx,
-                                                 background_dfu_request_bitmap_t * p_req_bmp);
+uint32_t nrf_dfu_init(nrf_dfu_observer_t observer);
 
-/**@brief Send background DFU request, based on DFU state.
- *
- * @param[in] p_dfu_ctx A pointer to the background DFU context.
- */
-void background_dfu_transport_send_request(background_dfu_context_t * p_dfu_ctx);
 
-/**@brief Update background DFU transport state.
- *
- * @param[in] p_dfu_ctx A pointer to the background DFU context.
- */
-void background_dfu_transport_state_update(background_dfu_context_t * p_dfu_ctx);
+#ifdef __cplusplus
+}
+#endif
 
-/**@brief Get random value.
- *
- * @returns A random value of uint32_t type.
- */
-uint32_t background_dfu_random(void);
-
-/** @brief Handle DFU error.
- *
- *  Notify transport about DFU error.
- */
-void background_dfu_handle_error(void);
-
-#endif /* BACKGROUND_DFU_COAP_H_ */
+#endif // NRF_DFU_H__
 
 /** @} */

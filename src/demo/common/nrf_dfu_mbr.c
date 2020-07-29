@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2017 - 2020, Nordic Semiconductor ASA
+ * Copyright (c) 2016 - 2020, Nordic Semiconductor ASA
  *
  * All rights reserved.
  *
@@ -37,55 +37,69 @@
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  */
+#include "nrf_dfu_mbr.h"
+#include "nrf_mbr.h"
+#include "nrf_dfu_types.h"
+#include "nrf_log.h"
+#include "nrf_bootloader_info.h"
 
-/** @file
- *
- * @defgroup background_dfu_transport background_dfu_state.h
- * @{
- * @ingroup background_dfu
- * @brief Background DFU transport API.
- *
- */
+#define MBR_IRQ_FORWARD_ADDRESS_ADDRESS (0x20000000) //!< The address of the variable that decides where the MBR forwards interrupts
 
-#ifndef BACKGROUND_DFU_TRANSPORT_H_
-#define BACKGROUND_DFU_TRANSPORT_H_
+uint32_t nrf_dfu_mbr_copy_bl(uint32_t * p_src, uint32_t len)
+{
+    uint32_t ret_val;
+    uint32_t const len_words = len / sizeof(uint32_t);
 
-#include "background_dfu_state.h"
+    sd_mbr_command_t command =
+    {
+        .command = SD_MBR_COMMAND_COPY_BL,
+        .params.copy_bl.bl_src = p_src,
+        .params.copy_bl.bl_len = len_words
+    };
 
-/**@brief Create and send DFU block request with missing blocks.
- *
- * This function is used in multicast DFU.
- *
- * @param[in] p_dfu_ctx A pointer to the background DFU context.
- * @param[in] p_req_bmp A pointer to the bitmap structure that shall be sent.
- */
-void background_dfu_transport_block_request_send(background_dfu_context_t        * p_dfu_ctx,
-                                                 background_dfu_request_bitmap_t * p_req_bmp);
+    ret_val = sd_mbr_command(&command);
 
-/**@brief Send background DFU request, based on DFU state.
- *
- * @param[in] p_dfu_ctx A pointer to the background DFU context.
- */
-void background_dfu_transport_send_request(background_dfu_context_t * p_dfu_ctx);
+    return ret_val;
+}
 
-/**@brief Update background DFU transport state.
- *
- * @param[in] p_dfu_ctx A pointer to the background DFU context.
- */
-void background_dfu_transport_state_update(background_dfu_context_t * p_dfu_ctx);
 
-/**@brief Get random value.
- *
- * @returns A random value of uint32_t type.
- */
-uint32_t background_dfu_random(void);
+uint32_t nrf_dfu_mbr_init_sd(void)
+{
+    uint32_t ret_val;
 
-/** @brief Handle DFU error.
- *
- *  Notify transport about DFU error.
- */
-void background_dfu_handle_error(void);
+    sd_mbr_command_t command =
+    {
+        .command = SD_MBR_COMMAND_INIT_SD
+    };
 
-#endif /* BACKGROUND_DFU_COAP_H_ */
+    ret_val = sd_mbr_command(&command);
 
-/** @} */
+    return ret_val;
+}
+
+
+uint32_t nrf_dfu_mbr_irq_forward_address_set(void)
+{
+    uint32_t ret_val = NRF_ERROR_INVALID_PARAM;
+    uint32_t address = MBR_SIZE;
+
+#if !defined(BLE_STACK_SUPPORT_REQD) && !defined(ANT_STACK_SUPPORT_REQD)
+    sd_mbr_command_t command =
+    {
+        .command = SD_MBR_COMMAND_IRQ_FORWARD_ADDRESS_SET,
+        .params.irq_forward_address_set.address = address,
+    };
+
+    ret_val = sd_mbr_command(&command);
+#endif
+
+    if (ret_val == NRF_ERROR_INVALID_PARAM)
+    {
+        // Manually set the forward address if this MBR doesn't have the command.
+        *(uint32_t *)(MBR_IRQ_FORWARD_ADDRESS_ADDRESS) = address;
+
+        ret_val = NRF_SUCCESS;
+    }
+
+    return ret_val;
+}

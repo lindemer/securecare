@@ -37,55 +37,85 @@
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  */
+#include "nrf_bootloader_wdt.h"
+#include "nrf_wdt.h"
+#include "nrf_bootloader_dfu_timers.h"
+#include "nrf_log_ctrl.h"
 
-/** @file
- *
- * @defgroup background_dfu_transport background_dfu_state.h
- * @{
- * @ingroup background_dfu
- * @brief Background DFU transport API.
- *
- */
+#define NRF_LOG_MODULE_NAME nrf_bootloader_wdt
+#include "nrf_log.h"
+NRF_LOG_MODULE_REGISTER();
 
-#ifndef BACKGROUND_DFU_TRANSPORT_H_
-#define BACKGROUND_DFU_TRANSPORT_H_
 
-#include "background_dfu_state.h"
+static void wdt_feed(void)
+{
+    if (nrf_wdt_started())
+    {
+        for (nrf_wdt_rr_register_t i = NRF_WDT_RR0; i < NRF_WDT_RR7; i++)
+        {
+            if (nrf_wdt_reload_request_is_enabled(i))
+            {
+                nrf_wdt_reload_request_set(i);
+            }
+        }
+    }
+}
 
-/**@brief Create and send DFU block request with missing blocks.
- *
- * This function is used in multicast DFU.
- *
- * @param[in] p_dfu_ctx A pointer to the background DFU context.
- * @param[in] p_req_bmp A pointer to the bitmap structure that shall be sent.
- */
-void background_dfu_transport_block_request_send(background_dfu_context_t        * p_dfu_ctx,
-                                                 background_dfu_request_bitmap_t * p_req_bmp);
 
-/**@brief Send background DFU request, based on DFU state.
- *
- * @param[in] p_dfu_ctx A pointer to the background DFU context.
- */
-void background_dfu_transport_send_request(background_dfu_context_t * p_dfu_ctx);
+static void wdt_feed_timer_handler(void)
+{
+    NRF_LOG_INFO("Internal feed");
+    wdt_feed();
+}
 
-/**@brief Update background DFU transport state.
- *
- * @param[in] p_dfu_ctx A pointer to the background DFU context.
- */
-void background_dfu_transport_state_update(background_dfu_context_t * p_dfu_ctx);
 
-/**@brief Get random value.
- *
- * @returns A random value of uint32_t type.
- */
-uint32_t background_dfu_random(void);
+void WDT_IRQHandler(void)
+{
+    nrf_wdt_event_clear(NRF_WDT_EVENT_TIMEOUT);
+    NRF_LOG_FINAL_FLUSH();
+}
 
-/** @brief Handle DFU error.
- *
- *  Notify transport about DFU error.
- */
-void background_dfu_handle_error(void);
+#define MAX_FLASH_OP_TIME_TICKS 3200 // ~100 ms
 
-#endif /* BACKGROUND_DFU_COAP_H_ */
+void nrf_bootloader_wdt_init(void)
+{
+    static bool initialized = false;
 
-/** @} */
+    if (initialized)
+    {
+        return;
+    }
+
+    if (nrf_wdt_started())
+    {
+        uint32_t wdt_ticks = nrf_wdt_reload_value_get();
+
+        NRF_LOG_INFO("WDT enabled CRV:%d ticks", wdt_ticks);
+
+        //wdt_ticks must be reduced to feed the watchdog before the timeout.
+        uint32_t reduced_timeout_ticks = MAX((int32_t)wdt_ticks - MAX_FLASH_OP_TIME_TICKS,
+                                             NRF_BOOTLOADER_MIN_TIMEOUT_TICKS);
+
+        /* initial watchdog feed */
+        wdt_feed();
+
+        NRF_LOG_INFO("Starting a timer (%d ticks) for feeding watchdog.", reduced_timeout_ticks);
+        nrf_bootloader_wdt_feed_timer_start(reduced_timeout_ticks, wdt_feed_timer_handler);
+
+        NVIC_EnableIRQ(WDT_IRQn);
+    }
+    else
+    {
+        NRF_LOG_INFO("WDT is not enabled");
+    }
+
+    initialized = true;
+}
+
+void nrf_bootloader_wdt_feed(void)
+{
+    if (nrf_wdt_started())
+    {
+        wdt_feed();
+    }
+}

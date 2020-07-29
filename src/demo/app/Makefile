@@ -23,12 +23,6 @@ SRC_FILES += \
   $(SDK_ROOT)/components/libraries/crypto/backend/micro_ecc/micro_ecc_backend_ecc.c \
   $(SDK_ROOT)/components/libraries/crypto/backend/micro_ecc/micro_ecc_backend_ecdh.c \
   $(SDK_ROOT)/components/libraries/crypto/backend/micro_ecc/micro_ecc_backend_ecdsa.c \
-  $(SDK_ROOT)/components/libraries/crypto/backend/mbedtls/mbedtls_backend_ecc.c \
-  $(SDK_ROOT)/components/libraries/crypto/backend/mbedtls/mbedtls_backend_ecdh.c \
-  $(SDK_ROOT)/components/libraries/crypto/backend/mbedtls/mbedtls_backend_ecdsa.c \
-  $(SDK_ROOT)/components/libraries/crypto/backend/cc310/cc310_backend_ecc.c \
-  $(SDK_ROOT)/components/libraries/crypto/backend/cc310/cc310_backend_ecdh.c \
-  $(SDK_ROOT)/components/libraries/crypto/backend/cc310/cc310_backend_ecdsa.c \
   $(SDK_ROOT)/components/libraries/button/app_button.c \
   $(SDK_ROOT)/components/libraries/util/app_error.c \
   $(SDK_ROOT)/components/libraries/util/app_error_handler_gcc.c \
@@ -80,17 +74,17 @@ SRC_FILES += \
   $(SDK_ROOT)/components/libraries/crypto/backend/nrf_sw/nrf_sw_backend_hash.c \
   $(SDK_ROOT)/external/nano-pb/pb_common.c \
   $(SDK_ROOT)/external/nano-pb/pb_decode.c \
-  $(SDK_ROOT)/components/libraries/bootloader/dfu/dfu-cc.pb.c \
-  $(SDK_ROOT)/components/libraries/bootloader/dfu/nrf_dfu.c \
-  $(SDK_ROOT)/components/libraries/bootloader/dfu/nrf_dfu_flash.c \
-  $(SDK_ROOT)/components/libraries/bootloader/dfu/nrf_dfu_handling_error.c \
-  $(SDK_ROOT)/components/libraries/bootloader/dfu/nrf_dfu_mbr.c \
-  $(SDK_ROOT)/components/libraries/bootloader/dfu/nrf_dfu_req_handler.c \
-  $(SDK_ROOT)/components/libraries/bootloader/dfu/nrf_dfu_settings.c \
-  $(SDK_ROOT)/components/libraries/bootloader/dfu/nrf_dfu_transport.c \
-  $(SDK_ROOT)/components/libraries/bootloader/dfu/nrf_dfu_utils.c \
-  $(SDK_ROOT)/components/libraries/bootloader/dfu/nrf_dfu_validation.c \
-  $(SDK_ROOT)/components/libraries/bootloader/dfu/nrf_dfu_ver_validation.c \
+  $(PROJ_DIR)/../common/dfu-cc.pb.c \
+  $(PROJ_DIR)/../common/nrf_dfu.c \
+  $(PROJ_DIR)/../common/nrf_dfu_flash.c \
+  $(PROJ_DIR)/../common/nrf_dfu_handling_error.c \
+  $(PROJ_DIR)/../common/nrf_dfu_mbr.c \
+  $(PROJ_DIR)/../common/nrf_dfu_req_handler.c \
+  $(PROJ_DIR)/../common/nrf_dfu_settings.c \
+  $(PROJ_DIR)/../common/nrf_dfu_transport.c \
+  $(PROJ_DIR)/../common/nrf_dfu_utils.c \
+  $(PROJ_DIR)/../common/nrf_dfu_validation.c \
+  $(PROJ_DIR)/../common/nrf_dfu_ver_validation.c \
   $(SDK_ROOT)/components/iot/coap/coap.c \
   $(SDK_ROOT)/components/iot/coap/coap_block.c \
   $(SDK_ROOT)/components/iot/coap/coap_message.c \
@@ -101,13 +95,6 @@ SRC_FILES += \
   $(SDK_ROOT)/external/segger_rtt/SEGGER_RTT.c \
   $(SDK_ROOT)/external/segger_rtt/SEGGER_RTT_Syscalls_GCC.c \
   $(SDK_ROOT)/external/segger_rtt/SEGGER_RTT_printf.c \
-  $(SDK_ROOT)/components/libraries/crypto/backend/oberon/oberon_backend_chacha_poly_aead.c \
-  $(SDK_ROOT)/components/libraries/crypto/backend/oberon/oberon_backend_ecc.c \
-  $(SDK_ROOT)/components/libraries/crypto/backend/oberon/oberon_backend_ecdh.c \
-  $(SDK_ROOT)/components/libraries/crypto/backend/oberon/oberon_backend_ecdsa.c \
-  $(SDK_ROOT)/components/libraries/crypto/backend/oberon/oberon_backend_eddsa.c \
-  $(SDK_ROOT)/components/libraries/crypto/backend/oberon/oberon_backend_hash.c \
-  $(SDK_ROOT)/components/libraries/crypto/backend/oberon/oberon_backend_hmac.c \
   $(SDK_ROOT)/components/thread/utils/thread_utils.c \
   $(PROJ_DIR)/../../../lib/NanoCBOR/src/encoder.c \
   $(PROJ_DIR)/../../../lib/NanoCBOR/src/decoder.c \
@@ -116,15 +103,16 @@ SRC_FILES += \
 
 # Include folders common to all targets
 INC_FOLDERS += \
-  $(PROJ_DIR)/../../../lib/NanoCBOR/include \
+  $(PROJ_DIR) \
+  $(PROJ_DIR)/../common \
   $(PROJ_DIR)/../../cose \
+  $(PROJ_DIR)/../../../lib/NanoCBOR/include \
   $(SDK_ROOT)/components/libraries/crypto/backend/cc310 \
   $(SDK_ROOT)/external/nrf_cc310/include \
   $(SDK_ROOT)/external/nrf_security/include \
   $(SDK_ROOT)/components/libraries/crypto/backend/cifra \
   $(SDK_ROOT)/external/openthread/include \
   $(SDK_ROOT)/external/fprintf \
-  $(PROJ_DIR) \
   $(SDK_ROOT)/components/boards \
   $(SDK_ROOT)/components/iot/background_dfu \
   $(SDK_ROOT)/components/libraries/atomic \
@@ -155,7 +143,6 @@ INC_FOLDERS += \
   $(SDK_ROOT)/modules/nrfx/drivers/include \
   $(SDK_ROOT)/external/openthread/project/config \
   $(SDK_ROOT)/components/libraries/crypto/backend/cc310_bl \
-  $(SDK_ROOT)/components/libraries/bootloader/dfu \
   $(SDK_ROOT)/components/libraries/ringbuf \
   $(SDK_ROOT)/external/nrf_security/config \
   $(SDK_ROOT)/components/thread/utils \
@@ -187,7 +174,6 @@ INC_FOLDERS += \
   $(SDK_ROOT)/components/libraries/sha256 \
   $(SDK_ROOT)/components/softdevice/mbr/headers \
   $(SDK_ROOT)/components/libraries/crypto/backend/oberon \
-  $(SDK_ROOT)/components/libraries/bootloader \
 
 # Libraries common to all targets
 LIB_FILES += \

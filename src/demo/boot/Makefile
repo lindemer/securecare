@@ -60,48 +60,43 @@ SRC_FILES += \
   $(KEYS_DIR)/pub.c \
   $(PROJ_DIR)/main.c \
   $(SDK_ROOT)/components/libraries/crypto/backend/nrf_sw/nrf_sw_backend_hash.c \
-  $(SDK_ROOT)/components/libraries/bootloader/nrf_bootloader.c \
-  $(SDK_ROOT)/components/libraries/bootloader/nrf_bootloader_app_start.c \
-  $(SDK_ROOT)/components/libraries/bootloader/nrf_bootloader_app_start_final.c \
-  $(SDK_ROOT)/components/libraries/bootloader/nrf_bootloader_dfu_timers.c \
-  $(SDK_ROOT)/components/libraries/bootloader/nrf_bootloader_fw_activation.c \
-  $(SDK_ROOT)/components/libraries/bootloader/nrf_bootloader_info.c \
-  $(SDK_ROOT)/components/libraries/bootloader/nrf_bootloader_wdt.c \
   $(SDK_ROOT)/external/nano-pb/pb_common.c \
   $(SDK_ROOT)/external/nano-pb/pb_decode.c \
-  $(SDK_ROOT)/components/libraries/bootloader/dfu/dfu-cc.pb.c \
-  $(SDK_ROOT)/components/libraries/bootloader/dfu/nrf_dfu.c \
-  $(SDK_ROOT)/components/libraries/bootloader/dfu/nrf_dfu_flash.c \
-  $(SDK_ROOT)/components/libraries/bootloader/dfu/nrf_dfu_handling_error.c \
-  $(SDK_ROOT)/components/libraries/bootloader/dfu/nrf_dfu_mbr.c \
-  $(SDK_ROOT)/components/libraries/bootloader/dfu/nrf_dfu_req_handler.c \
-  $(SDK_ROOT)/components/libraries/bootloader/dfu/nrf_dfu_settings.c \
-  $(SDK_ROOT)/components/libraries/bootloader/dfu/nrf_dfu_transport.c \
-  $(SDK_ROOT)/components/libraries/bootloader/dfu/nrf_dfu_utils.c \
-  $(SDK_ROOT)/components/libraries/bootloader/dfu/nrf_dfu_validation.c \
-  $(SDK_ROOT)/components/libraries/bootloader/dfu/nrf_dfu_ver_validation.c \
+  $(PROJ_DIR)/../common/nrf_bootloader.c \
+  $(PROJ_DIR)/../common/nrf_bootloader_app_start.c \
+  $(PROJ_DIR)/../common/nrf_bootloader_app_start_final.c \
+  $(PROJ_DIR)/../common/nrf_bootloader_dfu_timers.c \
+  $(PROJ_DIR)/../common/nrf_bootloader_fw_activation.c \
+  $(PROJ_DIR)/../common/nrf_bootloader_info.c \
+  $(PROJ_DIR)/../common/nrf_bootloader_wdt.c \
+  $(PROJ_DIR)/../common/dfu-cc.pb.c \
+  $(PROJ_DIR)/../common/nrf_dfu.c \
+  $(PROJ_DIR)/../common/nrf_dfu_flash.c \
+  $(PROJ_DIR)/../common/nrf_dfu_handling_error.c \
+  $(PROJ_DIR)/../common/nrf_dfu_mbr.c \
+  $(PROJ_DIR)/../common/nrf_dfu_req_handler.c \
+  $(PROJ_DIR)/../common/nrf_dfu_settings.c \
+  $(PROJ_DIR)/../common/nrf_dfu_transport.c \
+  $(PROJ_DIR)/../common/nrf_dfu_utils.c \
+  $(PROJ_DIR)/../common/nrf_dfu_validation.c \
+  $(PROJ_DIR)/../common/nrf_dfu_ver_validation.c \
   $(SDK_ROOT)/external/segger_rtt/SEGGER_RTT.c \
   $(SDK_ROOT)/external/segger_rtt/SEGGER_RTT_Syscalls_GCC.c \
   $(SDK_ROOT)/external/segger_rtt/SEGGER_RTT_printf.c \
-  $(SDK_ROOT)/components/libraries/crypto/backend/oberon/oberon_backend_chacha_poly_aead.c \
-  $(SDK_ROOT)/components/libraries/crypto/backend/oberon/oberon_backend_ecc.c \
-  $(SDK_ROOT)/components/libraries/crypto/backend/oberon/oberon_backend_ecdh.c \
-  $(SDK_ROOT)/components/libraries/crypto/backend/oberon/oberon_backend_ecdsa.c \
-  $(SDK_ROOT)/components/libraries/crypto/backend/oberon/oberon_backend_eddsa.c \
-  $(SDK_ROOT)/components/libraries/crypto/backend/oberon/oberon_backend_hash.c \
-  $(SDK_ROOT)/components/libraries/crypto/backend/oberon/oberon_backend_hmac.c \
   $(PROJ_DIR)/../../../lib/NanoCBOR/src/encoder.c \
   $(PROJ_DIR)/../../../lib/NanoCBOR/src/decoder.c \
   $(PROJ_DIR)/../../cose/cose.c \
+  $(PROJ_DIR)/../../cose/suit.c \
 
 # Include folders common to all targets
 INC_FOLDERS += \
-  $(PROJ_DIR)/../../../lib/NanoCBOR/include \
+  $(PROJ_DIR) \
+  $(PROJ_DIR)/../common \
   $(PROJ_DIR)/../../cose \
+  $(PROJ_DIR)/../../../lib/NanoCBOR/include \
   $(SDK_ROOT)/components/libraries/crypto/backend/cc310 \
   $(SDK_ROOT)/components/libraries/crypto/backend/cifra \
   $(SDK_ROOT)/external/fprintf \
-  $(PROJ_DIR) \
   $(SDK_ROOT)/components/libraries/atomic \
   $(SDK_ROOT)/modules/nrfx/hal \
   $(SDK_ROOT)/components/libraries/atomic_fifo \
@@ -123,7 +118,6 @@ INC_FOLDERS += \
   $(SDK_ROOT)/components/libraries/crypto/backend/optiga \
   $(SDK_ROOT)/modules/nrfx/drivers/include \
   $(SDK_ROOT)/components/libraries/crypto/backend/cc310_bl \
-  $(SDK_ROOT)/components/libraries/bootloader/dfu \
   $(SDK_ROOT)/components/libraries/ringbuf \
   $(SDK_ROOT)/external/nano-pb \
   $(SDK_ROOT)/modules/nrfx \
@@ -149,7 +143,6 @@ INC_FOLDERS += \
   $(SDK_ROOT)/components/libraries/sha256 \
   $(SDK_ROOT)/components/softdevice/mbr/headers \
   $(SDK_ROOT)/components/libraries/crypto/backend/oberon \
-  $(SDK_ROOT)/components/libraries/bootloader \
 
 # Libraries common to all targets
 LIB_FILES += \

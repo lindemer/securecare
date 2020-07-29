@@ -740,6 +740,9 @@ static void suit_request_callback(coap_resource_t * p_resource, coap_message_t *
 
     // Send response, if created.
     if (p_response != NULL) coap_dfu_delayed_message_send(p_response);
+
+    // Download firmware.
+    if (!err) coap_dfu_trigger(&p_request->remote);
 }
 
 /***************************************************************************************************
