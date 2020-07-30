@@ -168,7 +168,7 @@ static void state_changed_callback(uint32_t aFlags, void *aContext)
             case OT_DEVICE_ROLE_CHILD:
             case OT_DEVICE_ROLE_ROUTER:
             case OT_DEVICE_ROLE_LEADER:
-                coap_dfu_trigger(NULL);
+                //coap_dfu_trigger(NULL);
                 break;
 
             case OT_DEVICE_ROLE_DISABLED:

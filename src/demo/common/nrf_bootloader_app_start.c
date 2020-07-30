@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2017 - 2020, Nordic Semiconductor ASA
+ * Copyright (c) 2016 - 2020, Nordic Semiconductor ASA
  *
  * All rights reserved.
  *
@@ -37,55 +37,41 @@
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  */
+#include <stdint.h>
+#include "nrf.h"
+#include "nrf_bootloader_app_start.h"
+#include "nrf_bootloader_info.h"
+#include "nrf_log.h"
+#include "nrf_dfu_mbr.h"
+#include "nrf_log_ctrl.h"
+#include "nrf_bootloader_info.h"
 
-/** @file
- *
- * @defgroup background_dfu_transport background_dfu_state.h
- * @{
- * @ingroup background_dfu
- * @brief Background DFU transport API.
- *
- */
+// Do the final stages of app_start. Protect flash and run app. See nrf_bootloader_app_start_final.c
+void nrf_bootloader_app_start_final(uint32_t start_addr);
 
-#ifndef BACKGROUND_DFU_TRANSPORT_H_
-#define BACKGROUND_DFU_TRANSPORT_H_
+void nrf_bootloader_app_start(void)
+{
+    uint32_t start_addr = MBR_SIZE; // Always boot from end of MBR. If a SoftDevice is present, it will boot the app.
+    NRF_LOG_DEBUG("Running nrf_bootloader_app_start with address: 0x%08x", start_addr);
+    uint32_t err_code;
 
-#include "background_dfu_state.h"
+    // Disable and clear interrupts
+    // Notice that this disables only 'external' interrupts (positive IRQn).
+    NRF_LOG_DEBUG("Disabling interrupts. NVIC->ICER[0]: 0x%x", NVIC->ICER[0]);
 
-/**@brief Create and send DFU block request with missing blocks.
- *
- * This function is used in multicast DFU.
- *
- * @param[in] p_dfu_ctx A pointer to the background DFU context.
- * @param[in] p_req_bmp A pointer to the bitmap structure that shall be sent.
- */
-void background_dfu_transport_block_request_send(background_dfu_context_t        * p_dfu_ctx,
-                                                 background_dfu_request_bitmap_t * p_req_bmp);
+    NVIC->ICER[0]=0xFFFFFFFF;
+    NVIC->ICPR[0]=0xFFFFFFFF;
+#if defined(__NRF_NVIC_ISER_COUNT) && __NRF_NVIC_ISER_COUNT == 2
+    NVIC->ICER[1]=0xFFFFFFFF;
+    NVIC->ICPR[1]=0xFFFFFFFF;
+#endif
 
-/**@brief Send background DFU request, based on DFU state.
- *
- * @param[in] p_dfu_ctx A pointer to the background DFU context.
- */
-void background_dfu_transport_send_request(background_dfu_context_t * p_dfu_ctx);
+    err_code = nrf_dfu_mbr_irq_forward_address_set();
+    if (err_code != NRF_SUCCESS)
+    {
+        NRF_LOG_ERROR("Failed running nrf_dfu_mbr_irq_forward_address_set()");
+    }
 
-/**@brief Update background DFU transport state.
- *
- * @param[in] p_dfu_ctx A pointer to the background DFU context.
- */
-void background_dfu_transport_state_update(background_dfu_context_t * p_dfu_ctx);
-
-/**@brief Get random value.
- *
- * @returns A random value of uint32_t type.
- */
-uint32_t background_dfu_random(void);
-
-/** @brief Handle DFU error.
- *
- *  Notify transport about DFU error.
- */
-void background_dfu_handle_error(void);
-
-#endif /* BACKGROUND_DFU_COAP_H_ */
-
-/** @} */
+    NRF_LOG_FLUSH();
+    nrf_bootloader_app_start_final(start_addr);
+}

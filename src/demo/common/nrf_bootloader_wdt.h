@@ -37,55 +37,43 @@
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  */
+#ifndef NRF_BOOTLOADER_WDT_H
+#define NRF_BOOTLOADER_WDT_H
 
-/** @file
+/**@file
  *
- * @defgroup background_dfu_transport background_dfu_state.h
+ * @defgroup nrf_bootloader_wdt  Automated feeding of the watchdog
  * @{
- * @ingroup background_dfu
- * @brief Background DFU transport API.
- *
+ * @ingroup  nrf_bootloader
+ * @brief Module that keeps the WDT from timing out if the WDT has been started in the application.
  */
 
-#ifndef BACKGROUND_DFU_TRANSPORT_H_
-#define BACKGROUND_DFU_TRANSPORT_H_
+#include "sdk_errors.h"
 
-#include "background_dfu_state.h"
-
-/**@brief Create and send DFU block request with missing blocks.
+#ifdef __cplusplus
+extern "C" {
+#endif
+/**
+ * @brief Function for checking whether the WDT peripheral is started and for getting its configuration.
  *
- * This function is used in multicast DFU.
- *
- * @param[in] p_dfu_ctx A pointer to the background DFU context.
- * @param[in] p_req_bmp A pointer to the bitmap structure that shall be sent.
+ * The module uses a timer to start regular feeding of the watchdog. Timer interval
+ * is chosen based on watchdog settings. When @ref nrf_bootloader_wdt_feed is called, internal
+ * feeding is stopped assuming that the application takes responsibity of watchdog feeding.
+ * However, if @ref NRF_BL_WDT_MAX_SCHEDULER_LATENCY_MS or the watchdog is configured to
+ * run during sleep, then internal feeding (from timeout handler context) is kept active.
  */
-void background_dfu_transport_block_request_send(background_dfu_context_t        * p_dfu_ctx,
-                                                 background_dfu_request_bitmap_t * p_req_bmp);
+void nrf_bootloader_wdt_init(void);
 
-/**@brief Send background DFU request, based on DFU state.
- *
- * @param[in] p_dfu_ctx A pointer to the background DFU context.
+
+/**
+ * @brief Function for feeding the watchdog (if active).
  */
-void background_dfu_transport_send_request(background_dfu_context_t * p_dfu_ctx);
+void nrf_bootloader_wdt_feed(void);
 
-/**@brief Update background DFU transport state.
- *
- * @param[in] p_dfu_ctx A pointer to the background DFU context.
- */
-void background_dfu_transport_state_update(background_dfu_context_t * p_dfu_ctx);
-
-/**@brief Get random value.
- *
- * @returns A random value of uint32_t type.
- */
-uint32_t background_dfu_random(void);
-
-/** @brief Handle DFU error.
- *
- *  Notify transport about DFU error.
- */
-void background_dfu_handle_error(void);
-
-#endif /* BACKGROUND_DFU_COAP_H_ */
+#ifdef __cplusplus
+}
+#endif
 
 /** @} */
+
+#endif //NRF_BOOTLOADER_WDT_H

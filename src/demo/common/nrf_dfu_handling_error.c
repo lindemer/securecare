@@ -38,54 +38,24 @@
  *
  */
 
-/** @file
- *
- * @defgroup background_dfu_transport background_dfu_state.h
- * @{
- * @ingroup background_dfu
- * @brief Background DFU transport API.
- *
- */
+#include "nrf_dfu_handling_error.h"
 
-#ifndef BACKGROUND_DFU_TRANSPORT_H_
-#define BACKGROUND_DFU_TRANSPORT_H_
+#include "nrf_log.h"
+#include "nrf_dfu_req_handler.h"
 
-#include "background_dfu_state.h"
+static nrf_dfu_ext_error_code_t m_last_error = NRF_DFU_EXT_ERROR_NO_ERROR;
 
-/**@brief Create and send DFU block request with missing blocks.
- *
- * This function is used in multicast DFU.
- *
- * @param[in] p_dfu_ctx A pointer to the background DFU context.
- * @param[in] p_req_bmp A pointer to the bitmap structure that shall be sent.
- */
-void background_dfu_transport_block_request_send(background_dfu_context_t        * p_dfu_ctx,
-                                                 background_dfu_request_bitmap_t * p_req_bmp);
+nrf_dfu_result_t ext_error_set(nrf_dfu_ext_error_code_t error_code)
+{
+    m_last_error = error_code;
 
-/**@brief Send background DFU request, based on DFU state.
- *
- * @param[in] p_dfu_ctx A pointer to the background DFU context.
- */
-void background_dfu_transport_send_request(background_dfu_context_t * p_dfu_ctx);
+    return NRF_DFU_RES_CODE_EXT_ERROR;
+}
 
-/**@brief Update background DFU transport state.
- *
- * @param[in] p_dfu_ctx A pointer to the background DFU context.
- */
-void background_dfu_transport_state_update(background_dfu_context_t * p_dfu_ctx);
+nrf_dfu_ext_error_code_t ext_error_get()
+{
+    nrf_dfu_ext_error_code_t last_error = m_last_error;
+    m_last_error = NRF_DFU_EXT_ERROR_NO_ERROR;
 
-/**@brief Get random value.
- *
- * @returns A random value of uint32_t type.
- */
-uint32_t background_dfu_random(void);
-
-/** @brief Handle DFU error.
- *
- *  Notify transport about DFU error.
- */
-void background_dfu_handle_error(void);
-
-#endif /* BACKGROUND_DFU_COAP_H_ */
-
-/** @} */
+    return last_error;
+}

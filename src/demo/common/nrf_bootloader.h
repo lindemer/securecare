@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2017 - 2020, Nordic Semiconductor ASA
+ * Copyright (c) 2016 - 2020, Nordic Semiconductor ASA
  *
  * All rights reserved.
  *
@@ -37,55 +37,43 @@
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  */
-
-/** @file
+/**@file
  *
- * @defgroup background_dfu_transport background_dfu_state.h
+ *
+ * @defgroup nrf_bootloader Bootloader modules
  * @{
- * @ingroup background_dfu
- * @brief Background DFU transport API.
+ * @ingroup app_common
+ * @brief Bootloader and DFU modules
  *
+ * The bootloader module can be used to implement a basic bootloader that
+ * can be extended with, for example, Device Firmware Update (DFU) support
+ * or custom functionality.
+  */
+
+#ifndef NRF_BOOTLOADER_H__
+#define NRF_BOOTLOADER_H__
+
+#include <stdint.h>
+#include "nrf_dfu.h"
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/** @brief Function for initializing the bootloader.
+ *
+ * @details This function is the entry point of all bootloader operations.
+ *          If DFU functionality is compiled in, the DFU process is initialized
+ *          when running this function.
+ *
+ * @note This function does not return unless an error occurred.
+ *
+ * @retval NRF_ERROR_INTERNAL  Something went wrong.
  */
+ret_code_t nrf_bootloader_init(nrf_dfu_observer_t observer);
 
-#ifndef BACKGROUND_DFU_TRANSPORT_H_
-#define BACKGROUND_DFU_TRANSPORT_H_
+#ifdef __cplusplus
+}
+#endif
 
-#include "background_dfu_state.h"
-
-/**@brief Create and send DFU block request with missing blocks.
- *
- * This function is used in multicast DFU.
- *
- * @param[in] p_dfu_ctx A pointer to the background DFU context.
- * @param[in] p_req_bmp A pointer to the bitmap structure that shall be sent.
- */
-void background_dfu_transport_block_request_send(background_dfu_context_t        * p_dfu_ctx,
-                                                 background_dfu_request_bitmap_t * p_req_bmp);
-
-/**@brief Send background DFU request, based on DFU state.
- *
- * @param[in] p_dfu_ctx A pointer to the background DFU context.
- */
-void background_dfu_transport_send_request(background_dfu_context_t * p_dfu_ctx);
-
-/**@brief Update background DFU transport state.
- *
- * @param[in] p_dfu_ctx A pointer to the background DFU context.
- */
-void background_dfu_transport_state_update(background_dfu_context_t * p_dfu_ctx);
-
-/**@brief Get random value.
- *
- * @returns A random value of uint32_t type.
- */
-uint32_t background_dfu_random(void);
-
-/** @brief Handle DFU error.
- *
- *  Notify transport about DFU error.
- */
-void background_dfu_handle_error(void);
-
-#endif /* BACKGROUND_DFU_COAP_H_ */
-
+#endif // NRF_BOOTLOADER_H__
 /** @} */

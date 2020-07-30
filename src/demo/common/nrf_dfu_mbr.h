@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2017 - 2020, Nordic Semiconductor ASA
+ * Copyright (c) 2016 - 2020, Nordic Semiconductor ASA
  *
  * All rights reserved.
  *
@@ -37,55 +37,54 @@
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  */
-
-/** @file
+/**@file
  *
- * @defgroup background_dfu_transport background_dfu_state.h
+ * @defgroup sdk_nrf_dfu_mbr MBR functions
  * @{
- * @ingroup background_dfu
- * @brief Background DFU transport API.
- *
+ * @ingroup  nrf_dfu
  */
 
-#ifndef BACKGROUND_DFU_TRANSPORT_H_
-#define BACKGROUND_DFU_TRANSPORT_H_
+#ifndef NRF_DFU_MBR_H__
+#define NRF_DFU_MBR_H__
 
-#include "background_dfu_state.h"
+#include <stdint.h>
 
-/**@brief Create and send DFU block request with missing blocks.
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/** @brief Function for copying the bootloader using an MBR command.
  *
- * This function is used in multicast DFU.
+ * @param[in] p_src         Source address of the bootloader data to copy.
+ * @param[in] len           Length of the data to copy in bytes.
  *
- * @param[in] p_dfu_ctx A pointer to the background DFU context.
- * @param[in] p_req_bmp A pointer to the bitmap structure that shall be sent.
+ * @return  This function will return only if the command request could not be run.
+ *          See @ref sd_mbr_command_copy_bl_t for possible return values.
  */
-void background_dfu_transport_block_request_send(background_dfu_context_t        * p_dfu_ctx,
-                                                 background_dfu_request_bitmap_t * p_req_bmp);
+uint32_t nrf_dfu_mbr_copy_bl(uint32_t * p_src, uint32_t len);
 
-/**@brief Send background DFU request, based on DFU state.
+
+/** @brief Function for initializing the SoftDevice using an MBR command.
  *
- * @param[in] p_dfu_ctx A pointer to the background DFU context.
+ * @retval  NRF_SUCCESS     If the SoftDevice was initialized successfully.
+ *                          Any other return value indicates that the SoftDevice
+ *                          could not be initialized.
  */
-void background_dfu_transport_send_request(background_dfu_context_t * p_dfu_ctx);
+uint32_t nrf_dfu_mbr_init_sd(void);
 
-/**@brief Update background DFU transport state.
+
+/** @brief Function for setting the address of the IRQ table to the app's using an MBR command.
  *
- * @param[in] p_dfu_ctx A pointer to the background DFU context.
+ * @retval  NRF_SUCCESS  If the address of the new irq table was set. Any other
+ *                       return value indicates that the address could not be set.
  */
-void background_dfu_transport_state_update(background_dfu_context_t * p_dfu_ctx);
+uint32_t nrf_dfu_mbr_irq_forward_address_set(void);
 
-/**@brief Get random value.
- *
- * @returns A random value of uint32_t type.
- */
-uint32_t background_dfu_random(void);
 
-/** @brief Handle DFU error.
- *
- *  Notify transport about DFU error.
- */
-void background_dfu_handle_error(void);
+#ifdef __cplusplus
+}
+#endif
 
-#endif /* BACKGROUND_DFU_COAP_H_ */
+#endif // NRF_DFU_MBR_H__
 
 /** @} */

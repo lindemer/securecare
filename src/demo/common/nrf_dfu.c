@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2017 - 2020, Nordic Semiconductor ASA
+ * Copyright (c) 2016 - 2020, Nordic Semiconductor ASA
  *
  * All rights reserved.
  *
@@ -37,55 +37,62 @@
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  */
+#include "nrf_dfu.h"
 
-/** @file
- *
- * @defgroup background_dfu_transport background_dfu_state.h
- * @{
- * @ingroup background_dfu
- * @brief Background DFU transport API.
- *
+#include "nrf_dfu_utils.h"
+#include "nrf_dfu_transport.h"
+#include "nrf_dfu_req_handler.h"
+#include "nrf_log.h"
+
+static nrf_dfu_observer_t m_user_observer;                          //<! Observer callback set by the user.
+
+
+
+/**
+ * @brief This function calls the user's observer (@ref m_observer) after it is done handling the event.
  */
+static void dfu_observer(nrf_dfu_evt_type_t event)
+{
+    switch (event)
+    {
+        case NRF_DFU_EVT_DFU_COMPLETED:
+        case NRF_DFU_EVT_DFU_ABORTED:
+#ifndef NRF_DFU_NO_TRANSPORT
+            UNUSED_RETURN_VALUE(nrf_dfu_transports_close(NULL));
+#endif
+            break;
+        default:
+            break;
+    }
 
-#ifndef BACKGROUND_DFU_TRANSPORT_H_
-#define BACKGROUND_DFU_TRANSPORT_H_
+    /* Call user's observer if present. */
+    if (m_user_observer)
+    {
+        m_user_observer(event);
+    }
+}
 
-#include "background_dfu_state.h"
 
-/**@brief Create and send DFU block request with missing blocks.
- *
- * This function is used in multicast DFU.
- *
- * @param[in] p_dfu_ctx A pointer to the background DFU context.
- * @param[in] p_req_bmp A pointer to the bitmap structure that shall be sent.
- */
-void background_dfu_transport_block_request_send(background_dfu_context_t        * p_dfu_ctx,
-                                                 background_dfu_request_bitmap_t * p_req_bmp);
 
-/**@brief Send background DFU request, based on DFU state.
- *
- * @param[in] p_dfu_ctx A pointer to the background DFU context.
- */
-void background_dfu_transport_send_request(background_dfu_context_t * p_dfu_ctx);
+uint32_t nrf_dfu_init(nrf_dfu_observer_t observer)
+{
+    uint32_t ret_val;
 
-/**@brief Update background DFU transport state.
- *
- * @param[in] p_dfu_ctx A pointer to the background DFU context.
- */
-void background_dfu_transport_state_update(background_dfu_context_t * p_dfu_ctx);
+    m_user_observer = observer;
 
-/**@brief Get random value.
- *
- * @returns A random value of uint32_t type.
- */
-uint32_t background_dfu_random(void);
+    NRF_LOG_INFO("Entering DFU mode.");
 
-/** @brief Handle DFU error.
- *
- *  Notify transport about DFU error.
- */
-void background_dfu_handle_error(void);
+    dfu_observer(NRF_DFU_EVT_DFU_INITIALIZED);
 
-#endif /* BACKGROUND_DFU_COAP_H_ */
+    // Initializing transports
+    ret_val = nrf_dfu_transports_init(dfu_observer);
+    if (ret_val != NRF_SUCCESS)
+    {
+        NRF_LOG_ERROR("Could not initalize DFU transport: 0x%08x", ret_val);
+        return ret_val;
+    }
 
-/** @} */
+    ret_val = nrf_dfu_req_handler_init(dfu_observer);
+
+    return ret_val;
+}

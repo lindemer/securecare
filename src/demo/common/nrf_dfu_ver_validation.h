@@ -37,55 +37,28 @@
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  */
+#ifndef __NRF_DFU_VER_VALIDATION_H
+#define __NRF_DFU_VER_VALIDATION_H
 
-/** @file
+#include "stdint.h"
+#include "sdk_errors.h"
+#include "nrf_dfu_handling_error.h"
+#include "dfu-cc.pb.h"
+
+/** @brief SD_REQ field value which indicates that Softdevice can be overwritten by the application. */
+#define SD_REQ_APP_OVERWRITES_SD 0
+
+/** @brief SD_REQ_ANY_VERSION field value which indicates that any SoftDevice version is valid. 
  *
- * @defgroup background_dfu_transport background_dfu_state.h
- * @{
- * @ingroup background_dfu
- * @brief Background DFU transport API.
- *
+ * @note This is used by external application in case SoftDevice version compatibility isn't needed.
  */
+#define SD_REQ_ANY_VERSION (0xFFFE)
 
-#ifndef BACKGROUND_DFU_TRANSPORT_H_
-#define BACKGROUND_DFU_TRANSPORT_H_
-
-#include "background_dfu_state.h"
-
-/**@brief Create and send DFU block request with missing blocks.
+/**
+ * @brief Function for validating version of new firmware.
  *
- * This function is used in multicast DFU.
- *
- * @param[in] p_dfu_ctx A pointer to the background DFU context.
- * @param[in] p_req_bmp A pointer to the bitmap structure that shall be sent.
+ * @return NRF_DFU_RES_CODE_SUCCESS if successful or error code otherwise
  */
-void background_dfu_transport_block_request_send(background_dfu_context_t        * p_dfu_ctx,
-                                                 background_dfu_request_bitmap_t * p_req_bmp);
+nrf_dfu_result_t nrf_dfu_ver_validation_check(dfu_init_command_t const * p_init);
 
-/**@brief Send background DFU request, based on DFU state.
- *
- * @param[in] p_dfu_ctx A pointer to the background DFU context.
- */
-void background_dfu_transport_send_request(background_dfu_context_t * p_dfu_ctx);
-
-/**@brief Update background DFU transport state.
- *
- * @param[in] p_dfu_ctx A pointer to the background DFU context.
- */
-void background_dfu_transport_state_update(background_dfu_context_t * p_dfu_ctx);
-
-/**@brief Get random value.
- *
- * @returns A random value of uint32_t type.
- */
-uint32_t background_dfu_random(void);
-
-/** @brief Handle DFU error.
- *
- *  Notify transport about DFU error.
- */
-void background_dfu_handle_error(void);
-
-#endif /* BACKGROUND_DFU_COAP_H_ */
-
-/** @} */
+#endif //__NRF_DFU_VER_VALIDATION_H
