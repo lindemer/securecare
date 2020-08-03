@@ -61,6 +61,8 @@ static bool use_dtls_check(char * p_uri)
 
 uint32_t addr_parse_uri(uint8_t *  p_addr,
                         uint16_t * p_port,
+                        char **    p_res,
+                        size_t *   p_res_len,
                         bool *     p_use_dtls,
                         char *     p_uri,
                         uint8_t    uri_len)
@@ -141,6 +143,10 @@ uint32_t addr_parse_uri(uint8_t *  p_addr,
             *p_port = atoi(port_buf);
         }
     }
+
+    // The resource URI is all remaining characters except the initial '/'.
+    *p_res = &p_uri[index + 1];
+    *p_res_len = uri_len - index;
 
     return NRF_SUCCESS;
 }

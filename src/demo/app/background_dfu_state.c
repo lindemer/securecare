@@ -76,21 +76,6 @@ NRF_LOG_MODULE_REGISTER();
 
 #define DFU_DATE_TIME               (__DATE__ " " __TIME__)
 
-/**@brief DFU trigger packet version. */
-#define TRIGGER_VERSION         1
-
-/**
- * @defgroup background_dfu_trigger_flags Trigger flags and offsets.
- * @{
- */
-#define TRIGGER_FLAGS_VERSION_OFFSET 4
-#define TRIGGER_FLAGS_VERSION_MASK   0xF0
-#define TRIGGER_FLAGS_MODE_OFFSET    3
-#define TRIGGER_FLAGS_MODE_MASK      0x08
-#define TRIGGER_FLAGS_RESET_OFFSET   2
-#define TRIGGER_FLAGS_RESET_MASK     0x04
-/** @} */
-
 APP_TIMER_DEF(m_missing_block_timer);
 APP_TIMER_DEF(m_block_timeout_timer);
 

@@ -332,14 +332,21 @@ static void handle_trigger_response(uint32_t status, void * p_arg, coap_message_
                             p_response->p_payload, p_response->payload_len))
     {
         bool m_use_dtls;
+        char * m_resource;
+        size_t m_resource_len;
         // TODO: extract resource URI
         if (NRF_SUCCESS == addr_parse_uri((uint8_t *)&m_coap_dfu_ctx.remote.addr,
                                           &m_coap_dfu_ctx.remote.port_number,
+                                          &m_resource,
+                                          &m_resource_len,
                                           &m_use_dtls,
                                           m_suit_ctx.components[0].uri,
                                           (uint8_t)m_suit_ctx.components[0].len_uri))
         {
+            NRF_LOG_INFO("Remote resource address and name parsed from SUIT manifest:");
             NRF_LOG_HEXDUMP_INFO(&m_coap_dfu_ctx.remote.addr, 16);
+            NRF_LOG_HEXDUMP_INFO(m_resource, m_resource_len);
+
             if (!m_use_dtls) {
                 background_dfu_process_manifest(&m_dfu_ctx,
                                                 p_response->p_payload,
