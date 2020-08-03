@@ -84,6 +84,7 @@ void handle_dfu_command(uint8_t argc, char *argv[]);
 // Timer used by this module.
 APP_TIMER_DEF(m_coap_tick_timer);
 
+// Remote firmware manifest server address.
 static coap_remote_t suit_remote =
 {
     .addr = { 0xfd, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -286,7 +287,7 @@ static void thread_instance_init(void)
     memcpy(aDataset.mMeshLocalPrefix.m8, otbr_mesh_local_prefix, sizeof(aDataset.mMeshLocalPrefix));
     aDataset.mComponents.mIsMeshLocalPrefixPresent = true;
     
-    // FIXME: Force permanent child state for development purposes.
+    // FIXME: Force permanent child state for debugging purposes.
     otThreadSetRouterEligible(aInstance, false);
     
     // Start OpenThread. 

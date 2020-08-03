@@ -76,7 +76,8 @@
 
 #include "suit.h"
 
-#define SUIT_MANIFEST_URI "manifest.cbor"
+// Manifest resource name on the remote SUIT server. 
+#define SUIT_MANIFEST_NAME "manifest.cbor"
 
 __ALIGN(4) extern const uint8_t pk[64];
 
@@ -107,7 +108,7 @@ NRF_LOG_MODULE_REGISTER();
 
 #define INIT_RESOURCE_NAME      "init"
 #define IMAGE_RESOURCE_NAME     "image"
-#define TRIGGER_RESOURCE_NAME   SUIT_MANIFEST_URI
+#define TRIGGER_RESOURCE_NAME   SUIT_MANIFEST_NAME
 #define BITMAP_RESOURCE_NAME    "bitmap"
 #define RESET_RESOURCE_NAME     "reset"
 
@@ -334,7 +335,7 @@ static void handle_trigger_response(uint32_t status, void * p_arg, coap_message_
         bool m_use_dtls;
         char * m_resource;
         size_t m_resource_len;
-        // TODO: extract resource URI
+
         if (NRF_SUCCESS == addr_parse_uri((uint8_t *)&m_coap_dfu_ctx.remote.addr,
                                           &m_coap_dfu_ctx.remote.port_number,
                                           &m_resource,
@@ -346,6 +347,8 @@ static void handle_trigger_response(uint32_t status, void * p_arg, coap_message_
             NRF_LOG_INFO("Remote resource address and name parsed from SUIT manifest:");
             NRF_LOG_HEXDUMP_INFO(&m_coap_dfu_ctx.remote.addr, 16);
             NRF_LOG_HEXDUMP_INFO(m_resource, m_resource_len);
+
+            // TODO: use resource name
 
             if (!m_use_dtls) {
                 background_dfu_process_manifest(&m_dfu_ctx,
