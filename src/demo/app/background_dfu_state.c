@@ -56,6 +56,7 @@
 #include "compiler_abstraction.h"
 #include "nrf_dfu_types.h"
 #include "nrf_dfu_settings.h"
+#include "crc32.h"
 #include "sha256.h"
 #include "background_dfu_transport.h"
 #include "background_dfu_operation.h"
@@ -157,112 +158,79 @@ static __INLINE void restart_block_timeout_timer(background_dfu_context_t * p_df
 }
 
 /***************************************************************************************************
- * @section Handle DFU Trigger
+ * @section Handle SUIT Manifest (DFU Trigger)
  **************************************************************************************************/
 
-/**@brief Parses trigger data and updates DFU client context accordingly.
- *
- * @param[inout] p_dfu_ctx A pointer to DFU Client context.
- * @param[in]    p_trigger A pointer to trigger data.
- *
- * @return True if parsing was successful, false otherwise.
- */
-static bool parse_trigger(background_dfu_context_t       * p_dfu_ctx,
-                          const background_dfu_trigger_t * p_trigger)
+__ALIGN(4) extern const uint8_t pk[64];
+
+bool background_dfu_validate_manifest(background_dfu_context_t * p_dfu_ctx,
+                                      suit_context_t           * p_suit_ctx,
+                                      const uint8_t            * p_payload,
+                                      uint32_t                   payload_len)
 {
-    uint8_t trigger_version = (p_trigger->flags & TRIGGER_FLAGS_VERSION_MASK)
-                                    >> TRIGGER_FLAGS_VERSION_OFFSET;
-
-    if (trigger_version <= TRIGGER_VERSION)
-    {
-        // Base fields available from version 0.
-        p_dfu_ctx->init_cmd_size = uint32_big_decode((const uint8_t *)&p_trigger->init_length);
-        p_dfu_ctx->init_cmd_crc  = uint32_big_decode((const uint8_t *)&p_trigger->init_crc);
-        p_dfu_ctx->firmware_size = uint32_big_decode((const uint8_t *)&p_trigger->image_length);
-        p_dfu_ctx->firmware_crc  = uint32_big_decode((const uint8_t *)&p_trigger->image_crc);
-
-        // Mode flag was added in DFU Trigger version 1.
-        if (trigger_version >= 1)
-        {
-            p_dfu_ctx->dfu_mode = (background_dfu_mode_t)((p_trigger->flags
-                                    & TRIGGER_FLAGS_MODE_MASK) >> TRIGGER_FLAGS_MODE_OFFSET);
-            p_dfu_ctx->reset_suppress = (p_trigger->flags & TRIGGER_FLAGS_RESET_MASK) >>
-                                          TRIGGER_FLAGS_RESET_OFFSET;
-
-        }
-        else
-        {
-            p_dfu_ctx->dfu_mode = BACKGROUND_DFU_MODE_UNICAST;
-        }
-
-        NRF_LOG_INFO("DFU trigger: init (sz=%d, crc=%0X) image (sz=%d, crc=%0X)",
-                     p_dfu_ctx->init_cmd_size,
-                     p_dfu_ctx->init_cmd_crc,
-                     p_dfu_ctx->firmware_size,
-                     p_dfu_ctx->firmware_crc);
-
-        return true;
-    }
-
-    return false;
-}
-
-bool background_dfu_validate_trigger(background_dfu_context_t * p_dfu_ctx,
-                                     const uint8_t            * p_payload,
-                                     uint32_t                   payload_len)
-{
-    if (payload_len != sizeof(background_dfu_trigger_t))
-    {
-        NRF_LOG_ERROR("Validate trigger: size mismatch");
-        return false;
-    }
-
     if ((p_dfu_ctx->dfu_state != BACKGROUND_DFU_IDLE) &&
         (p_dfu_ctx->dfu_state != BACKGROUND_DFU_DOWNLOAD_TRIG))
     {
-        NRF_LOG_ERROR("Validate trigger: DFU already in progress (s:%s).",
+        NRF_LOG_ERROR("Process manifest: DFU already in progress (s:%s).",
                 (uint32_t)background_dfu_state_to_string(p_dfu_ctx->dfu_state));
         return false;
     }
 
-    uint8_t trigger_version = (((background_dfu_trigger_t *)p_payload)->flags
-                                    & TRIGGER_FLAGS_VERSION_MASK) >> TRIGGER_FLAGS_VERSION_OFFSET;
-    if (trigger_version > TRIGGER_VERSION)
+    // Convert public key to big-endian format for use in nrf_crypto.
+    uint8_t pk_swap[sizeof(pk)];
+    nrf_crypto_internal_double_swap_endian(pk_swap, pk, sizeof(pk) / 2);
+
+    uint32_t err;
+    uint8_t * man;
+    size_t len_man;
+
+    // Verify manifest signature
+    if ((err = suit_raw_unwrap(pk_swap, sizeof(pk), p_payload, payload_len,
+                    (const uint8_t **)&man, &len_man)))
     {
-        NRF_LOG_ERROR("Validate trigger: invalid trigger version.");
+        NRF_LOG_ERROR("Manifest signature check failed (0x%x)", err);
         return false;
+    }
+    else
+    {
+        // Parse manifest contents.
+        if ((err = suit_parse(p_suit_ctx, (const uint8_t *)man, len_man)))
+	{
+            NRF_LOG_ERROR("Manifest parse failed (0x%x)", err);
+	    return false;
+	}
+	else
+	{
+            p_dfu_ctx->init_cmd_size = payload_len;
+            p_dfu_ctx->init_cmd_crc  = crc32_compute(p_payload, payload_len, NULL);
+            p_dfu_ctx->firmware_size = p_suit_ctx->components[0].size;
+            p_dfu_ctx->firmware_crc  = 0;
+            p_dfu_ctx->dfu_mode = BACKGROUND_DFU_MODE_UNICAST;
+	}
     }
 
     return true;
 }
 
-bool background_dfu_process_trigger(background_dfu_context_t * p_dfu_ctx,
-                                    const uint8_t            * p_payload,
-                                    uint32_t                   payload_len)
+bool background_dfu_process_manifest(background_dfu_context_t * p_dfu_ctx,
+                                     const uint8_t            * p_payload,
+                                     uint32_t                   payload_len)
 {
-    bool result = false;
+    p_dfu_ctx->dfu_state = BACKGROUND_DFU_DOWNLOAD_TRIG;
 
-    do
+    uint32_t err;
+    if ((err = background_dfu_handle_event(p_dfu_ctx, BACKGROUND_DFU_EVENT_TRANSFER_COMPLETE)))
     {
-        if (!parse_trigger(p_dfu_ctx, (background_dfu_trigger_t *)p_payload))
-        {
-            NRF_LOG_ERROR("Process trigger: failed to parse payload");
-            break;
-        }
+        NRF_LOG_ERROR("Error in background_dfu_handle_event (0x%d)", err);
+    }
 
-        p_dfu_ctx->dfu_state = BACKGROUND_DFU_DOWNLOAD_TRIG;
+    NRF_LOG_INFO("DFU trigger: init (sz=%d, crc=%0X) image (sz=%d, crc=%0X)",
+            p_dfu_ctx->init_cmd_size,
+            p_dfu_ctx->init_cmd_crc,
+            p_dfu_ctx->firmware_size,
+            p_dfu_ctx->firmware_crc);
 
-        uint32_t err_code = background_dfu_handle_event(p_dfu_ctx,
-                                                        BACKGROUND_DFU_EVENT_TRANSFER_COMPLETE);
-        if (err_code != NRF_SUCCESS)
-        {
-            NRF_LOG_ERROR("Error in background_dfu_handle_event (%d)", err_code);
-        }
-
-        result = true;
-    } while(0);
-
-    return result;
+    return true;
 }
 
 /***************************************************************************************************

@@ -68,6 +68,7 @@ SRC_FILES += \
   $(KEYS_DIR)/pub.c \
   $(PROJ_DIR)/main.c \
   $(PROJ_DIR)/coap_dfu.c \
+  $(PROJ_DIR)/addr_parse.c \
   $(PROJ_DIR)/background_dfu_block.c \
   $(PROJ_DIR)/background_dfu_operation.c \
   $(PROJ_DIR)/background_dfu_state.c \
@@ -92,6 +93,7 @@ SRC_FILES += \
   $(SDK_ROOT)/components/iot/coap/coap_queue.c \
   $(SDK_ROOT)/components/iot/coap/coap_resource.c \
   $(SDK_ROOT)/components/iot/coap/coap_transport_ot.c \
+  $(SDK_ROOT)/components/iot/ipv6_parse/ipv6_parse.c \
   $(SDK_ROOT)/external/segger_rtt/SEGGER_RTT.c \
   $(SDK_ROOT)/external/segger_rtt/SEGGER_RTT_Syscalls_GCC.c \
   $(SDK_ROOT)/external/segger_rtt/SEGGER_RTT_printf.c \
@@ -116,6 +118,7 @@ INC_FOLDERS += \
   $(SDK_ROOT)/components/boards \
   $(SDK_ROOT)/components/iot/background_dfu \
   $(SDK_ROOT)/components/libraries/atomic \
+  $(SDK_ROOT)/components/iot/ipv6_parse \
   $(SDK_ROOT)/components/iot/ble_6lowpan \
   $(SDK_ROOT)/components/iot/coap \
   $(SDK_ROOT)/modules/nrfx/hal \

@@ -71,8 +71,7 @@ void coap_dfu_process(void);
 /** @brief Trigger DFU.
  *
  *  @param[in] p_remote Address of a host which should be queried for DFU. If NULL then the
- *                      function will attempt to discover any DFU hosts by sending
- *                      a trigger request to a multicast address.
+ *                      function will default to coap://[fd00::1]:5683.
  *
  *  @return NRF_SUCCESS on success, otherwise an error code is returned.
  */

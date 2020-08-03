@@ -41,7 +41,7 @@
  * @{
  */
 
-#define SUIT_PREFIX 0xDEAD0000
+#define SUIT_PREFIX 0xdead0000
 
 #define SUIT_ERROR_NONE                               0x0
 #define SUIT_ERROR_CBOR                 SUIT_PREFIX | 0x1
@@ -218,7 +218,7 @@ struct suit_component_s {
     suit_digest_alg_t digest_alg;
     suit_archive_alg_t archive_alg;     /* compression algorithm */
 
-    uint8_t * uri; size_t len_uri;
+    char * uri; size_t len_uri;
     uint8_t * digest; size_t len_digest;
     uint8_t * class_id; size_t len_class_id;
     uint8_t * vendor_id; size_t len_vendor_id;

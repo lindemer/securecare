@@ -99,6 +99,9 @@ int main(int argc, char *argv[])
 
     /* buffer for I/O */
     uint32_t ibytes = 0;
+
+    // FIXME: A buffer does not need to be allocated for the manifest. (Unwrap
+    // returns a pointer.)
     size_t obytes = HEAP_BUFFER;
     uint8_t * buffer = (uint8_t *) malloc(HEAP_BUFFER);
     read_stdin(buffer, &ibytes);

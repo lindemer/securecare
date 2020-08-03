@@ -66,6 +66,7 @@
 #include "nrf_dfu_req_handler.h"
 #include "nrf_dfu_utils.h"
 #include "nordic_common.h"
+#include "addr_parse.h"
 #include "iot_errors.h"
 #include "coap_api.h"
 #include "coap_block.h"
@@ -75,11 +76,11 @@
 
 #include "suit.h"
 
-/**
- * Run 'make keys' from the ../boot directory to generate this key. It will be
- * placed in the ../../keys directory.
- **/
+#define SUIT_MANIFEST_URI "manifest.cbor"
+
 __ALIGN(4) extern const uint8_t pk[64];
+
+static suit_context_t m_suit_ctx;
 
 #define NRF_LOG_LEVEL 4
 #define NRF_LOG_MODULE_NAME COAP_DFU
@@ -88,9 +89,6 @@ NRF_LOG_MODULE_REGISTER();
 
 /** @brief Maximum delay (in ms) between requesting consecutive image blocks. */
 #define DEFAULT_DELAY_MAX_MS    128
-
-#define REALM_LOCAL_ADDR        (uint8_t []){0xff, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, \
-                                             0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01}
 
 #ifndef DFU_DEBUG_RANDOM_INIT_BLOCK_LOSS_ENABLE
 #define DFU_DEBUG_RANDOM_INIT_BLOCK_LOSS_ENABLE  0  /**< Enable random init block loss for debugging purposes. */
@@ -104,28 +102,24 @@ NRF_LOG_MODULE_REGISTER();
 #define DFU_DEBUG_RANDOM_BLOCK_LOSS_RATE         50 /**< Block loss rate, in percent.*/
 #endif
 
-#define DFU_RESOURCE_PREFIX     "dfu"
+#define DEBUG_RESOURCE_NAME     "debug"
+#define DIAG_RESOURCE_NAME      "diagnostic"
 
-#define SUIT_RESOURCE_NAME      "s"
-#define INIT_RESOURCE_NAME      "i"
-#define IMAGE_RESOURCE_NAME     "f"
-#define TRIGGER_RESOURCE_NAME   "t"
-#define DIAG_RESOURCE_NAME      "d"
-#define BITMAP_RESOURCE_NAME    "b"
-#define RESET_RESOURCE_NAME     "r"
-#define RESOURCE_PATH(name)     (DFU_RESOURCE_PREFIX "/" name)
+#define INIT_RESOURCE_NAME      "init"
+#define IMAGE_RESOURCE_NAME     "image"
+#define TRIGGER_RESOURCE_NAME   SUIT_MANIFEST_URI
+#define BITMAP_RESOURCE_NAME    "bitmap"
+#define RESET_RESOURCE_NAME     "reset"
 
-#define SCHED_QUEUE_SIZE      32                                                              /**< Maximum number of events in the scheduler queue. */
-#define SCHED_EVENT_DATA_SIZE MAX(sizeof(nrf_dfu_request_t), APP_TIMER_SCHED_EVENT_DATA_SIZE) /**< Maximum app_scheduler event size. */
+// Maximum number of events in the scheduler queue.
+#define SCHED_QUEUE_SIZE 32
+
+// Maximum app_scheduler event size.
+#define SCHED_EVENT_DATA_SIZE MAX(sizeof(nrf_dfu_request_t), APP_TIMER_SCHED_EVENT_DATA_SIZE)
 
 typedef struct
 {
     coap_resource_t          root;            /**< Root resource. */
-    coap_resource_t          suit;            /**< SUIT resource. */
-    coap_resource_t          prefix;          /**< Prefix resource. */
-    coap_resource_t          trigger;         /**< Trigger resource. */
-    coap_resource_t          init;            /**< Init resource. Used in multicast DFU transfer. */
-    coap_resource_t          image;           /**< Image resource. Used in multicast DFU transfer. */
     coap_resource_t          diagnostic;      /**< Diagnostic resource. */
     coap_resource_t          reset;           /**< Reset resource. */
 
@@ -200,43 +194,6 @@ static void dfu_observer(nrf_dfu_evt_type_t evt_type)
 /***************************************************************************************************
  * @section Block processing
  **************************************************************************************************/
-
-/** @brief Parse and return CoAP Block1 option from a given message.
- *
- *  @param[in]  p_message        A pointer to CoAP message.
- *  @param[out] p_block1_option  A pointer to parsed Block1 option.
- *
- *  @return True if message has Block1 option, false otherwise.
- */
-static bool get_block1_opt(const coap_message_t    * p_message,
-                           coap_block_opt_block1_t * p_block1_option)
-{
-    uint32_t        err_code;
-    uint8_t         option_index;
-    uint32_t        option_value;
-    coap_option_t * p_option;
-
-    if (coap_message_opt_index_get(&option_index,
-                                   (coap_message_t *)p_message,
-                                   COAP_OPT_BLOCK1) != NRF_SUCCESS)
-    {
-        return false;
-    }
-
-    p_option = (coap_option_t *)&p_message->options[option_index];
-    err_code = coap_opt_uint_decode(&option_value,
-                                    p_option->length,
-                                    p_option->p_data);
-
-    if (err_code != NRF_SUCCESS)
-    {
-        return false;
-    }
-
-    err_code = coap_block_opt_block1_decode(p_block1_option, option_value);
-
-    return (err_code == NRF_SUCCESS);
-}
 
 /** @brief Parse and return CoAP block option from a given message.
  *
@@ -371,10 +328,32 @@ static void handle_trigger_response(uint32_t status, void * p_arg, coap_message_
         return;
     }
 
-    if (background_dfu_validate_trigger(&m_dfu_ctx, p_response->p_payload, p_response->payload_len))
+    if (background_dfu_validate_manifest(&m_dfu_ctx, &m_suit_ctx,
+                            p_response->p_payload, p_response->payload_len))
     {
-        m_coap_dfu_ctx.remote = p_response->remote;
-        background_dfu_process_trigger(&m_dfu_ctx, p_response->p_payload, p_response->payload_len);
+        bool m_use_dtls;
+        // TODO: extract resource URI
+        if (NRF_SUCCESS == addr_parse_uri((uint8_t *)&m_coap_dfu_ctx.remote.addr,
+                                          &m_coap_dfu_ctx.remote.port_number,
+                                          &m_use_dtls,
+                                          m_suit_ctx.components[0].uri,
+                                          (uint8_t)m_suit_ctx.components[0].len_uri))
+        {
+            NRF_LOG_HEXDUMP_INFO(&m_coap_dfu_ctx.remote.addr, 16);
+            if (!m_use_dtls) {
+                background_dfu_process_manifest(&m_dfu_ctx,
+                                                p_response->p_payload,
+                                                p_response->payload_len);
+            }
+            else
+            {
+                NRF_LOG_ERROR("CoAPs support not yet implemented.");
+            }
+        }
+        else
+        {
+            NRF_LOG_ERROR("Failed to extract remote URI from SUIT manifest");
+        }
     }
 }
 
@@ -543,26 +522,6 @@ static coap_message_t * message_create(const coap_message_conf_t * p_conf,
     return p_message;
 }
 
-/**@brief Create an empty reset response.
- *
- * @param[in] p_request A pointer to the request.
- *
- * @return A pointer to the reset response or NULL if could not be created.
- */
-static coap_message_t * empty_reset_response_create(const coap_message_t * p_request)
-{
-    coap_message_conf_t message_conf;
-
-    memset(&message_conf, 0, sizeof(message_conf));
-
-    message_conf.type             = COAP_TYPE_RST;
-    message_conf.code             = COAP_CODE_EMPTY_MESSAGE;
-    message_conf.id               = p_request->header.id;
-    message_conf.port.port_number = DFU_UDP_PORT;
-
-    return message_create(&message_conf, NULL, NULL, 0, &p_request->remote);
-}
-
 /**@brief Create a response with diag resource.
  *
  * @param[in] type      A message type of the response.
@@ -664,213 +623,6 @@ static void coap_dfu_delayed_message_send(coap_message_t * p_message)
  * @section Resources
  **************************************************************************************************/
 
-/**@brief A request callback for /t resource.
- *
- * This method is called when a request to trigger resource is received.
- * An implementation of @ref coap_method_callback_t function type.
- *
- * @param[in] p_resource A pointer to resource.
- * @param[in] p_request  A pointer to request.
- */
-static void trigger_request_callback(coap_resource_t * p_resource, coap_message_t * p_request)
-{
-    NRF_LOG_INFO("DFU trigger request received");
-
-    if (p_request->header.code != COAP_CODE_POST)
-    {
-        NRF_LOG_INFO("Trigger request: method not supported");
-        return;
-    }
-
-    m_dfu_ctx.dfu_diag.triggers_received++;
-
-    if (background_dfu_validate_trigger(&m_dfu_ctx, p_request->p_payload, p_request->payload_len))
-    {
-        m_coap_dfu_ctx.remote = p_request->remote;
-        background_dfu_process_trigger(&m_dfu_ctx, p_request->p_payload, p_request->payload_len);
-    }
-}
-
-/***************************************************************************************************
- * [START] SUIT manifest handler
- **************************************************************************************************/
-
-/**@brief A request callback for /s resource.
- *
- * An implementation of @ref coap_method_callback_t function type. Data received at this endpoint
- * via PUT will be forwarded to the SUIT manifest parser (maximum 256 B).
- *
- * @param[in] p_resource A pointer to resource.
- * @param[in] p_request  A pointer to request.
- */
-static void suit_request_callback(coap_resource_t * p_resource, coap_message_t * p_request)
-{
-    // TODO: Handle tokens.
-    
-    coap_message_t * p_response = NULL;
-    coap_msg_code_t code = COAP_CODE_205_CONTENT;
-    coap_message_conf_t message_conf;
-    memset(&message_conf, 0, sizeof(message_conf));
-
-    // Only confirmable messages are accepted.
-    message_conf.type = (p_request->header.type == COAP_TYPE_CON) ? COAP_TYPE_ACK : COAP_TYPE_NON;
-    message_conf.code = code;
-    message_conf.port.port_number = DFU_UDP_PORT;
-    message_conf.token_len = p_request->header.token_len;
-    memcpy(message_conf.token, p_request->token, message_conf.token_len);
-    message_conf.id = (p_request->header.type == COAP_TYPE_CON) ? 
-        p_request->header.id : message_id_get();
-    
-    const uint8_t * env = p_request->p_payload;
-    size_t len_env = (size_t)p_request->payload_len;
-    uint8_t man[256];
-    size_t len_man = 256;
-
-    // Convert public key to big-endian format for use in nrf_crypto.
-    uint8_t    pk_copy[sizeof(pk)];
-    nrf_crypto_internal_double_swap_endian(pk_copy, pk, sizeof(pk) / 2);
-
-    char msg[128];
-    int err = suit_raw_unwrap(pk_copy, sizeof(pk), env, len_env, 
-            (const uint8_t **) &man, &len_man);
-    sprintf(msg, "0x%x", err);
-
-    p_response = message_create(&message_conf, NULL, (uint8_t *) msg, strlen(msg),
-            &p_request->remote);
-
-    // Send response, if created.
-    if (p_response != NULL) coap_dfu_delayed_message_send(p_response);
-
-    // Download firmware.
-    if (!err) coap_dfu_trigger(&p_request->remote);
-}
-
-/***************************************************************************************************
- * [END] SUIT manifest handler
- **************************************************************************************************/
-
-/**@brief A request callback for /i resource.
- *
- * An implementation of @ref coap_method_callback_t function type.
- *
- * @param[in] p_resource A pointer to resource.
- * @param[in] p_request  A pointer to request.
- */
-static void init_request_callback(coap_resource_t * p_resource, coap_message_t * p_request)
-{
-    coap_message_t          * p_response = NULL;
-    coap_block_opt_block1_t   block_opt  = {0};
-
-    do
-    {
-        // Resource only active in multicast mode firmware download state.
-        if ((m_dfu_ctx.dfu_mode != BACKGROUND_DFU_MODE_MULTICAST) ||
-            (m_dfu_ctx.dfu_state != BACKGROUND_DFU_DOWNLOAD_INIT_CMD))
-        {
-            NRF_LOG_WARNING("Init data received in invalid state: (m:%d s:%d).",
-                            m_dfu_ctx.dfu_mode, m_dfu_ctx.dfu_state);
-
-            if (!is_addr_multicast(&p_request->local))
-            {
-                p_response = empty_reset_response_create(p_request);
-            }
-
-            break;
-        }
-
-        if (!get_block1_opt(p_request, &block_opt))
-        {
-            NRF_LOG_WARNING("No block 1 option in init request message.");
-        }
-        else
-        {
-            background_dfu_block_t block;
-            block.number    = block_opt.number;
-            block.size      = block_opt.size;
-            block.p_payload = p_request->p_payload;
-
-#if (DFU_DEBUG_RANDOM_INIT_BLOCK_LOSS_ENABLE == 1)
-            if ((background_dfu_random() % 100) >= DFU_DEBUG_RANDOM_BLOCK_LOSS_RATE)
-            {
-                background_dfu_process_block(&m_dfu_ctx, &block);
-            }
-#else  // DFU_DEBUG_RANDOM_INIT_BLOCK_LOSS_ENABLE
-            background_dfu_process_block(&m_dfu_ctx, &block);
-#endif // DFU_DEBUG_RANDOM_INIT_BLOCK_LOSS_ENABLE
-        }
-
-        m_dfu_ctx.dfu_diag.total_init_blocks_received++;
-
-    } while (0);
-
-    // Send response, if created.
-    if (p_response != NULL)
-    {
-        coap_dfu_message_send(p_response);
-    }
-}
-
-/**@brief A request callback for /f resource.
- *
- * An implementation of @ref coap_method_callback_t function type.
- *
- * @param[in] p_resource A pointer to resource.
- * @param[in] p_request  A pointer to request.
- */
-static void image_request_callback(coap_resource_t * p_resource, coap_message_t * p_request)
-{
-    coap_message_t          * p_response = NULL;
-    coap_block_opt_block1_t   block_opt = {0};
-
-    do
-    {
-        // Resource only active in multicast mode firmware download state.
-        if ((m_dfu_ctx.dfu_mode != BACKGROUND_DFU_MODE_MULTICAST) ||
-            (m_dfu_ctx.dfu_state != BACKGROUND_DFU_DOWNLOAD_FIRMWARE))
-        {
-            NRF_LOG_WARNING("Image data received in invalid state: (m:%d s:%d).",
-                            m_dfu_ctx.dfu_mode, m_dfu_ctx.dfu_state);
-
-            if (!is_addr_multicast(&p_request->local))
-            {
-                p_response = empty_reset_response_create(p_request);
-            }
-
-            break;
-        }
-
-        if (!get_block1_opt(p_request, &block_opt))
-        {
-            NRF_LOG_WARNING("No block 1 option in image request message.");
-        }
-        else
-        {
-            background_dfu_block_t block;
-            block.number    = block_opt.number;
-            block.size      = block_opt.size;
-            block.p_payload = p_request->p_payload;
-
-#if (DFU_DEBUG_RANDOM_IMAGE_BLOCK_LOSS_ENABLE == 1)
-            if ((background_dfu_random() % 100) >= DFU_DEBUG_RANDOM_BLOCK_LOSS_RATE)
-            {
-                background_dfu_process_block(&m_dfu_ctx, &block);
-            }
-#else  // DFU_DEBUG_RANDOM_IMAGE_BLOCK_LOSS_ENABLE
-            background_dfu_process_block(&m_dfu_ctx, &block);
-#endif // DFU_DEBUG_RANDOM_IMAGE_BLOCK_LOSS_ENABLE
-        }
-
-        m_dfu_ctx.dfu_diag.total_image_blocks_received++;
-
-    } while (0);
-
-    // Send response, if created.
-    if (p_response != NULL)
-    {
-        coap_dfu_message_send(p_response);
-    }
-}
-
 /**@brief A request callback for /d resource.
  *
  * An implementation of @ref coap_method_callback_t function type.
@@ -960,44 +712,6 @@ static uint32_t endpoints_init(coap_dfu_context_t * p_coap_dfu_ctx)
             break;
         }
 
-        err_code = coap_resource_create(&(p_coap_dfu_ctx->trigger), TRIGGER_RESOURCE_NAME);
-        if (err_code != NRF_SUCCESS)
-        {
-            break;
-        }
-
-        // We allow for GET method, so that the CoAP library doesn't send 'Method not allowed'
-        // response. Methods other that POST are rejected in the callback.
-        p_coap_dfu_ctx->trigger.permission = (COAP_PERM_POST | COAP_PERM_GET);
-        p_coap_dfu_ctx->trigger.callback   = trigger_request_callback;
-
-        err_code = coap_resource_create(&(p_coap_dfu_ctx->init), INIT_RESOURCE_NAME);
-        if (err_code != NRF_SUCCESS)
-        {
-            break;
-        }
-
-        p_coap_dfu_ctx->suit.permission = COAP_PERM_PUT;
-        p_coap_dfu_ctx->suit.callback   = suit_request_callback;
-
-        err_code = coap_resource_create(&(p_coap_dfu_ctx->suit), SUIT_RESOURCE_NAME);
-        if (err_code != NRF_SUCCESS)
-        {
-            break;
-        }
-
-        p_coap_dfu_ctx->init.permission = COAP_PERM_PUT;
-        p_coap_dfu_ctx->init.callback   = init_request_callback;
-
-        err_code = coap_resource_create(&(p_coap_dfu_ctx->image), IMAGE_RESOURCE_NAME);
-        if (err_code != NRF_SUCCESS)
-        {
-            break;
-        }
-
-        p_coap_dfu_ctx->image.permission = COAP_PERM_PUT;
-        p_coap_dfu_ctx->image.callback   = image_request_callback;
-
         err_code = coap_resource_create(&(p_coap_dfu_ctx->diagnostic), DIAG_RESOURCE_NAME);
         if (err_code != NRF_SUCCESS)
         {
@@ -1017,30 +731,6 @@ static uint32_t endpoints_init(coap_dfu_context_t * p_coap_dfu_ctx)
         p_coap_dfu_ctx->reset.callback   = reset_request_callback;
 
         // Create resource hierarchy.
-
-        err_code = coap_resource_child_add(&(p_coap_dfu_ctx->root), &(p_coap_dfu_ctx->trigger));
-        if (err_code != NRF_SUCCESS)
-        {
-            break;
-        }
-
-        err_code = coap_resource_child_add(&(p_coap_dfu_ctx->root), &(p_coap_dfu_ctx->suit));
-        if (err_code != NRF_SUCCESS)
-        {
-            break;
-        }
-
-        err_code = coap_resource_child_add(&(p_coap_dfu_ctx->root), &(p_coap_dfu_ctx->init));
-        if (err_code != NRF_SUCCESS)
-        {
-            break;
-        }
-
-        err_code = coap_resource_child_add(&(p_coap_dfu_ctx->root), &(p_coap_dfu_ctx->image));
-        if (err_code != NRF_SUCCESS)
-        {
-            break;
-        }
 
         err_code = coap_resource_child_add(&(p_coap_dfu_ctx->root), &(p_coap_dfu_ctx->diagnostic));
         if (err_code != NRF_SUCCESS)
@@ -1185,6 +875,7 @@ static uint16_t blocks_count(const background_dfu_request_bitmap_t * p_req_bmp)
 
     return count;
 }
+
 /**@brief An implmentation of @ref coap_error_callback_t type. */
 static void coap_error_handler(uint32_t error_code, coap_message_t * p_message)
 {
@@ -1367,8 +1058,7 @@ uint32_t coap_dfu_trigger(const coap_remote_t * p_remote)
     }
     else
     {
-        memcpy(&m_coap_dfu_ctx.remote.addr, REALM_LOCAL_ADDR, 16);
-        m_coap_dfu_ctx.remote.port_number = DFU_UDP_PORT;
+        return NRF_ERROR_FORBIDDEN;
     }
 
     // Transition from DFU_IDLE to DFU_DOWNLOAD_TRIG.
@@ -1381,7 +1071,7 @@ uint32_t coap_dfu_init(const void * p_context)
 
     do
     {
-        memset(&m_coap_dfu_ctx, 0 , sizeof(m_coap_dfu_ctx));
+        memset(&m_coap_dfu_ctx, 0, sizeof(m_coap_dfu_ctx));
 
         err_code = coap_protocol_init(p_context);
         if (err_code != NRF_SUCCESS)

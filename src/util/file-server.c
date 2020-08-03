@@ -219,11 +219,15 @@ static void hnd_get(coap_context_t *ctx UNUSED_PARAM,
     char * full_path = malloc(strlen(uri_path->s) + strlen(fsdir));
     sprintf(full_path, "%s/%s", fsdir, uri_path->s);
     uint8_t * buf = read_file_mem(full_path, &len);
-    free(full_path);
+
+    struct sockaddr_in * remote = &session->addr_info.remote.addr.sin;
+    char * ip = inet_ntoa(remote->sin_addr);
+    printf("/%s requested by remote %s\n", uri_path->s, ip);
 
     coap_add_data_blocked_response(resource, session, request, response, token,
             COAP_MEDIATYPE_ANY, -1, len, buf);
     
+    free(full_path);
     free(buf);
 }
 
