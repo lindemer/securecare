@@ -549,10 +549,25 @@ static bool postvalidate_app(suit_context_t const * p_suit_ctx, uint32_t src_add
 
 bool nrf_dfu_validation_boot_validate(boot_validation_t const * p_validation, uint32_t data_addr, uint32_t data_len)
 {
+    uint8_t const * p_data = (uint8_t*) data_addr;
     switch(p_validation->type)
     {
         case NO_VALIDATION:
             return true;
+
+        case VALIDATE_CRC:
+        {
+            uint32_t current_crc = *(uint32_t *)p_validation->bytes;
+            uint32_t crc = crc32_compute(p_data, data_len, NULL);
+
+            if (crc != current_crc)
+            {
+                // CRC does not match with what is stored.
+                NRF_LOG_DEBUG("CRC check of app failed. Return %d", NRF_DFU_DEBUG);
+                return NRF_DFU_DEBUG;
+            }
+            return true;
+        }
 
         case VALIDATE_SHA256:
             return nrf_dfu_validation_hash_ok(p_validation->bytes, data_addr, data_len, false);
