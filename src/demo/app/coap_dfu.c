@@ -108,7 +108,6 @@ NRF_LOG_MODULE_REGISTER();
 #define DIAG_RESOURCE_NAME      "diagnostic"
 
 #define INIT_RESOURCE_NAME      "init"
-#define IMAGE_RESOURCE_NAME     "image"
 #define BITMAP_RESOURCE_NAME    "bitmap"
 #define RESET_RESOURCE_NAME     "reset"
 
@@ -336,7 +335,7 @@ static void handle_manifest_response(uint32_t status, void * p_arg, coap_message
             image_resource_name[m_urn_len] = 0;
             memcpy(image_resource_name, m_urn, m_urn_len);
 
-            NRF_LOG_INFO("Remote firmware resource at URN: %s", (char *)image_resource_name);
+            NRF_LOG_INFO("Remote firmware resource at URN: %s", image_resource_name);
             NRF_LOG_HEXDUMP_INFO(&m_coap_dfu_ctx.remote.addr, 16);
 
             if (!m_use_dtls) {
@@ -801,7 +800,7 @@ static coap_message_t * coap_dfu_create_request(coap_remote_t            * p_rem
 
         message_conf.type              = COAP_TYPE_CON;
         message_conf.code              = COAP_CODE_GET;
-        message_conf.port.port_number  = DFU_UDP_PORT;
+        message_conf.port.port_number  = p_remote->port_number;
         message_conf.id                = message_id_get();
         message_conf.response_callback = callback;
         message_conf.token_len         = 2;
@@ -928,7 +927,7 @@ void background_dfu_transport_block_request_send(background_dfu_context_t       
     }
     else if (m_dfu_ctx.dfu_state == BACKGROUND_DFU_DOWNLOAD_FIRMWARE)
     {
-        p_resource_name = image_resource_name;
+        p_resource_name = (char *)image_resource_name;
         m_dfu_ctx.dfu_diag.image_blocks_requested += blocks_count(p_req_bmp);
     }
 
@@ -963,7 +962,7 @@ void background_dfu_transport_state_update(background_dfu_context_t * p_dfu_ctx)
             break;
 
         case BACKGROUND_DFU_DOWNLOAD_FIRMWARE:
-            m_coap_dfu_ctx.p_resource_path = IMAGE_RESOURCE_NAME;
+            m_coap_dfu_ctx.p_resource_path = image_resource_name;
             m_coap_dfu_ctx.handler         = handle_block_response;
             break;
 
@@ -1028,7 +1027,7 @@ void coap_dfu_diagnostic_get(struct background_dfu_diagnostic *p_diag)
 
 uint32_t coap_dfu_trigger(const coap_remote_t * p_remote)
 {
-    NRF_LOG_INFO("Triggering DFU");
+    NRF_LOG_INFO("Starting DFU.");
 
     if (m_dfu_ctx.dfu_state != BACKGROUND_DFU_IDLE)
     {

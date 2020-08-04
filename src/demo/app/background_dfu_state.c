@@ -158,14 +158,14 @@ bool background_dfu_validate_manifest(background_dfu_context_t * p_dfu_ctx,
     if ((p_dfu_ctx->dfu_state != BACKGROUND_DFU_IDLE) &&
         (p_dfu_ctx->dfu_state != BACKGROUND_DFU_DOWNLOAD_MANIFEST))
     {
-        NRF_LOG_ERROR("Process manifest: DFU already in progress (s:%s).",
+        NRF_LOG_ERROR("Validate manifest: DFU already in progress (s:%s).",
                 (uint32_t)background_dfu_state_to_string(p_dfu_ctx->dfu_state));
         return false;
     }
 
     if (!nrf_dfu_manifest_decode(p_payload, payload_len))
     {
-        NRF_LOG_ERROR("Failed to decode manifest.");
+        NRF_LOG_ERROR("Failed to decode SUIT manifest.");
         return false;
     }
     else
@@ -192,7 +192,7 @@ bool background_dfu_process_manifest(background_dfu_context_t * p_dfu_ctx,
         NRF_LOG_ERROR("Error in background_dfu_handle_event (0x%d)", err);
     }
 
-    NRF_LOG_INFO("DFU trigger: init (sz=%d, crc=%0X) image (sz=%d, crc=%0X)",
+    NRF_LOG_INFO("SUIT DFU: manifest (sz=%d, crc=%0X) image (sz=%d, crc=%0X)",
             p_dfu_ctx->init_cmd_size,
             p_dfu_ctx->init_cmd_crc,
             p_dfu_ctx->firmware_size,

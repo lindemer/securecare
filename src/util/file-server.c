@@ -222,7 +222,15 @@ static void hnd_get(coap_context_t *ctx UNUSED_PARAM,
 
     struct sockaddr_in * remote = &session->addr_info.remote.addr.sin;
     char * ip = inet_ntoa(remote->sin_addr);
-    printf("/%s requested by remote %s\n", uri_path->s, ip);
+    printf("/%s requested by remote %s - ", uri_path->s, ip);
+
+    coap_block_t block2 = { 0, 0, 0 };
+    if (coap_get_block(request, COAP_OPTION_BLOCK2, &block2)) {
+        printf("block %d, size %d\n", block2.num, 16 << block2.szx);
+    } else {
+        printf("no block option\n");
+    }
+
 
     coap_add_data_blocked_response(resource, session, request, response, token,
             COAP_MEDIATYPE_ANY, -1, len, buf);
@@ -252,6 +260,7 @@ static void load_directory(char * path, coap_context_t * ctx)
                 coap_register_handler(r, COAP_REQUEST_GET, hnd_get);
                 coap_resource_set_get_observable(r, 0);
                 coap_add_resource(ctx, r);
+                if (r != NULL) printf("Resource added: /%s\n", ent->d_name);
             }
         }
         closedir(dir);
