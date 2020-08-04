@@ -332,6 +332,7 @@ typedef struct {
 void cose_set_kid(cose_key_t * key, const uint8_t * kid, size_t len_kid);
 void cose_set_aad(cose_key_t * key, const uint8_t * aad, size_t len_aad);
 
+#ifdef COSE_BACKEND_NRF
 /**
  * @brief Initialize COSE signing context with a raw public key
  *
@@ -345,6 +346,7 @@ void cose_set_aad(cose_key_t * key, const uint8_t * aad, size_t len_aad);
  */
 int cose_sign_raw_init(cose_sign_context_t * ctx, cose_mode_t mode, 
          const nrf_crypto_ecc_public_key_t * key);
+#endif
 
 /**
  * @brief Initialize COSE signing context with a PEM-formatted key
