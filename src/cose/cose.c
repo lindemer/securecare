@@ -227,7 +227,7 @@ int _cose_sign1_decode(
 
 #ifdef COSE_BACKEND_NRF
 int cose_sign_raw_init(cose_sign_context_t * ctx, cose_mode_t mode, 
-        const uint8_t * key, size_t len_key)
+        const nrf_crypto_ecc_public_key_t * key)
 {
     /**
      * The user must supply the curve and algorithm to initialize a raw key. 
@@ -241,12 +241,9 @@ int cose_sign_raw_init(cose_sign_context_t * ctx, cose_mode_t mode,
     ctx->hash.len = COSE_SHA256_LENGTH;
     ctx->hash.type = COSE_SHA256_TYPE;
 
-    int err;
     if (mode == cose_mode_r) {
         ctx->key.op = cose_key_op_verify;
-        RETURN_ERROR(nrf_crypto_ecc_public_key_from_raw(
-                    &g_nrf_crypto_ecc_secp256r1_curve_info,
-                    &ctx->ctx.pub, key, len_key));
+        ctx->ctx.pub = key;
     
     } else return COSE_ERROR_UNSUPPORTED;
 
@@ -350,7 +347,7 @@ int cose_sign1_read(cose_sign_context_t * ctx,
     int err;
 #ifdef COSE_BACKEND_NRF
 
-    RETURN_ERROR(nrf_crypto_ecdsa_verify(NULL, &ctx->ctx.pub, ctx->hash.hash,
+    RETURN_ERROR(nrf_crypto_ecdsa_verify(NULL, ctx->ctx.pub, ctx->hash.hash,
                 ctx->hash.len, ctx->sig, ctx->len_sig));
 
 #else
@@ -380,9 +377,12 @@ void cose_sign_free(cose_sign_context_t * ctx)
 #ifdef COSE_BACKEND_NRF
     switch (ctx->mode) {
         case (cose_mode_w):
-            nrf_crypto_ecc_private_key_free(&ctx->ctx.priv); break;
+            nrf_crypto_ecc_private_key_free(&ctx->ctx.priv);
+            break;
         case (cose_mode_r):
-            nrf_crypto_ecc_public_key_free(&ctx->ctx.pub); break;
+            // The public key context is owned by the user. Nothing is done here
+            // in order to avoid an accidental double-free.
+            break;
     }
 #else
     mbedtls_pk_free(&ctx->ctx);

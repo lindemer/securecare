@@ -43,7 +43,7 @@
 #include "stdint.h"
 #include "sdk_errors.h"
 #include "nrf_dfu_handling_error.h"
-#include "dfu-cc.pb.h"
+#include "suit.h"
 
 /** @brief SD_REQ field value which indicates that Softdevice can be overwritten by the application. */
 #define SD_REQ_APP_OVERWRITES_SD 0
@@ -59,6 +59,6 @@
  *
  * @return NRF_DFU_RES_CODE_SUCCESS if successful or error code otherwise
  */
-nrf_dfu_result_t nrf_dfu_ver_validation_check(dfu_init_command_t const * p_init);
+nrf_dfu_result_t nrf_dfu_ver_validation_check(suit_context_t const * p_suit_ctx);
 
 #endif //__NRF_DFU_VER_VALIDATION_H

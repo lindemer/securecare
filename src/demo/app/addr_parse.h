@@ -49,8 +49,8 @@
  * @param[out] p_port Value by reference to be filled with the parsed port number. If no port
  *                    is defined in the uri the field will be filled by CoAP default ports
  *                    depending on wheter coap or coaps scheme was used.
- * @param[out] p_res     CoAP resource (all trailing characters after port number).
- * @param[out] p_res_len Length of CoAP resource string (not NULL-terminated).
+ * @param[out] p_urn     CoAP resource (all trailing characters after port number).
+ * @param[out] p_urn_len Length of URN (not NULL-terminated).
  * @param[out] p_use_dtls Value by reference to indicate if it was coap or coaps scheme used.
  * @param[in]  p_uri  Pointer to the buffer containing the URI ascii characters.
  * @param[in]  uri_len Length of the p_uri buffer pointed to.
@@ -61,8 +61,8 @@
  */
 uint32_t addr_parse_uri(uint8_t *  p_addr,
                         uint16_t * p_port,
-                        char **    p_res,
-                        size_t *   p_res_len,
+                        char **    p_urn,
+                        size_t *   p_urn_len,
                         bool *     p_use_dtls,
                         char *     p_uri,
                         uint8_t    uri_len);

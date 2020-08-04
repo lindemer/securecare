@@ -73,34 +73,35 @@
 #include "coap_option.h"
 #include "background_dfu_block.h"
 #include "openthread/random_noncrypto.h"
-
 #include "suit.h"
 
-// Manifest resource name on the remote SUIT server. 
-#define SUIT_MANIFEST_NAME "manifest.cbor"
+// Remote SUIT resource URNs. 
+static char * manifest_resource_name = "manifest.cbor";
+static char image_resource_name[256];
 
-__ALIGN(4) extern const uint8_t pk[64];
-
-static suit_context_t m_suit_ctx;
+extern suit_context_t m_suit_ctx;
 
 #define NRF_LOG_LEVEL 4
 #define NRF_LOG_MODULE_NAME COAP_DFU
 #include "nrf_log.h"
 NRF_LOG_MODULE_REGISTER();
 
-/** @brief Maximum delay (in ms) between requesting consecutive image blocks. */
+// Maximum delay (in ms) between requesting consecutive image blocks.
 #define DEFAULT_DELAY_MAX_MS    128
 
+// Enable random init block loss for debugging purposes.
 #ifndef DFU_DEBUG_RANDOM_INIT_BLOCK_LOSS_ENABLE
-#define DFU_DEBUG_RANDOM_INIT_BLOCK_LOSS_ENABLE  0  /**< Enable random init block loss for debugging purposes. */
+#define DFU_DEBUG_RANDOM_INIT_BLOCK_LOSS_ENABLE  0
 #endif
 
+// Enable random image block loss for debugging purposes.
 #ifndef DFU_DEBUG_RANDOM_IMAGE_BLOCK_LOSS_ENABLE
-#define DFU_DEBUG_RANDOM_IMAGE_BLOCK_LOSS_ENABLE 0  /**< Enable random image block loss for debugging purposes. */
+#define DFU_DEBUG_RANDOM_IMAGE_BLOCK_LOSS_ENABLE 0
 #endif
 
+// Block loss rate, in percent.
 #ifndef DFU_DEBUG_RANDOM_BLOCK_LOSS_RATE
-#define DFU_DEBUG_RANDOM_BLOCK_LOSS_RATE         50 /**< Block loss rate, in percent.*/
+#define DFU_DEBUG_RANDOM_BLOCK_LOSS_RATE         50
 #endif
 
 #define DEBUG_RESOURCE_NAME     "debug"
@@ -108,7 +109,6 @@ NRF_LOG_MODULE_REGISTER();
 
 #define INIT_RESOURCE_NAME      "init"
 #define IMAGE_RESOURCE_NAME     "image"
-#define TRIGGER_RESOURCE_NAME   SUIT_MANIFEST_NAME
 #define BITMAP_RESOURCE_NAME    "bitmap"
 #define RESET_RESOURCE_NAME     "reset"
 
@@ -155,17 +155,6 @@ static void reset_application(void)
 #endif
 
     NVIC_SystemReset();
-}
-
-/** @brief Check if given address is multicast.
- *
- *  @param[in] p_remote A pointer to the address.
- *
- *  @return True if address is a multicast, false otherwise.
- **/
-static bool is_addr_multicast(const coap_remote_t * p_remote)
-{
-    return p_remote->addr[0] == 0xff;
 }
 
 /**
@@ -308,15 +297,15 @@ static bool is_valid_response_received(uint32_t status, const coap_message_t * p
     return true;
 }
 
-/**@brief CoAP response handler for request sent to a trigger resource (@ref TRIGGER_RESOURCE_NAME).
+/**@brief CoAP response handler for request sent to a SUIT manifest resource.
  *
  * An implementation of @ref coap_response_callback_t function type.
  */
-static void handle_trigger_response(uint32_t status, void * p_arg, coap_message_t * p_response)
+static void handle_manifest_response(uint32_t status, void * p_arg, coap_message_t * p_response)
 {
     background_dfu_context_t * p_dfu_ctx = (background_dfu_context_t *)p_arg;
 
-    if (p_dfu_ctx->dfu_state != BACKGROUND_DFU_DOWNLOAD_TRIG)
+    if (p_dfu_ctx->dfu_state != BACKGROUND_DFU_DOWNLOAD_MANIFEST)
     {
         NRF_LOG_WARNING("Token response callback called in invalid state (s:%s)",
                 (uint32_t)background_dfu_state_to_string(p_dfu_ctx->dfu_state));
@@ -329,26 +318,26 @@ static void handle_trigger_response(uint32_t status, void * p_arg, coap_message_
         return;
     }
 
-    if (background_dfu_validate_manifest(&m_dfu_ctx, &m_suit_ctx,
+    if (background_dfu_validate_manifest(&m_dfu_ctx,
                             p_response->p_payload, p_response->payload_len))
     {
         bool m_use_dtls;
-        char * m_resource;
-        size_t m_resource_len;
+        char * m_urn;
+        size_t m_urn_len;
 
         if (NRF_SUCCESS == addr_parse_uri((uint8_t *)&m_coap_dfu_ctx.remote.addr,
                                           &m_coap_dfu_ctx.remote.port_number,
-                                          &m_resource,
-                                          &m_resource_len,
+                                          &m_urn, &m_urn_len,
                                           &m_use_dtls,
                                           m_suit_ctx.components[0].uri,
                                           (uint8_t)m_suit_ctx.components[0].len_uri))
         {
-            NRF_LOG_INFO("Remote resource address and name parsed from SUIT manifest:");
-            NRF_LOG_HEXDUMP_INFO(&m_coap_dfu_ctx.remote.addr, 16);
-            NRF_LOG_HEXDUMP_INFO(m_resource, m_resource_len);
+            // Copy resource name into NULL-terminated string.
+            image_resource_name[m_urn_len] = 0;
+            memcpy(image_resource_name, m_urn, m_urn_len);
 
-            // TODO: use resource name
+            NRF_LOG_INFO("Remote firmware resource at URN: %s", (char *)image_resource_name);
+            NRF_LOG_HEXDUMP_INFO(&m_coap_dfu_ctx.remote.addr, 16);
 
             if (!m_use_dtls) {
                 background_dfu_process_manifest(&m_dfu_ctx,
@@ -690,13 +679,6 @@ static void reset_request_callback(coap_resource_t * p_resource, coap_message_t 
             break;
         }
 
-        if (!is_addr_multicast(&p_request->local))
-        {
-            NRF_LOG_WARNING("Received unicast reset command. Only multicast is allowed.");
-
-            break;
-        }
-
         reset_delay_ms = uint32_big_decode((const uint8_t *)p_request->p_payload);
 
         app_timer_start(m_reset_timer, APP_TIMER_TICKS(reset_delay_ms), NULL);
@@ -817,15 +799,7 @@ static coap_message_t * coap_dfu_create_request(coap_remote_t            * p_rem
     {
         memset(&message_conf, 0, sizeof(message_conf));
 
-        if (is_addr_multicast(p_remote))
-        {
-            message_conf.type = COAP_TYPE_NON;
-        }
-        else
-        {
-            message_conf.type = COAP_TYPE_CON;
-        }
-
+        message_conf.type              = COAP_TYPE_CON;
         message_conf.code              = COAP_CODE_GET;
         message_conf.port.port_number  = DFU_UDP_PORT;
         message_conf.id                = message_id_get();
@@ -954,7 +928,7 @@ void background_dfu_transport_block_request_send(background_dfu_context_t       
     }
     else if (m_dfu_ctx.dfu_state == BACKGROUND_DFU_DOWNLOAD_FIRMWARE)
     {
-        p_resource_name = BITMAP_RESOURCE_NAME "/" IMAGE_RESOURCE_NAME;
+        p_resource_name = image_resource_name;
         m_dfu_ctx.dfu_diag.image_blocks_requested += blocks_count(p_req_bmp);
     }
 
@@ -978,9 +952,9 @@ void background_dfu_transport_state_update(background_dfu_context_t * p_dfu_ctx)
 {
     switch (p_dfu_ctx->dfu_state)
     {
-        case BACKGROUND_DFU_DOWNLOAD_TRIG:
-            m_coap_dfu_ctx.p_resource_path = TRIGGER_RESOURCE_NAME;
-            m_coap_dfu_ctx.handler         = handle_trigger_response;
+        case BACKGROUND_DFU_DOWNLOAD_MANIFEST:
+            m_coap_dfu_ctx.p_resource_path = manifest_resource_name;
+            m_coap_dfu_ctx.handler         = handle_manifest_response;
             break;
 
         case BACKGROUND_DFU_DOWNLOAD_INIT_CMD:
@@ -1005,7 +979,7 @@ void background_dfu_transport_state_update(background_dfu_context_t * p_dfu_ctx)
 
 void background_dfu_transport_send_request(background_dfu_context_t * p_dfu_ctx)
 {
-    uint16_t block_size = (p_dfu_ctx->dfu_state == BACKGROUND_DFU_DOWNLOAD_TRIG) ?
+    uint16_t block_size = (p_dfu_ctx->dfu_state == BACKGROUND_DFU_DOWNLOAD_MANIFEST) ?
                             0 : DEFAULT_BLOCK_SIZE;
 
     coap_message_t * p_request = coap_dfu_create_request(&m_coap_dfu_ctx.remote,

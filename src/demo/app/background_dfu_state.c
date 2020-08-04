@@ -56,6 +56,7 @@
 #include "compiler_abstraction.h"
 #include "nrf_dfu_types.h"
 #include "nrf_dfu_settings.h"
+#include "nrf_dfu_validation.h"
 #include "crc32.h"
 #include "sha256.h"
 #include "background_dfu_transport.h"
@@ -146,52 +147,34 @@ static __INLINE void restart_block_timeout_timer(background_dfu_context_t * p_df
  * @section Handle SUIT Manifest (DFU Trigger)
  **************************************************************************************************/
 
-__ALIGN(4) extern const uint8_t pk[64];
+// TODO: Check if this has security implications. This should probably be declared static so
+// application code cannot modify it directly.
+extern suit_context_t m_suit_ctx;
 
 bool background_dfu_validate_manifest(background_dfu_context_t * p_dfu_ctx,
-                                      suit_context_t           * p_suit_ctx,
                                       const uint8_t            * p_payload,
                                       uint32_t                   payload_len)
 {
     if ((p_dfu_ctx->dfu_state != BACKGROUND_DFU_IDLE) &&
-        (p_dfu_ctx->dfu_state != BACKGROUND_DFU_DOWNLOAD_TRIG))
+        (p_dfu_ctx->dfu_state != BACKGROUND_DFU_DOWNLOAD_MANIFEST))
     {
         NRF_LOG_ERROR("Process manifest: DFU already in progress (s:%s).",
                 (uint32_t)background_dfu_state_to_string(p_dfu_ctx->dfu_state));
         return false;
     }
 
-    // Convert public key to big-endian format for use in nrf_crypto.
-    uint8_t pk_swap[sizeof(pk)];
-    nrf_crypto_internal_double_swap_endian(pk_swap, pk, sizeof(pk) / 2);
-
-    uint32_t err;
-    uint8_t * man;
-    size_t len_man;
-
-    // Verify manifest signature
-    if ((err = suit_raw_unwrap(pk_swap, sizeof(pk), p_payload, payload_len,
-                    (const uint8_t **)&man, &len_man)))
+    if (!nrf_dfu_manifest_decode(p_payload, payload_len))
     {
-        NRF_LOG_ERROR("Manifest signature check failed (0x%x)", err);
+        NRF_LOG_ERROR("Failed to decode manifest.");
         return false;
     }
     else
     {
-        // Parse manifest contents.
-        if ((err = suit_parse(p_suit_ctx, (const uint8_t *)man, len_man)))
-	{
-            NRF_LOG_ERROR("Manifest parse failed (0x%x)", err);
-	    return false;
-	}
-	else
-	{
-            p_dfu_ctx->init_cmd_size = payload_len;
-            p_dfu_ctx->init_cmd_crc  = crc32_compute(p_payload, payload_len, NULL);
-            p_dfu_ctx->firmware_size = p_suit_ctx->components[0].size;
-            p_dfu_ctx->firmware_crc  = 0;
-            p_dfu_ctx->dfu_mode = BACKGROUND_DFU_MODE_UNICAST;
-	}
+        p_dfu_ctx->init_cmd_size = payload_len;
+        p_dfu_ctx->init_cmd_crc  = crc32_compute(p_payload, payload_len, NULL);
+        p_dfu_ctx->firmware_size = m_suit_ctx.components[0].size;
+        p_dfu_ctx->firmware_crc  = 0;
+        p_dfu_ctx->dfu_mode = BACKGROUND_DFU_MODE_UNICAST;
     }
 
     return true;
@@ -201,7 +184,7 @@ bool background_dfu_process_manifest(background_dfu_context_t * p_dfu_ctx,
                                      const uint8_t            * p_payload,
                                      uint32_t                   payload_len)
 {
-    p_dfu_ctx->dfu_state = BACKGROUND_DFU_DOWNLOAD_TRIG;
+    p_dfu_ctx->dfu_state = BACKGROUND_DFU_DOWNLOAD_MANIFEST;
 
     uint32_t err;
     if ((err = background_dfu_handle_event(p_dfu_ctx, BACKGROUND_DFU_EVENT_TRANSFER_COMPLETE)))
@@ -526,7 +509,7 @@ const char * background_dfu_state_to_string(const background_dfu_state_t state)
     {
         "DFU_DOWNLOAD_INIT_CMD",
         "DFU_DOWNLOAD_FIRMWARE",
-        "DFU_DOWNLOAD_TRIG",
+        "DFU_DOWNLOAD_MANIFEST",
         "DFU_WAIT_FOR_RESET",
         "DFU_IDLE",
         "DFU_ERROR",
@@ -570,7 +553,7 @@ uint32_t background_dfu_handle_event(background_dfu_context_t * p_dfu_ctx,
             {
                 p_dfu_ctx->dfu_diag.prev_state = BACKGROUND_DFU_IDLE;
 
-                p_dfu_ctx->dfu_state     = BACKGROUND_DFU_DOWNLOAD_TRIG;
+                p_dfu_ctx->dfu_state     = BACKGROUND_DFU_DOWNLOAD_MANIFEST;
                 p_dfu_ctx->block_num     = 0;
                 p_dfu_ctx->retry_count   = DEFAULT_RETRIES;
 
@@ -580,7 +563,7 @@ uint32_t background_dfu_handle_event(background_dfu_context_t * p_dfu_ctx,
             break;
         }
 
-        case BACKGROUND_DFU_DOWNLOAD_TRIG:
+        case BACKGROUND_DFU_DOWNLOAD_MANIFEST:
         {
             if (event == BACKGROUND_DFU_EVENT_TRANSFER_COMPLETE)
             {
@@ -592,7 +575,7 @@ uint32_t background_dfu_handle_event(background_dfu_context_t * p_dfu_ctx,
                     break;
                 }
 
-                p_dfu_ctx->dfu_diag.prev_state = BACKGROUND_DFU_DOWNLOAD_TRIG;
+                p_dfu_ctx->dfu_diag.prev_state = BACKGROUND_DFU_DOWNLOAD_MANIFEST;
 
                 p_dfu_ctx->dfu_state = BACKGROUND_DFU_DOWNLOAD_INIT_CMD;
 

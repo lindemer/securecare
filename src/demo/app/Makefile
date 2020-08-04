@@ -73,9 +73,6 @@ SRC_FILES += \
   $(PROJ_DIR)/background_dfu_operation.c \
   $(PROJ_DIR)/background_dfu_state.c \
   $(SDK_ROOT)/components/libraries/crypto/backend/nrf_sw/nrf_sw_backend_hash.c \
-  $(SDK_ROOT)/external/nano-pb/pb_common.c \
-  $(SDK_ROOT)/external/nano-pb/pb_decode.c \
-  $(PROJ_DIR)/../common/dfu-cc.pb.c \
   $(PROJ_DIR)/../common/nrf_dfu.c \
   $(PROJ_DIR)/../common/nrf_dfu_flash.c \
   $(PROJ_DIR)/../common/nrf_dfu_handling_error.c \
@@ -149,7 +146,6 @@ INC_FOLDERS += \
   $(SDK_ROOT)/components/libraries/ringbuf \
   $(SDK_ROOT)/external/nrf_security/config \
   $(SDK_ROOT)/components/thread/utils \
-  $(SDK_ROOT)/external/nano-pb \
   $(SDK_ROOT)/modules/nrfx \
   $(SDK_ROOT)/components/drivers_nrf/nrf_soc_nosd \
   $(SDK_ROOT)/components/libraries/log/src \

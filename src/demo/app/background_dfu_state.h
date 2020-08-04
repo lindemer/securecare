@@ -55,7 +55,6 @@
 
 #include "background_dfu_block.h"
 #include "nrf_dfu_req_handler.h"
-#include "suit.h"
 
 /** @brief DFU client state ID.
  *
@@ -67,7 +66,7 @@ typedef enum
 {
     BACKGROUND_DFU_DOWNLOAD_INIT_CMD = NRF_DFU_OBJ_TYPE_COMMAND,
     BACKGROUND_DFU_DOWNLOAD_FIRMWARE = NRF_DFU_OBJ_TYPE_DATA,
-    BACKGROUND_DFU_DOWNLOAD_TRIG,
+    BACKGROUND_DFU_DOWNLOAD_MANIFEST,
     BACKGROUND_DFU_WAIT_FOR_RESET,
     BACKGROUND_DFU_IDLE,
     BACKGROUND_DFU_ERROR,
@@ -145,7 +144,6 @@ typedef struct dfu_context
  * @return True if manifest was valid, false otherwise.
  */
 bool background_dfu_validate_manifest(background_dfu_context_t * p_dfu_ctx,
-                                      suit_context_t           * p_suit_ctx,
                                       const uint8_t            * p_payload,
                                       uint32_t                   payload_len);
 
