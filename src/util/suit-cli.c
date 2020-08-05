@@ -29,21 +29,22 @@
  * POSSIBILITY OF SUCH DAMAGE.
  **/
 
-#define USAGE fprintf(stderr,                                                          \
-"Copyright (c) 2020, RISE Research Institutes of Sweden\n"                             \
-"All rights reserved.\n"                                                               \
-"\nUsage: %s [-hknpu] > [output file] < [input file]\n"                                \
-"\t-h displays this text\n"                                                            \
-"\t-k [key file]\n"                                                                    \
-"\t-n [sequence number]\n"                                                             \
-"\t-p parses a manifest from stdin and decodes it\n"                                   \
-"\t-u [remote firmware URI]\n"                                                         \
-"\nExamples:\n"                                                                        \
-"%s -k key/priv.pem -n 0 -u coaps://[::1]/firmware > manifest.cbor < firmware.exe\n"   \
-"%s -k key/pub.pem -p < manifest.cbor\n"                                               \
+#define USAGE fprintf(stderr,                                                               \
+"Copyright (c) 2020, RISE Research Institutes of Sweden\n"                                  \
+"All rights reserved.\n"                                                                    \
+"\nUsage: %s [-hiknuv] > [output file]\n"                                                   \
+"\t-h displays this text\n"                                                                 \
+"\t-k [pem file]\n"                                                                         \
+"\t-n [sequence number]\n"                                                                  \
+"\t-u [remote firmware URI]\n"                                                              \
+"\t-v parsea manifest from stdin and verifies it\n"                                         \
+"\nExamples:\n"                                                                        	    \
+"%s -k key/priv.pem -n 0 -u coaps://[::1]/firmware.hex -i firmware.hex > manifest.cbor\n"   \
+"%s -k key/pub.pem -v < manifest.cbor\n"                                                    \
 , argv[0], argv[0], argv[0]);
 
-#define HEAP_BUFFER 2048
+#define MAX_MANIFEST_SIZE 2048
+#define MAX_PEM_SIZE      2048
 
 #include <stdbool.h>
 #include <stdio.h>
@@ -66,57 +67,55 @@ static uint8_t vendor_id[] = { 0xfa, 0x6b, 0x4a, 0x53, 0xd5, 0xad, 0x5f, 0xdf,
 
 int main(int argc, char *argv[])
 {
+    char * i = NULL;  /* firmware file */ 
     char * k = NULL;  /* PEM key file */
     char * n = NULL;  /* manifest sequence number */
-    bool   p = false; /* parse manifest from stdin */
     char * u = NULL;  /* remote firmware URI */
+    bool   v = false; /* parse manifest from stdin */
     
     int opt; /* parse command line arguments */
-    while ((opt = getopt (argc, argv, "hk:n:pu:")) != -1) {
+    while ((opt = getopt (argc, argv, "hi:k:n:u:v")) != -1) {
         switch (opt) {
-        case 'h': USAGE; exit(EXIT_FAILURE);
+        case 'h': goto fail;
+        case 'i': i = optarg; break;
         case 'k': k = optarg; break;
         case 'n': n = optarg; break;
-        case 'p': p = true;   break;
         case 'u': u = optarg; break;
+        case 'v': v = true;   break;
         }
     }
     
     /* buffer for PEM-formatted key */
-    char * pem = (char *) malloc(HEAP_BUFFER);
+    char * pem = (char *)malloc(MAX_PEM_SIZE);
 
     if (k != NULL) { /* read key from PEM file */
 
-        FILE * fptr = fopen(k, "r"); char * wptr = pem;
+        FILE * fptr = fopen(k, "r"); 
+        if (fptr == NULL) goto fail;
+        
+        char * wptr = pem;
         while (!feof(fptr)) *(wptr++) = fgetc(fptr);
         fclose(fptr);
 
-    } else { /* no key file specified */
+    } else goto fail;
 
-        USAGE; exit(EXIT_FAILURE);
+    if (v) { /* parse and decode existing manifest */
 
-    }
+        uint32_t ibytes = 0;
+        uint8_t * buffer = (uint8_t *)malloc(MAX_MANIFEST_SIZE);
+        read_stdin(buffer, &ibytes);
 
-    /* buffer for I/O */
-    uint32_t ibytes = 0;
+        uint8_t * manifest;
+	size_t len_manifest;
 
-    // FIXME: A buffer does not need to be allocated for the manifest. (Unwrap
-    // returns a pointer.)
-    size_t obytes = HEAP_BUFFER;
-    uint8_t * buffer = (uint8_t *) malloc(HEAP_BUFFER);
-    read_stdin(buffer, &ibytes);
-    
-    if (p) { /* parse and decode existing manifest */
-
-        uint8_t * manifest = malloc(HEAP_BUFFER);
-        if (suit_pem_unwrap(pem, buffer, HEAP_BUFFER, 
-                    (const uint8_t **) &manifest, &obytes)) {
+        if (suit_pem_unwrap(pem, buffer, MAX_MANIFEST_SIZE, 
+                    (const uint8_t **) &manifest, &len_manifest)) {
             fprintf(stderr, "Signature verification failed.\n");
             exit(EXIT_FAILURE);
         }
     
         suit_context_t ctx;
-        if (suit_parse(&ctx, manifest, obytes)) {
+        if (suit_parse(&ctx, manifest, len_manifest)) {
             fprintf(stderr, "Parser error.\n");
             exit(EXIT_FAILURE);
         }
@@ -147,10 +146,32 @@ int main(int argc, char *argv[])
                 ctx.components[i].len_digest, 32);
 
             printf("(%d) Image size\t\t%d [B]\n", i, ctx.components[i].size);
-        
+           
+            free(buffer);
         }
 
     } else { /* write new manifest */
+    
+        uint8_t * buffer;
+        size_t ibytes;
+
+        if (i != NULL) {
+
+            FILE * fptr = fopen(i, "r");
+            if (fptr == NULL) goto fail;
+
+            /* get file size */
+            fseek(fptr, 0L, SEEK_END);
+            ibytes = ftell(fptr);
+            rewind(fptr);
+        
+            buffer = (uint8_t *)malloc(ibytes);
+            char * wptr = buffer;
+            while (!feof(fptr)) *(wptr++) = fgetc(fptr);
+
+            fclose(fptr);
+
+        } else goto fail;
 
         suit_context_t ctx;
         ctx.version = 1;
@@ -160,7 +181,7 @@ int main(int argc, char *argv[])
         else ctx.sequence_number = (uint32_t) strtol(n, NULL, 0);
 
         if (u == NULL) {
-            USAGE; exit(EXIT_FAILURE);
+            goto fail;
         } else {
             ctx.components[0].uri = u;
             ctx.components[0].len_uri = strlen(u);
@@ -175,25 +196,33 @@ int main(int argc, char *argv[])
 
         hash_firmware(buffer, ibytes, &ctx.components[0]);
         
+        size_t len_manifest = MAX_MANIFEST_SIZE;
+        uint8_t * manifest = (uint8_t *)malloc(MAX_MANIFEST_SIZE); 
+
         /* encode the manifest */
-        suit_encode(&ctx, buffer, &obytes);
+        suit_encode(&ctx, manifest, &len_manifest);
 
         /* sign the manifest */
-        size_t len_wrapped = HEAP_BUFFER;
-        uint8_t * wrapped = (uint8_t *) malloc(HEAP_BUFFER);
-        if (suit_pem_wrap(pem, buffer, obytes, wrapped, &len_wrapped)) {
+        size_t len_envelope = MAX_MANIFEST_SIZE;
+        uint8_t * envelope = (uint8_t *)malloc(MAX_MANIFEST_SIZE);
+
+        if (suit_pem_wrap(pem, manifest, len_manifest, envelope, &len_envelope)) {
             fprintf(stderr, "Failed to encode manifest.\n");
             exit(EXIT_FAILURE);
         }
 
         /* write to stdout */
-        fwrite(wrapped, sizeof(uint8_t), len_wrapped, stdout);
-        free(wrapped);
+        fwrite(envelope, sizeof(uint8_t), len_envelope, stdout);
+        free(envelope);
+        free(buffer);
     }
 
     free(pem);
-    free(buffer);
     return 0;
+
+fail:
+    USAGE; exit(EXIT_FAILURE);
+
 }
 
 void read_stdin(uint8_t * wptr, uint32_t * bytes)
