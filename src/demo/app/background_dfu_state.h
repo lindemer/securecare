@@ -66,7 +66,7 @@ typedef enum
 {
     BACKGROUND_DFU_DOWNLOAD_INIT_CMD = NRF_DFU_OBJ_TYPE_COMMAND,
     BACKGROUND_DFU_DOWNLOAD_FIRMWARE = NRF_DFU_OBJ_TYPE_DATA,
-    BACKGROUND_DFU_DOWNLOAD_TRIG,
+    BACKGROUND_DFU_DOWNLOAD_MANIFEST,
     BACKGROUND_DFU_WAIT_FOR_RESET,
     BACKGROUND_DFU_IDLE,
     BACKGROUND_DFU_ERROR,
@@ -134,29 +134,30 @@ typedef struct dfu_context
     uint8_t                        retry_count;     /**< Number of remaining retires. */
 } background_dfu_context_t;
 
-/**@brief Check if payload contains valid trigger.
+/**@brief Check if payload contains valid SUIT manifest and parse its contents.
+ *
+ * @param[inout] p_dfu_ctx   DFU context.
+ * @param[out]   p_suit_ctx  SUIT context to populate with manifest contents.
+ * @param[in]    p_payload   A pointer to the message payload.
+ * @param[in]    payload_len Payload length.
+ *
+ * @return True if manifest was valid, false otherwise.
+ */
+bool background_dfu_validate_manifest(background_dfu_context_t * p_dfu_ctx,
+                                      const uint8_t            * p_payload,
+                                      uint32_t                   payload_len);
+
+/**@brief Process a payload with a SUIT manifest.
  *
  * @param[inout] p_dfu_ctx   DFU context.
  * @param[in]    p_payload   A pointer to the message payload.
- * @param[in[    payload_len Payload length.
+ * @param[in]    payload_len Payload length.
  *
- * @return True if trigger was valid, false otherwise.
+ * @return True if SUIT manifest was successfully processed, false otherwise.
  */
-bool background_dfu_validate_trigger(background_dfu_context_t * p_dfu_ctx,
+bool background_dfu_process_manifest(background_dfu_context_t * p_dfu_ctx,
                                      const uint8_t            * p_payload,
                                      uint32_t                   payload_len);
-
-/**@brief Process a payload with a DFU trigger.
- *
- * @param[inout] p_dfu_ctx   DFU context.
- * @param[in]    p_payload   A pointer to the message payload.
- * @param[in[    payload_len Payload length.
- *
- * @return True if trigger was successfully processed, false otherwise.
- */
-bool background_dfu_process_trigger(background_dfu_context_t * p_dfu_ctx,
-                                    const uint8_t            * p_payload,
-                                    uint32_t                   payload_len);
 
 /**@brief Process the block and return CoAP result code corresponding to the result of operation.
  *

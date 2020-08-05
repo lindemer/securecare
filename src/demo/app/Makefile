@@ -68,13 +68,11 @@ SRC_FILES += \
   $(KEYS_DIR)/pub.c \
   $(PROJ_DIR)/main.c \
   $(PROJ_DIR)/coap_dfu.c \
+  $(PROJ_DIR)/addr_parse.c \
   $(PROJ_DIR)/background_dfu_block.c \
   $(PROJ_DIR)/background_dfu_operation.c \
   $(PROJ_DIR)/background_dfu_state.c \
   $(SDK_ROOT)/components/libraries/crypto/backend/nrf_sw/nrf_sw_backend_hash.c \
-  $(SDK_ROOT)/external/nano-pb/pb_common.c \
-  $(SDK_ROOT)/external/nano-pb/pb_decode.c \
-  $(PROJ_DIR)/../common/dfu-cc.pb.c \
   $(PROJ_DIR)/../common/nrf_dfu.c \
   $(PROJ_DIR)/../common/nrf_dfu_flash.c \
   $(PROJ_DIR)/../common/nrf_dfu_handling_error.c \
@@ -92,6 +90,7 @@ SRC_FILES += \
   $(SDK_ROOT)/components/iot/coap/coap_queue.c \
   $(SDK_ROOT)/components/iot/coap/coap_resource.c \
   $(SDK_ROOT)/components/iot/coap/coap_transport_ot.c \
+  $(SDK_ROOT)/components/iot/ipv6_parse/ipv6_parse.c \
   $(SDK_ROOT)/external/segger_rtt/SEGGER_RTT.c \
   $(SDK_ROOT)/external/segger_rtt/SEGGER_RTT_Syscalls_GCC.c \
   $(SDK_ROOT)/external/segger_rtt/SEGGER_RTT_printf.c \
@@ -116,6 +115,7 @@ INC_FOLDERS += \
   $(SDK_ROOT)/components/boards \
   $(SDK_ROOT)/components/iot/background_dfu \
   $(SDK_ROOT)/components/libraries/atomic \
+  $(SDK_ROOT)/components/iot/ipv6_parse \
   $(SDK_ROOT)/components/iot/ble_6lowpan \
   $(SDK_ROOT)/components/iot/coap \
   $(SDK_ROOT)/modules/nrfx/hal \
@@ -146,7 +146,6 @@ INC_FOLDERS += \
   $(SDK_ROOT)/components/libraries/ringbuf \
   $(SDK_ROOT)/external/nrf_security/config \
   $(SDK_ROOT)/components/thread/utils \
-  $(SDK_ROOT)/external/nano-pb \
   $(SDK_ROOT)/modules/nrfx \
   $(SDK_ROOT)/components/drivers_nrf/nrf_soc_nosd \
   $(SDK_ROOT)/components/libraries/log/src \

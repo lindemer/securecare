@@ -72,13 +72,43 @@
 #include <openthread/platform/alarm-micro.h>
 #include <openthread/platform/alarm-milli.h>
 
-#define SCHED_QUEUE_SIZE                32                                            /**< Maximum number of events in the scheduler queue. */
-#define SCHED_EVENT_DATA_SIZE           APP_TIMER_SCHED_EVENT_DATA_SIZE               /**< Maximum app_scheduler event size. */
+// Maximum number of events in the scheduler queue.
+#define SCHED_QUEUE_SIZE                32
+
+// Maximum app_scheduler event size.
+#define SCHED_EVENT_DATA_SIZE           APP_TIMER_SCHED_EVENT_DATA_SIZE
 
 extern const app_timer_id_t nrf_dfu_inactivity_timeout_timer_id;
 void handle_dfu_command(uint8_t argc, char *argv[]);
 
-APP_TIMER_DEF(m_coap_tick_timer);    /**< Timer used by this module. */
+// Timer used by this module.
+APP_TIMER_DEF(m_coap_tick_timer);
+
+// Remote firmware manifest server address.
+static coap_remote_t suit_remote =
+{
+    .addr = { 0xfd, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01 },
+    .port_number = 5683
+};
+
+/* Override default network settings with the OpenThread border router defaults. This is for
+ * development purposes only. Commissioning should be used to add devices to the network in
+ * production use cases.
+ */
+static uint8_t otbr_channel = 15;
+
+static uint16_t otbr_pan_id = 0x1234;
+
+static uint8_t otbr_ext_pan_id[OT_EXT_PAN_ID_SIZE] =
+    { 0x11, 0x11, 0x11, 0x11, 0x22, 0x22, 0x22, 0x22 };
+
+static uint8_t otbr_master_key[OT_MASTER_KEY_SIZE] =
+    { 0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77,
+      0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff };
+
+static uint8_t otbr_mesh_local_prefix[OT_MESH_LOCAL_PREFIX_SIZE] =
+    { 0xfd, 0x11, 0x11, 0x11, 0x11, 0x22, 0x00, 0x00 };
 
 static otCliCommand m_user_commands[] =
 {
@@ -165,14 +195,17 @@ static void state_changed_callback(uint32_t aFlags, void *aContext)
     {
         switch(role)
         {
-            case OT_DEVICE_ROLE_CHILD:
-            case OT_DEVICE_ROLE_ROUTER:
-            case OT_DEVICE_ROLE_LEADER:
-                //coap_dfu_trigger(NULL);
-                break;
-
             case OT_DEVICE_ROLE_DISABLED:
+                break;
             case OT_DEVICE_ROLE_DETACHED:
+                break;
+            case OT_DEVICE_ROLE_CHILD:
+                coap_dfu_trigger(&suit_remote);
+                break;
+            case OT_DEVICE_ROLE_ROUTER:
+                break;
+            case OT_DEVICE_ROLE_LEADER:
+                break;
             default:
                 break;
         }
@@ -228,37 +261,33 @@ static void thread_instance_init(void)
 
     thread_init(&thread_configuration);
     
-    /**
-     * Override default network settings with the OpenThread border router defaults. This is for 
-     * development purposes only. Commissioning should be used to add devices to the network in 
-     * production use cases.
-     */
-
     otInstance * aInstance = thread_ot_instance_get();
     otOperationalDataset aDataset;
     memset(&aDataset, 0, sizeof(otOperationalDataset));
     aDataset.mActiveTimestamp = 1;
     aDataset.mComponents.mIsActiveTimestampPresent = true;
 
-    aDataset.mChannel = 15;
+    // Thread network channel
+    aDataset.mChannel = otbr_channel;
     aDataset.mComponents.mIsChannelPresent = true;
-    aDataset.mPanId = (otPanId) 0x1234;
+
+    // Thread netork PAN ID
+    aDataset.mPanId = (otPanId) otbr_pan_id;
     aDataset.mComponents.mIsPanIdPresent = true;
-    uint8_t extPanId[OT_EXT_PAN_ID_SIZE] = 
-        {0x11, 0x11, 0x11, 0x11, 0x22, 0x22, 0x22, 0x22};
-    memcpy(aDataset.mExtendedPanId.m8, extPanId, sizeof(aDataset.mExtendedPanId));
+
+    // Thread network extended PAN ID
+    memcpy(aDataset.mExtendedPanId.m8, otbr_ext_pan_id, sizeof(aDataset.mExtendedPanId));
     aDataset.mComponents.mIsExtendedPanIdPresent = true;
-    uint8_t key[OT_MASTER_KEY_SIZE] = 
-        {0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 
-         0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff};
-    memcpy(aDataset.mMasterKey.m8, key, sizeof(aDataset.mMasterKey));
+
+    // Thread network master key
+    memcpy(aDataset.mMasterKey.m8, otbr_master_key, sizeof(aDataset.mMasterKey));
     aDataset.mComponents.mIsMasterKeyPresent = true;
-    uint8_t prefix[OT_MESH_LOCAL_PREFIX_SIZE] = 
-        {0xfd, 0x11, 0x11, 0x11, 0x11, 0x22, 0x00, 0x00};
-    memcpy(aDataset.mMeshLocalPrefix.m8, prefix, sizeof(aDataset.mMeshLocalPrefix));
+
+    // Thread network mesh local prefix
+    memcpy(aDataset.mMeshLocalPrefix.m8, otbr_mesh_local_prefix, sizeof(aDataset.mMeshLocalPrefix));
     aDataset.mComponents.mIsMeshLocalPrefixPresent = true;
     
-    // Force permanent child state for development purposes.
+    // FIXME: Force permanent child state for debugging purposes.
     otThreadSetRouterEligible(aInstance, false);
     
     // Start OpenThread. 

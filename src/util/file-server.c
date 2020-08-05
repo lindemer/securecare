@@ -215,15 +215,31 @@ static void hnd_get(coap_context_t *ctx UNUSED_PARAM,
         return;
     }
 
-    size_t len;
+    size_t flen;
     char * full_path = malloc(strlen(uri_path->s) + strlen(fsdir));
     sprintf(full_path, "%s/%s", fsdir, uri_path->s);
-    uint8_t * buf = read_file_mem(full_path, &len);
-    free(full_path);
+    uint8_t * buf = read_file_mem(full_path, &flen);
+
+    struct sockaddr_in * remote = &session->addr_info.remote.addr.sin;
+    char * ip = inet_ntoa(remote->sin_addr);
+    printf("/%s requested by remote %s - ", uri_path->s, ip);
+
+    coap_block_t block2 = { 0, 0, 0 };
+    if (coap_get_block(request, COAP_OPTION_BLOCK2, &block2)) {
+        int block_size = 16 << block2.szx;
+        int total_blocks = (flen / block_size) +
+                ((flen % block_size) == 0 ? 0 : 1);
+        printf("block [%d/%d], size %d\n",
+                     block2.num, total_blocks, block_size);
+    } else {
+        printf("no block option\n");
+    }
+
 
     coap_add_data_blocked_response(resource, session, request, response, token,
-            COAP_MEDIATYPE_ANY, -1, len, buf);
+            COAP_MEDIATYPE_ANY, -1, flen, buf);
     
+    free(full_path);
     free(buf);
 }
 
@@ -248,6 +264,7 @@ static void load_directory(char * path, coap_context_t * ctx)
                 coap_register_handler(r, COAP_REQUEST_GET, hnd_get);
                 coap_resource_set_get_observable(r, 0);
                 coap_add_resource(ctx, r);
+                if (r != NULL) printf("Resource added: /%s\n", ent->d_name);
             }
         }
         closedir(dir);

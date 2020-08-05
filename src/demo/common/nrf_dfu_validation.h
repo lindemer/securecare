@@ -47,9 +47,9 @@
 #ifndef __NRF_DFU_VALIDATION_H
 #define __NRF_DFU_VALIDATION_H
 
+#include "suit.h"
 #include "stdint.h"
 #include "sdk_errors.h"
-#include "dfu-cc.pb.h"
 #include "nrf_dfu_handling_error.h"
 
 /**
@@ -59,24 +59,34 @@
  */
 void nrf_dfu_validation_init(void);
 
-/**
- * @brief Function called on reception of init command creation request.
+/** @brief Function for decoding byte stream into variable.
  *
- * @param[in] size Size of incoming init packet.
+ *  @param[in]  env Pointer to wrapped SUIT manifest, or NULL to use stored manifest.
+ *  @param[in]  len Length of wrapped SUIT manifest.
  *
- * @return       Operation result. See @ref nrf_dfu_result_t
+ *  @retval true   If the manifest was successfully decoded.
+ *  @retval false  If there was no stored manifest, or the decoding failed.
  */
-nrf_dfu_result_t nrf_dfu_validation_init_cmd_create(uint32_t size);
+bool nrf_dfu_manifest_decode(const uint8_t * env, uint32_t len);
 
 /**
- * @brief Function called on reception of fragment of init command.
+ * @brief Function called on reception of manifest creation request.
  *
- * @param[in] p_data Init command fragment.
- * @param[in] length Init command fragment size.
+ * @param[in] size Size of incoming manifest.
  *
  * @return       Operation result. See @ref nrf_dfu_result_t
  */
-nrf_dfu_result_t nrf_dfu_validation_init_cmd_append(uint8_t const * p_data, uint32_t length);
+nrf_dfu_result_t nrf_dfu_validation_manifest_create(uint32_t size);
+
+/**
+ * @brief Function called on reception of fragment of manifest.
+ *
+ * @param[in] p_data Manifest fragment.
+ * @param[in] length Manifest fragment size.
+ *
+ * @return       Operation result. See @ref nrf_dfu_result_t
+ */
+nrf_dfu_result_t nrf_dfu_validation_manifest_append(uint8_t const * p_data, uint32_t length);
 
 /**
  * @brief Function for getting init command status.
@@ -178,14 +188,14 @@ nrf_dfu_result_t nrf_dfu_validation_activation_prepare(uint32_t data_addr, uint3
  *          - Ensuring that a bank flag or any other flash access can only happen after root-of-trust.
  *          - Ensuring that the device reaches the correct state after a power failure on the device.
  *
- * @param[in] p_init        Init command for the firmware upgrade.
+ * @param[in] p_ctx         SUIT manifest for the firmware upgrade.
  * @param[in] is_trusted    Must be set to true if this is called after root-of-trust boot.
  *                          Must be set to false if this is called from DFU mode or background
  *                          DFU operation.
  *
  * @return      Operation result. see @ref nrf_dfu_result_t.
  */
-nrf_dfu_result_t nrf_dfu_validation_post_external_app_execute(dfu_init_command_t const * p_init, bool is_trusted);
+nrf_dfu_result_t nrf_dfu_validation_post_external_app_execute(suit_context_t const * p_ctx, bool is_trusted);
 
 /**
 * @brief Function to check if there is a valid external app in Bank 1.

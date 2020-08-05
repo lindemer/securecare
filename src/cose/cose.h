@@ -301,7 +301,7 @@ typedef struct {
 #ifdef COSE_BACKEND_NRF
     union {
         nrf_crypto_ecc_private_key_t priv;
-        nrf_crypto_ecc_public_key_t pub;
+        const nrf_crypto_ecc_public_key_t * pub;
     } ctx;
 #else
     mbedtls_pk_context ctx;
@@ -332,20 +332,21 @@ typedef struct {
 void cose_set_kid(cose_key_t * key, const uint8_t * kid, size_t len_kid);
 void cose_set_aad(cose_key_t * key, const uint8_t * aad, size_t len_aad);
 
+#ifdef COSE_BACKEND_NRF
 /**
  * @brief Initialize COSE signing context with a raw public key
  *
  * @param[in]   ctx     Pointer to uninitialized signing context
  * @param[in]   mode    0 for signature generation, 1 for verification
- * @param[in]   key     Pointer to key bytes
- * @param[in]   len_key Length of key
+ * @param       key     Pointer to public key
  *
  * @retval COSE_ERROR_NONE              Success
  * @retval COSE_ERROR_CRYPTO            Failed to parse key string 
  * @retval COSE_ERROR_UNSUPPORTED       Crypto algorithm not supported
  */
 int cose_sign_raw_init(cose_sign_context_t * ctx, cose_mode_t mode, 
-        const uint8_t * key, size_t len_key);
+         const nrf_crypto_ecc_public_key_t * key);
+#endif
 
 /**
  * @brief Initialize COSE signing context with a PEM-formatted key

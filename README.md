@@ -3,8 +3,8 @@ This is an experimental implementation of the [SUIT protocol](https://datatracke
 - [RFC 8152](https://tools.ietf.org/html/rfc8152) CBOR Object Signing and Encryption (COSE)
 - [RFC 8392](https://tools.ietf.org/html/rfc8392/) CBOR Web Token (CWT)
 - [RFC 8747](https://tools.ietf.org/html/rfc8747) Proof-of-Possession Key Semantics for CWTs
-- [Internet-Draft](https://datatracker.ietf.org/doc/draft-ietf-ace-oauth-authz/) Authorization and Access Control for Constrained Environments (ACE)
 - [Internet-Draft](https://datatracker.ietf.org/doc/draft-ietf-suit-manifest/) CBOR SUIT Manifest
+- [Internet-Draft](https://tools.ietf.org/html/draft-ietf-ace-coap-est-12) EST over Secure CoAP (EST-CoAPs)
 
 ![SecureCare logo](https://github.com/lindemer/securecare/blob/master/securecare.png "SecureCare logo")
 
@@ -16,7 +16,6 @@ The [mesh-local EID](https://openthread.io/guides/thread-primer/ipv6-addressing)
 ## Project Structure
 - `key` keys and certificates
 - `lib` external libraries 
-- `src/ace` ACE client and authorization server
 - `src/cose` COSE, CWT and SUIT parser/encoder sources
 - `src/demo` example code for the nRF52840 SoC
 - `src/est` EST-CoAPs sources
@@ -26,7 +25,6 @@ The [mesh-local EID](https://openthread.io/guides/thread-primer/ipv6-addressing)
 1. Run `make` from `key` to generate keys. (This will overwrite existing keys).
 2. Run `make` from `src/demo` to flash the example code to an nRF52840 SoC.
 3. Run `make` from `src/util` to compile CLI utilities.
-4. Run `make` from `src/ace` to compile the ACE client and authorization server.
 
 ## Toolchain Installation
 This code has been built and tested on an nRF52840 DK using the [nRF5 SDK for Thread v4.1.0](https://www.nordicsemi.com/Software-and-tools/Software/nRF5-SDK-for-Thread-and-Zigbee/Download). Create an environment variable called `$NRF5_SDK` pointing to the SDK directory before running `make`. The SDK expects to find a copy of the [Arm GCC Embedded Toolchain v7-2018-q2-update](https://developer.arm.com/open-source/gnu-toolchain/gnu-rm/downloads) in the `/usr/local` directory.

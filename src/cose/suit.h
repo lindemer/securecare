@@ -34,14 +34,20 @@
 
 #include "cose.h"
 
+#ifdef COSE_BACKEND_NRF
+#include "nrf_crypto.h"
+#endif
+
+#ifndef SUIT_MAX_COMPONENTS
 #define SUIT_MAX_COMPONENTS 2
+#endif
 
 /** 
  * @brief SUIT API
  * @{
  */
 
-#define SUIT_PREFIX 0xDEAD0000
+#define SUIT_PREFIX 0xdead0000
 
 #define SUIT_ERROR_NONE                               0x0
 #define SUIT_ERROR_CBOR                 SUIT_PREFIX | 0x1
@@ -218,7 +224,7 @@ struct suit_component_s {
     suit_digest_alg_t digest_alg;
     suit_archive_alg_t archive_alg;     /* compression algorithm */
 
-    uint8_t * uri; size_t len_uri;
+    char * uri; size_t len_uri;
     uint8_t * digest; size_t len_digest;
     uint8_t * class_id; size_t len_class_id;
     uint8_t * vendor_id; size_t len_vendor_id;
@@ -267,11 +273,11 @@ int suit_parse(suit_context_t * ctx, const uint8_t * man, size_t len_man);
  */
 int suit_encode(suit_context_t * ctx, uint8_t * man, size_t * len_man);
 
+#ifdef COSE_BACKEND_NRF
 /**
  * @brief Verify and and extract signed manifest with a raw public key
  * 
- * @param       key     Pointer to key bytes
- * @param       len_key Length of key
+ * @param       key     Pointer to public key
  * @param       env     Pointer to encoded SUIT envelope
  * @param       len_env Size of envelope
  * @param[out]  man     Pointer to manifest within envelope
@@ -281,9 +287,10 @@ int suit_encode(suit_context_t * ctx, uint8_t * man, size_t * len_man);
  * @retval      1       fail 
  */
 int suit_raw_unwrap(
-        const uint8_t * key, const size_t len_key,
+        const nrf_crypto_ecc_public_key_t * key,
         const uint8_t * env, const size_t len_env,
         const uint8_t ** man, size_t * len_man);
+#endif
 
 /**
  * @brief Verify and and extract signed manifest with a PEM-formatted key

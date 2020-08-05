@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2017 - 2020, Nordic Semiconductor ASA
+ * Copyright (c) 2015 - 2020, Nordic Semiconductor ASA
  *
  * All rights reserved.
  *
@@ -37,28 +37,34 @@
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  */
-#ifndef __NRF_DFU_VER_VALIDATION_H
-#define __NRF_DFU_VER_VALIDATION_H
+#ifndef ADDR_PARSE_H__
+#define ADDR_PARSE_H__
 
-#include "stdint.h"
-#include "sdk_errors.h"
-#include "nrf_dfu_handling_error.h"
-#include "suit.h"
+#include <stdint.h>
+#include <stdbool.h>
 
-/** @brief SD_REQ field value which indicates that Softdevice can be overwritten by the application. */
-#define SD_REQ_APP_OVERWRITES_SD 0
-
-/** @brief SD_REQ_ANY_VERSION field value which indicates that any SoftDevice version is valid. 
+/**@brief Parse a coap(s) uri to extract an IPv6 hostname and port if available.
  *
- * @note This is used by external application in case SoftDevice version compatibility isn't needed.
- */
-#define SD_REQ_ANY_VERSION (0xFFFE)
-
-/**
- * @brief Function for validating version of new firmware.
+ * @param[out] p_addr Array of 16 bytes to hold the parsed IPv6 address.
+ * @param[out] p_port Value by reference to be filled with the parsed port number. If no port
+ *                    is defined in the uri the field will be filled by CoAP default ports
+ *                    depending on wheter coap or coaps scheme was used.
+ * @param[out] p_urn     CoAP resource (all trailing characters after port number).
+ * @param[out] p_urn_len Length of URN (not NULL-terminated).
+ * @param[out] p_use_dtls Value by reference to indicate if it was coap or coaps scheme used.
+ * @param[in]  p_uri  Pointer to the buffer containing the URI ascii characters.
+ * @param[in]  uri_len Length of the p_uri buffer pointed to.
  *
- * @return NRF_DFU_RES_CODE_SUCCESS if successful or error code otherwise
+ * @retval NRF_SUCCESS       If parsing of the uri was successfull.
+ * @retval NRF_ERROR_NULL    If any of the supplied parameters where NULL.
+ * @retval NRF_ERROR_INVALID_DATA If the function could not parse the content of p_uri.
  */
-nrf_dfu_result_t nrf_dfu_ver_validation_check(suit_context_t const * p_suit_ctx);
+uint32_t addr_parse_uri(uint8_t *  p_addr,
+                        uint16_t * p_port,
+                        char **    p_urn,
+                        size_t *   p_urn_len,
+                        bool *     p_use_dtls,
+                        char *     p_uri,
+                        uint8_t    uri_len);
 
-#endif //__NRF_DFU_VER_VALIDATION_H
+#endif // ADDR_PARSE_H__

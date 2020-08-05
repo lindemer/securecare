@@ -50,10 +50,6 @@
 #include "nrf_fstorage.h"
 #include "nrf_bootloader_info.h"
 #include "app_util.h"
-#include "pb.h"
-#include "pb_common.h"
-#include "pb_decode.h"
-#include "dfu-cc.pb.h"
 #include "crc32.h"
 #include "app_scheduler.h"
 #include "sdk_macros.h"
@@ -71,7 +67,8 @@ NRF_LOG_MODULE_REGISTER();
 #define NRF_DFU_PROTOCOL_REDUCED 0
 #endif
 
-STATIC_ASSERT(DFU_SIGNED_COMMAND_SIZE <= INIT_COMMAND_MAX_SIZE);
+// FIXME
+//STATIC_ASSERT(DFU_SIGNED_COMMAND_SIZE <= INIT_COMMAND_MAX_SIZE);
 
 static uint32_t m_firmware_start_addr;          /**< Start address of the current firmware image. */
 static uint32_t m_firmware_size_req;            /**< The size of the entire firmware image. Defined by the init command. */
@@ -264,7 +261,7 @@ static void on_cmd_obj_create_request(nrf_dfu_request_t * p_req, nrf_dfu_respons
 
     m_observer(NRF_DFU_EVT_DFU_STARTED);
 
-    nrf_dfu_result_t ret_val = nrf_dfu_validation_init_cmd_create(p_req->create.object_size);
+    nrf_dfu_result_t ret_val = nrf_dfu_validation_manifest_create(p_req->create.object_size);
     p_res->result = ext_err_code_handle(ret_val);
 }
 
@@ -280,7 +277,7 @@ static void on_cmd_obj_write_request(nrf_dfu_request_t * p_req, nrf_dfu_response
 
     nrf_dfu_result_t ret_val;
 
-    ret_val = nrf_dfu_validation_init_cmd_append(p_req->write.p_data, p_req->write.len);
+    ret_val = nrf_dfu_validation_manifest_append(p_req->write.p_data, p_req->write.len);
     p_res->result = ext_err_code_handle(ret_val);
 
     /* Update response. This is only used when the PRN is triggered and the 'write' message

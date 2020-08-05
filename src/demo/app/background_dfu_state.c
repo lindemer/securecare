@@ -56,6 +56,8 @@
 #include "compiler_abstraction.h"
 #include "nrf_dfu_types.h"
 #include "nrf_dfu_settings.h"
+#include "nrf_dfu_validation.h"
+#include "crc32.h"
 #include "sha256.h"
 #include "background_dfu_transport.h"
 #include "background_dfu_operation.h"
@@ -74,21 +76,6 @@ NRF_LOG_MODULE_REGISTER();
 #define BLOCK_RECEIVE_TIMEOUT       2000    /**< Timeout value after which block is considered missing in multicast DFU. */
 
 #define DFU_DATE_TIME               (__DATE__ " " __TIME__)
-
-/**@brief DFU trigger packet version. */
-#define TRIGGER_VERSION         1
-
-/**
- * @defgroup background_dfu_trigger_flags Trigger flags and offsets.
- * @{
- */
-#define TRIGGER_FLAGS_VERSION_OFFSET 4
-#define TRIGGER_FLAGS_VERSION_MASK   0xF0
-#define TRIGGER_FLAGS_MODE_OFFSET    3
-#define TRIGGER_FLAGS_MODE_MASK      0x08
-#define TRIGGER_FLAGS_RESET_OFFSET   2
-#define TRIGGER_FLAGS_RESET_MASK     0x04
-/** @} */
 
 APP_TIMER_DEF(m_missing_block_timer);
 APP_TIMER_DEF(m_block_timeout_timer);
@@ -157,112 +144,61 @@ static __INLINE void restart_block_timeout_timer(background_dfu_context_t * p_df
 }
 
 /***************************************************************************************************
- * @section Handle DFU Trigger
+ * @section Handle SUIT Manifest (DFU Trigger)
  **************************************************************************************************/
 
-/**@brief Parses trigger data and updates DFU client context accordingly.
- *
- * @param[inout] p_dfu_ctx A pointer to DFU Client context.
- * @param[in]    p_trigger A pointer to trigger data.
- *
- * @return True if parsing was successful, false otherwise.
- */
-static bool parse_trigger(background_dfu_context_t       * p_dfu_ctx,
-                          const background_dfu_trigger_t * p_trigger)
+// TODO: Check if this has security implications. This should probably be declared static so
+// application code cannot modify it directly.
+extern suit_context_t m_suit_ctx;
+
+bool background_dfu_validate_manifest(background_dfu_context_t * p_dfu_ctx,
+                                      const uint8_t            * p_payload,
+                                      uint32_t                   payload_len)
 {
-    uint8_t trigger_version = (p_trigger->flags & TRIGGER_FLAGS_VERSION_MASK)
-                                    >> TRIGGER_FLAGS_VERSION_OFFSET;
-
-    if (trigger_version <= TRIGGER_VERSION)
-    {
-        // Base fields available from version 0.
-        p_dfu_ctx->init_cmd_size = uint32_big_decode((const uint8_t *)&p_trigger->init_length);
-        p_dfu_ctx->init_cmd_crc  = uint32_big_decode((const uint8_t *)&p_trigger->init_crc);
-        p_dfu_ctx->firmware_size = uint32_big_decode((const uint8_t *)&p_trigger->image_length);
-        p_dfu_ctx->firmware_crc  = uint32_big_decode((const uint8_t *)&p_trigger->image_crc);
-
-        // Mode flag was added in DFU Trigger version 1.
-        if (trigger_version >= 1)
-        {
-            p_dfu_ctx->dfu_mode = (background_dfu_mode_t)((p_trigger->flags
-                                    & TRIGGER_FLAGS_MODE_MASK) >> TRIGGER_FLAGS_MODE_OFFSET);
-            p_dfu_ctx->reset_suppress = (p_trigger->flags & TRIGGER_FLAGS_RESET_MASK) >>
-                                          TRIGGER_FLAGS_RESET_OFFSET;
-
-        }
-        else
-        {
-            p_dfu_ctx->dfu_mode = BACKGROUND_DFU_MODE_UNICAST;
-        }
-
-        NRF_LOG_INFO("DFU trigger: init (sz=%d, crc=%0X) image (sz=%d, crc=%0X)",
-                     p_dfu_ctx->init_cmd_size,
-                     p_dfu_ctx->init_cmd_crc,
-                     p_dfu_ctx->firmware_size,
-                     p_dfu_ctx->firmware_crc);
-
-        return true;
-    }
-
-    return false;
-}
-
-bool background_dfu_validate_trigger(background_dfu_context_t * p_dfu_ctx,
-                                     const uint8_t            * p_payload,
-                                     uint32_t                   payload_len)
-{
-    if (payload_len != sizeof(background_dfu_trigger_t))
-    {
-        NRF_LOG_ERROR("Validate trigger: size mismatch");
-        return false;
-    }
-
     if ((p_dfu_ctx->dfu_state != BACKGROUND_DFU_IDLE) &&
-        (p_dfu_ctx->dfu_state != BACKGROUND_DFU_DOWNLOAD_TRIG))
+        (p_dfu_ctx->dfu_state != BACKGROUND_DFU_DOWNLOAD_MANIFEST))
     {
-        NRF_LOG_ERROR("Validate trigger: DFU already in progress (s:%s).",
+        NRF_LOG_ERROR("Validate manifest: DFU already in progress (s:%s).",
                 (uint32_t)background_dfu_state_to_string(p_dfu_ctx->dfu_state));
         return false;
     }
 
-    uint8_t trigger_version = (((background_dfu_trigger_t *)p_payload)->flags
-                                    & TRIGGER_FLAGS_VERSION_MASK) >> TRIGGER_FLAGS_VERSION_OFFSET;
-    if (trigger_version > TRIGGER_VERSION)
+    if (!nrf_dfu_manifest_decode(p_payload, payload_len))
     {
-        NRF_LOG_ERROR("Validate trigger: invalid trigger version.");
+        NRF_LOG_ERROR("Failed to decode SUIT manifest.");
         return false;
+    }
+    else
+    {
+        p_dfu_ctx->init_cmd_size = payload_len;
+        p_dfu_ctx->init_cmd_crc  = crc32_compute(p_payload, payload_len, NULL);
+        p_dfu_ctx->firmware_size = m_suit_ctx.components[0].size;
+        p_dfu_ctx->firmware_crc  = 0;
+        p_dfu_ctx->dfu_mode = BACKGROUND_DFU_MODE_UNICAST;
     }
 
     return true;
 }
 
-bool background_dfu_process_trigger(background_dfu_context_t * p_dfu_ctx,
-                                    const uint8_t            * p_payload,
-                                    uint32_t                   payload_len)
+bool background_dfu_process_manifest(background_dfu_context_t * p_dfu_ctx,
+                                     const uint8_t            * p_payload,
+                                     uint32_t                   payload_len)
 {
-    bool result = false;
+    p_dfu_ctx->dfu_state = BACKGROUND_DFU_DOWNLOAD_MANIFEST;
 
-    do
+    uint32_t err;
+    if ((err = background_dfu_handle_event(p_dfu_ctx, BACKGROUND_DFU_EVENT_TRANSFER_COMPLETE)))
     {
-        if (!parse_trigger(p_dfu_ctx, (background_dfu_trigger_t *)p_payload))
-        {
-            NRF_LOG_ERROR("Process trigger: failed to parse payload");
-            break;
-        }
+        NRF_LOG_ERROR("Error in background_dfu_handle_event (0x%d)", err);
+    }
 
-        p_dfu_ctx->dfu_state = BACKGROUND_DFU_DOWNLOAD_TRIG;
+    NRF_LOG_INFO("SUIT DFU: manifest (sz=%d, crc=%0X) image (sz=%d, crc=%0X)",
+            p_dfu_ctx->init_cmd_size,
+            p_dfu_ctx->init_cmd_crc,
+            p_dfu_ctx->firmware_size,
+            p_dfu_ctx->firmware_crc);
 
-        uint32_t err_code = background_dfu_handle_event(p_dfu_ctx,
-                                                        BACKGROUND_DFU_EVENT_TRANSFER_COMPLETE);
-        if (err_code != NRF_SUCCESS)
-        {
-            NRF_LOG_ERROR("Error in background_dfu_handle_event (%d)", err_code);
-        }
-
-        result = true;
-    } while(0);
-
-    return result;
+    return true;
 }
 
 /***************************************************************************************************
@@ -573,7 +509,7 @@ const char * background_dfu_state_to_string(const background_dfu_state_t state)
     {
         "DFU_DOWNLOAD_INIT_CMD",
         "DFU_DOWNLOAD_FIRMWARE",
-        "DFU_DOWNLOAD_TRIG",
+        "DFU_DOWNLOAD_MANIFEST",
         "DFU_WAIT_FOR_RESET",
         "DFU_IDLE",
         "DFU_ERROR",
@@ -617,7 +553,7 @@ uint32_t background_dfu_handle_event(background_dfu_context_t * p_dfu_ctx,
             {
                 p_dfu_ctx->dfu_diag.prev_state = BACKGROUND_DFU_IDLE;
 
-                p_dfu_ctx->dfu_state     = BACKGROUND_DFU_DOWNLOAD_TRIG;
+                p_dfu_ctx->dfu_state     = BACKGROUND_DFU_DOWNLOAD_MANIFEST;
                 p_dfu_ctx->block_num     = 0;
                 p_dfu_ctx->retry_count   = DEFAULT_RETRIES;
 
@@ -627,7 +563,7 @@ uint32_t background_dfu_handle_event(background_dfu_context_t * p_dfu_ctx,
             break;
         }
 
-        case BACKGROUND_DFU_DOWNLOAD_TRIG:
+        case BACKGROUND_DFU_DOWNLOAD_MANIFEST:
         {
             if (event == BACKGROUND_DFU_EVENT_TRANSFER_COMPLETE)
             {
@@ -639,7 +575,7 @@ uint32_t background_dfu_handle_event(background_dfu_context_t * p_dfu_ctx,
                     break;
                 }
 
-                p_dfu_ctx->dfu_diag.prev_state = BACKGROUND_DFU_DOWNLOAD_TRIG;
+                p_dfu_ctx->dfu_diag.prev_state = BACKGROUND_DFU_DOWNLOAD_MANIFEST;
 
                 p_dfu_ctx->dfu_state = BACKGROUND_DFU_DOWNLOAD_INIT_CMD;
 

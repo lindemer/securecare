@@ -714,7 +714,7 @@ int _suit_wrap(cose_sign_context_t * ctx,
 
 #ifdef COSE_BACKEND_NRF
 int suit_raw_unwrap(
-        const uint8_t * key, const size_t len_key,
+        const nrf_crypto_ecc_public_key_t * key,
         const uint8_t * env, const size_t len_env,
         const uint8_t ** man, size_t * len_man) 
 {
@@ -722,7 +722,7 @@ int suit_raw_unwrap(
     ctx.key.curve = cose_curve_p256;
     ctx.key.alg = cose_alg_ecdsa_sha_256;
     
-    int err = cose_sign_raw_init(&ctx, cose_mode_r, key, len_key);
+    int err = cose_sign_raw_init(&ctx, cose_mode_r, key);
     if (err) return err;
 
     return _suit_unwrap(&ctx, env, len_env, man, len_man);
