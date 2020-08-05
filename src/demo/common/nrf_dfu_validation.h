@@ -89,28 +89,28 @@ nrf_dfu_result_t nrf_dfu_validation_manifest_create(uint32_t size);
 nrf_dfu_result_t nrf_dfu_validation_manifest_append(uint8_t const * p_data, uint32_t length);
 
 /**
- * @brief Function for getting init command status.
+ * @brief Function for getting SUIT manifest status.
  *
  * @param[out] p_offset   Current offset.
  * @param[out] p_crc      Current CRC.
- * @param[out] p_max_size Maximum size of init command.
+ * @param[out] p_max_size Maximum size of SUIT manifest.
  */
 void nrf_dfu_validation_init_cmd_status_get(uint32_t * p_offset,
                                             uint32_t * p_crc,
                                             uint32_t * p_max_size);
 
 /**
- * @brief Function for inquiring whether a valid init command has been received.
+ * @brief Function for inquiring whether a valid SUIT manifest has been received.
  *
- * @return true  if there is a valid init command. This can be true at boot time
+ * @return true  if there is a valid SUIT manifest. This can be true at boot time
  *               if the device was reset during a DFU operation.
  */
 bool nrf_dfu_validation_init_cmd_present(void);
 
 /**
- * @brief Function for validating init command and retrieving the address and length of the firmware.
+ * @brief Function for validating SUIT manifest and retrieving the address and length of the firmware.
  *
- * If init command is successfully validated Bank 1 details are written to out parameters.
+ * If SUIT manifest is successfully validated Bank 1 details are written to out parameters.
  *
  * Until @ref nrf_dfu_validation_init_cmd_create is called, this function can be called
  * again after the first time without side effects to retrieve address and length.
@@ -124,7 +124,7 @@ nrf_dfu_result_t nrf_dfu_validation_init_cmd_execute(uint32_t * p_dst_data_addr,
                                                      uint32_t * p_data_len);
 
 /**
- * @brief Function for validating the init command.
+ * @brief Function for validating the SUIT manifest.
  *
  * @return       Operation result. See @ref nrf_dfu_result_t.
  */

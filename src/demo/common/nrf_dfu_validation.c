@@ -128,8 +128,8 @@ bool nrf_dfu_manifest_decode(const uint8_t * env, uint32_t len)
 
     if (env == NULL)
     {
-        env = s_dfu_settings.init_command;
-        len = s_dfu_settings.progress.command_size;
+        env = s_dfu_settings.suit_manifest;
+        len = s_dfu_settings.progress.manifest_size;
     }
 
     // Verify manifest signature
@@ -170,8 +170,8 @@ bool nrf_dfu_manifest_decode(const uint8_t * env, uint32_t len)
 
 void nrf_dfu_validation_init(void)
 {
-    // If the command is stored to flash, init command was valid.
-    if ((s_dfu_settings.progress.command_size != 0) &&
+    // If the manifest is stored to flash, it was already validated.
+    if ((s_dfu_settings.progress.manifest_size != 0) &&
          nrf_dfu_manifest_decode(NULL, 0))
     {
         NRF_LOG_INFO("Valid manifest found in flash.")
@@ -192,7 +192,7 @@ nrf_dfu_result_t nrf_dfu_validation_manifest_create(uint32_t size)
     {
         ret_val = NRF_DFU_RES_CODE_INVALID_PARAMETER;
     }
-    else if (size > INIT_COMMAND_MAX_SIZE)
+    else if (size > SUIT_MANIFEST_MAX_SIZE)
     {
         ret_val = NRF_DFU_RES_CODE_INSUFFICIENT_RESOURCES;
     }
@@ -204,8 +204,8 @@ nrf_dfu_result_t nrf_dfu_validation_manifest_create(uint32_t size)
         // Reset all progress.
         nrf_dfu_settings_progress_reset();
 
-        // Set the init command size.
-        s_dfu_settings.progress.command_size = size;
+        // Set the SUIT manifest size.
+        s_dfu_settings.progress.manifest_size = size;
     }
     return ret_val;
 }
@@ -214,22 +214,22 @@ nrf_dfu_result_t nrf_dfu_validation_manifest_create(uint32_t size)
 nrf_dfu_result_t nrf_dfu_validation_manifest_append(uint8_t const * p_data, uint32_t length)
 {
     nrf_dfu_result_t ret_val = NRF_DFU_RES_CODE_SUCCESS;
-    if ((length + s_dfu_settings.progress.command_offset) > s_dfu_settings.progress.command_size)
+    if ((length + s_dfu_settings.progress.manifest_offset) > s_dfu_settings.progress.manifest_size)
     {
-        NRF_LOG_ERROR("Init command larger than expected.");
+        NRF_LOG_ERROR("SUIT manifest larger than expected.");
         ret_val = NRF_DFU_RES_CODE_INVALID_PARAMETER;
     }
     else
     {
         // Copy the received data to RAM, update offset and calculate CRC.
-        memcpy(&s_dfu_settings.init_command[s_dfu_settings.progress.command_offset],
+        memcpy(&s_dfu_settings.suit_manifest[s_dfu_settings.progress.manifest_offset],
                 p_data,
                 length);
 
-        s_dfu_settings.progress.command_offset += length;
-        s_dfu_settings.progress.command_crc = crc32_compute(p_data,
+        s_dfu_settings.progress.manifest_offset += length;
+        s_dfu_settings.progress.manifest_crc = crc32_compute(p_data,
                                                             length,
-                                                            &s_dfu_settings.progress.command_crc);
+                                                            &s_dfu_settings.progress.manifest_crc);
     }
     return ret_val;
 }
@@ -239,9 +239,9 @@ void nrf_dfu_validation_init_cmd_status_get(uint32_t * p_offset,
                                             uint32_t * p_crc,
                                             uint32_t * p_max_size)
 {
-    *p_offset   = s_dfu_settings.progress.command_offset;
-    *p_crc      = s_dfu_settings.progress.command_crc;
-    *p_max_size = INIT_COMMAND_MAX_SIZE;
+    *p_offset   = s_dfu_settings.progress.manifest_offset;
+    *p_crc      = s_dfu_settings.progress.manifest_crc;
+    *p_max_size = SUIT_MANIFEST_MAX_SIZE;
 }
 
 
@@ -253,7 +253,7 @@ bool nrf_dfu_validation_init_cmd_present(void)
 // Function to calculate the total size of the firmware(s) in the update.
 static nrf_dfu_result_t update_data_size_get(suit_context_t const * p_suit_ctx, uint32_t * p_size)
 {
-    nrf_dfu_result_t ret_val = EXT_ERR(NRF_DFU_EXT_ERROR_INIT_COMMAND_INVALID);
+    nrf_dfu_result_t ret_val = EXT_ERR(NRF_DFU_EXT_ERROR_SUIT_MANIFEST_INVALID);
     uint32_t         fw_sz   = 0;
 
     for (size_t idx = 0; idx < SUIT_MAX_COMPONENTS; idx++)
@@ -360,7 +360,7 @@ nrf_dfu_result_t nrf_dfu_validation_init_cmd_execute(uint32_t * p_dst_data_addr,
 {
     nrf_dfu_result_t ret_val = NRF_DFU_RES_CODE_SUCCESS;
 
-    if (s_dfu_settings.progress.command_offset != s_dfu_settings.progress.command_size)
+    if (s_dfu_settings.progress.manifest_offset != s_dfu_settings.progress.manifest_size)
     {
         // The object wasn't the right (requested) size.
         NRF_LOG_ERROR("Execute with faulty offset");
@@ -373,8 +373,8 @@ nrf_dfu_result_t nrf_dfu_validation_init_cmd_execute(uint32_t * p_dst_data_addr,
     }
     else if (nrf_dfu_manifest_decode(NULL, 0))
     {
-        // Will only get here if init command was received since last reset.
-        // An init command should not be written to flash until after it's been checked here.
+        // Will only get here if SUIT manifest was received since last reset.
+        // An SUIT manifest should not be written to flash until after it's been checked here.
         ret_val = nrf_dfu_validation_prevalidate();
 
         *p_dst_data_addr = 0;
@@ -392,7 +392,7 @@ nrf_dfu_result_t nrf_dfu_validation_init_cmd_execute(uint32_t * p_dst_data_addr,
             ret_val = update_data_addr_get(&m_suit_ctx, *p_data_len, p_dst_data_addr);
         }
 
-        // Set flag validating the init command.
+        // Set flag validating the SUIT manifest.
         if (ret_val == NRF_DFU_RES_CODE_SUCCESS)
         {
             m_valid_manifest_present = true;
@@ -412,7 +412,7 @@ nrf_dfu_result_t nrf_dfu_validation_init_cmd_execute(uint32_t * p_dst_data_addr,
 }
 
 
-// Function to check the hash received in the init command against the received firmware.
+// Function to check the hash received in the SUIT manifest against the received firmware.
 // little_endian specifies the endianness of @p p_hash.
 static bool nrf_dfu_validation_hash_ok(uint8_t const * p_hash, uint32_t src_addr, uint32_t data_len, bool little_endian)
 {

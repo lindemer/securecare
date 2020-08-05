@@ -326,6 +326,8 @@ int main(int argc, char *argv[])
 {
     log_init();
 
+    NRF_LOG_INFO("Hello from original firmware image!");
+
     uint32_t err_code = nrf_mem_init();
     APP_ERROR_CHECK(err_code);
 

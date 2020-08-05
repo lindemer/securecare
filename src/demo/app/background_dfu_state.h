@@ -64,9 +64,9 @@
  */
 typedef enum
 {
-    BACKGROUND_DFU_DOWNLOAD_INIT_CMD = NRF_DFU_OBJ_TYPE_COMMAND,
-    BACKGROUND_DFU_DOWNLOAD_FIRMWARE = NRF_DFU_OBJ_TYPE_DATA,
-    BACKGROUND_DFU_DOWNLOAD_MANIFEST,
+    BACKGROUND_DFU_GET_MANIFEST_BLOCKWISE = NRF_DFU_OBJ_TYPE_COMMAND,
+    BACKGROUND_DFU_GET_FIRMWARE_BLOCKWISE = NRF_DFU_OBJ_TYPE_DATA,
+    BACKGROUND_DFU_GET_MANIFEST,
     BACKGROUND_DFU_WAIT_FOR_RESET,
     BACKGROUND_DFU_IDLE,
     BACKGROUND_DFU_ERROR,
@@ -120,13 +120,13 @@ typedef struct dfu_context
                                                          downloading firmware. */
     background_dfu_diagnostic_t    dfu_diag;        /**< DFU diagnostic information. */
 
-    uint32_t                       init_cmd_size;   /**< Current init command size. */
-    uint32_t                       init_cmd_crc;    /**< Current init command checksum. */
-    uint32_t                       firmware_size;   /**< Current firmware command size. */
-    uint32_t                       firmware_crc;    /**< Current firmware command checksum. */
-    uint32_t                       max_obj_size;    /**< Maximum size of the DFU object. */
-    uint32_t                       remaining_size;  /**< Remaining size, in bytes, of the resource which
-                                                         is being downloaded. */
+    uint32_t                       suit_manifest_size;   /**< Current SUIT manifest size. */
+    uint32_t                       suit_manifest_crc;    /**< Current SUIT manifest checksum. */
+    uint32_t                       firmware_size;        /**< Current firmware command size. */
+    uint32_t                       firmware_crc;         /**< Current firmware command checksum. */
+    uint32_t                       max_obj_size;         /**< Maximum size of the DFU object. */
+    uint32_t                       remaining_size;       /**< Remaining size, in bytes, of the resource which
+                                                              is being downloaded. */
     /* TODO Move the block num to the block manager. */
     uint32_t                       block_num;       /**< Currently requested block number. */
     uint32_t      *                p_resource_size; /**< Downloaded resource size. */

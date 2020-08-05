@@ -49,11 +49,11 @@
 
 
 #define DFU_SETTINGS_VERSION_OFFSET             (offsetof(nrf_dfu_settings_t, settings_version))                         //<! Offset in the settings struct where the settings version is located.
-#define DFU_SETTINGS_INIT_COMMAND_OFFSET        (offsetof(nrf_dfu_settings_t, init_command))                             //<! Offset in the settings struct where the InitCommand is located.
+#define DFU_SETTINGS_SUIT_MANIFEST_OFFSET       (offsetof(nrf_dfu_settings_t, suit_manifest))                            //<! Offset in the settings struct where the SUIT maniest is located.
 #define DFU_SETTINGS_BOOT_VALIDATION_OFFSET     (offsetof(nrf_dfu_settings_t, boot_validation_crc))                      //<! Offset in the settings struct where the boot validation info is located.
 #define DFU_SETTINGS_BOOT_VALIDATION_SIZE       ((3 * sizeof(boot_validation_t)) + 4)
-#define DFU_SETTINGS_BOND_DATA_OFFSET_V1        (offsetof(nrf_dfu_settings_t, init_command) + INIT_COMMAND_MAX_SIZE_v1)  //<! Offset in the settings struct where the bond data was located in settings version 1.
-#define DFU_SETTINGS_ADV_NAME_OFFSET_V1         (offsetof(nrf_dfu_settings_t, init_command) + INIT_COMMAND_MAX_SIZE_v1 + NRF_DFU_PEER_DATA_LEN)  //<! Offset in the settings struct where the bond data was located in settings version 1.
+#define DFU_SETTINGS_BOND_DATA_OFFSET_V1        (offsetof(nrf_dfu_settings_t, suit_manifest) + INIT_COMMAND_MAX_SIZE_v1)  //<! Offset in the settings struct where the bond data was located in settings version 1.
+#define DFU_SETTINGS_ADV_NAME_OFFSET_V1         (offsetof(nrf_dfu_settings_t, suit_manifest) + INIT_COMMAND_MAX_SIZE_v1 + NRF_DFU_PEER_DATA_LEN)  //<! Offset in the settings struct where the bond data was located in settings version 1.
 
 #define NRF_LOG_MODULE_NAME nrf_dfu_settings
 #include "nrf_log.h"
@@ -159,8 +159,8 @@ static uint32_t settings_crc_get(nrf_dfu_settings_t const * p_settings)
 {
     ASSERT(offsetof(nrf_dfu_settings_t, crc) == 0);
 
-    // The crc is calculated from the s_dfu_settings struct, except the crc itself, the init command, bond data, and boot validation.
-    return crc32_compute((uint8_t*)(p_settings) + 4, DFU_SETTINGS_INIT_COMMAND_OFFSET - 4, NULL);
+    // The crc is calculated from the s_dfu_settings struct, except the crc itself, the SUIT manifest, bond data, and boot validation.
+    return crc32_compute((uint8_t*)(p_settings) + 4, DFU_SETTINGS_SUIT_MANIFEST_OFFSET - 4, NULL);
 }
 
 
@@ -221,7 +221,7 @@ static void settings_forbidden_parts_copy_from_backup(uint8_t * p_dst_addr)
     REGION_COPY_BY_MEMBER(boot_validation_crc, peer_data, p_dst_addr);
 #else
     REGION_COPY_BY_MEMBER(settings_version, enter_buttonless_dfu, p_dst_addr);
-    REGION_COPY_BY_MEMBER(init_command, peer_data, p_dst_addr);
+    REGION_COPY_BY_MEMBER(suit_manifest, peer_data, p_dst_addr);
 #endif
 }
 
@@ -427,7 +427,7 @@ __WEAK ret_code_t nrf_dfu_settings_additional_erase(void)
 
 void nrf_dfu_settings_progress_reset(void)
 {
-    memset(s_dfu_settings.init_command, 0xFF, INIT_COMMAND_MAX_SIZE); // Remove the last init command
+    memset(s_dfu_settings.suit_manifest, 0xFF, SUIT_MANIFEST_MAX_SIZE); // Remove the last SUIT manifest
     memset(&s_dfu_settings.progress, 0, sizeof(dfu_progress_t));
     s_dfu_settings.write_offset = 0;
 }

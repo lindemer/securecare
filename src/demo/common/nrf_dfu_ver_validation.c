@@ -180,7 +180,7 @@ nrf_dfu_result_t nrf_dfu_ver_validation_check(suit_context_t const * p_suit_ctx)
     if (!fw_type_ok(p_suit_ctx))
     {
         NRF_LOG_ERROR("Invalid firmware type.");
-        ret_val = EXT_ERR(NRF_DFU_EXT_ERROR_INIT_COMMAND_INVALID);
+        ret_val = EXT_ERR(NRF_DFU_EXT_ERROR_SUIT_MANIFEST_INVALID);
     }
     else if (!fw_hash_type_ok(p_suit_ctx))
     {
@@ -196,7 +196,7 @@ nrf_dfu_result_t nrf_dfu_ver_validation_check(suit_context_t const * p_suit_ctx)
         if (p_suit_ctx->has_hw_version == false)
         {
             NRF_LOG_ERROR("No HW version.");
-            ret_val = EXT_ERR(NRF_DFU_EXT_ERROR_INIT_COMMAND_INVALID);
+            ret_val = EXT_ERR(NRF_DFU_EXT_ERROR_SUIT_MANIFEST_INVALID);
         }
         else if (p_suit_ctx->hw_version != NRF_DFU_HW_VERSION)
         {
@@ -217,7 +217,7 @@ nrf_dfu_result_t nrf_dfu_ver_validation_check(suit_context_t const * p_suit_ctx)
             if (fw_version_required(p_suit_ctx->type))
             {
                 NRF_LOG_ERROR("FW version missing.");
-                ret_val = EXT_ERR(NRF_DFU_EXT_ERROR_INIT_COMMAND_INVALID);
+                ret_val = EXT_ERR(NRF_DFU_EXT_ERROR_SUIT_MANIFEST_INVALID);
             }
         }
     }
