@@ -159,7 +159,7 @@ static uint8_t * read_file_mem(const char * file, size_t * length)
         return NULL;
     }
 
-    buf = malloc(statbuf.st_size+1);
+    buf = malloc(statbuf.st_size);
     if (!buf) {
         fclose(f);
         return NULL;
@@ -170,8 +170,7 @@ static uint8_t * read_file_mem(const char * file, size_t * length)
         free(buf);
         return NULL;
     }
-    buf[statbuf.st_size] = '\000';
-    *length = (size_t)(statbuf.st_size + 1);
+    *length = (size_t)statbuf.st_size;
     fclose(f);
     return buf;
 }
@@ -229,6 +228,7 @@ static void hnd_get(coap_context_t *ctx UNUSED_PARAM,
         int block_size = 16 << block2.szx;
         int total_blocks = (flen / block_size) +
                 ((flen % block_size) == 0 ? 0 : 1);
+	if (block2.num == (total_blocks - 1)) block_size = flen % block_size;
         printf("block [%d/%d], size %d\n",
                      block2.num, total_blocks - 1, block_size);
     } else {
