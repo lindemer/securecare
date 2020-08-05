@@ -180,8 +180,8 @@ static uint8_t * read_file_mem(const char * file, size_t * length)
  * @section Index handler
  ******************************************************************************/
 
-#define INDEX "This is a test server made with libcoap (see https://libcoap.net)\n" \
-              "Copyright (C) 2010--2020 Olaf Bergmann <bergmann@tzi.org> and others\n\n"
+#define INDEX "This is a simple CoAP(s) file server made with libcoap.\n" \
+              "Copyright (c) 2020, RISE Research Institutes of Sweden AB\n\n"
 
 static void hnd_get_index(coap_context_t *ctx UNUSED_PARAM,
               struct coap_resource_t *resource,
@@ -230,7 +230,7 @@ static void hnd_get(coap_context_t *ctx UNUSED_PARAM,
         int total_blocks = (flen / block_size) +
                 ((flen % block_size) == 0 ? 0 : 1);
         printf("block [%d/%d], size %d\n",
-                     block2.num, total_blocks, block_size);
+                     block2.num, total_blocks - 1, block_size);
     } else {
         printf("no block option\n");
     }

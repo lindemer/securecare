@@ -471,7 +471,7 @@ bool fw_hash_ok(suit_context_t const * p_suit_ctx, uint32_t fw_start_addr, uint3
 {
     // FIXME: Only handles one component.
     ASSERT(p_suit_ctx != NULL);
-    return nrf_dfu_validation_hash_ok(p_suit_ctx->components[0].digest, fw_start_addr, fw_size, true);
+    return nrf_dfu_validation_hash_ok(p_suit_ctx->components[0].digest, fw_start_addr, fw_size, false);
 }
 
 static bool boot_validation_extract(boot_validation_t * p_boot_validation,
