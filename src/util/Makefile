@@ -29,7 +29,7 @@ INCLUDES += -I$(COSE)
 INCLUDES += -I.
 LIBS = -lmbedtls -lmbedcrypto -lcoap-2-openssl
 
-default: mkdir suit-cli file-server
+default: mkdir suit-cli demo-server
 
 mkdir:
 	@mkdir -p $(BUILD)
@@ -52,10 +52,10 @@ $(BUILD)/suit-cli.o: $(CURDIR)/suit-cli.c
 suit-cli: $(OBJS)
 	$(CC) -o $(BUILD)/$@ $^ $(CFLAGS) $(LIBS)
 
-$(BUILD)/file-server.o: $(CURDIR)/file-server.c
+$(BUILD)/demo-server.o: $(CURDIR)/demo-server.c
 	$(CC) -c -o $@ $< $(CLFAGS) $(INCLUDES)
 
-file-server: $(BUILD)/file-server.o $(BUILD)/encoder.o
+demo-server: $(BUILD)/demo-server.o $(BUILD)/encoder.o
 	$(CC) -o $(BUILD)/$@ $^ $(CFLAGS) $(LIBS)
 
 .PHONY: clean
