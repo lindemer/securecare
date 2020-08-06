@@ -1020,7 +1020,7 @@ void background_dfu_transport_send_request(background_dfu_context_t * p_dfu_ctx)
     uint16_t block_size = (p_dfu_ctx->dfu_state == BACKGROUND_DFU_GET_MANIFEST_METADATA) ?
                             0 : DEFAULT_BLOCK_SIZE;
 
-    char * query = "size"; 
+    char * query = "meta"; 
 
     coap_message_t * p_request = coap_dfu_create_request(&m_coap_dfu_ctx.remote,
                                                          m_coap_dfu_ctx.p_resource_path,

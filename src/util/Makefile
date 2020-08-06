@@ -52,10 +52,10 @@ $(BUILD)/suit-cli.o: $(CURDIR)/suit-cli.c
 suit-cli: $(OBJS)
 	$(CC) -o $(BUILD)/$@ $^ $(CFLAGS) $(LIBS)
 
-$(BUILD)/file-server.o: $(CURDIR)/file-server.c 
+$(BUILD)/file-server.o: $(CURDIR)/file-server.c
 	$(CC) -c -o $@ $< $(CLFAGS) $(INCLUDES)
 
-file-server: $(BUILD)/file-server.o
+file-server: $(BUILD)/file-server.o $(BUILD)/encoder.o
 	$(CC) -o $(BUILD)/$@ $^ $(CFLAGS) $(LIBS)
 
 .PHONY: clean

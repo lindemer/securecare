@@ -61,6 +61,7 @@
 #include "sha256.h"
 #include "background_dfu_transport.h"
 #include "background_dfu_operation.h"
+#include "nanocbor/nanocbor.h"
 
 #define NRF_LOG_MODULE_NAME background_dfu
 
@@ -162,20 +163,20 @@ bool background_dfu_validate_manifest_metadata(background_dfu_context_t * p_dfu_
         return false;
     }
 
-    int parsed = sscanf((const char *)p_payload, "%ld,%ld", &p_dfu_ctx->suit_manifest_size, 
-		                                            &p_dfu_ctx->suit_manifest_crc);
-    if (parsed != 2)
-    {
-        NRF_LOG_ERROR("Failed to decode SUIT manifest.");
-        return false;
-    }
-    else
-    {
-        NRF_LOG_INFO("size = %ld, crc32 = %ld", p_dfu_ctx->suit_manifest_size,
-                                                p_dfu_ctx->suit_manifest_crc);
-        return true;
-    }
-	
+    nanocbor_value_t nc, arr;
+    nanocbor_decoder_init(&nc, p_payload, payload_len);
+
+    if (nanocbor_enter_array(&nc, &arr) < 0) goto metadata_fail;
+    if (nanocbor_get_uint32(&arr, &p_dfu_ctx->suit_manifest_size) < 0) goto metadata_fail;
+    if (nanocbor_get_uint32(&arr, &p_dfu_ctx->suit_manifest_crc) < 0) goto metadata_fail;
+
+    NRF_LOG_INFO("size = %ld, crc32 = %ld", p_dfu_ctx->suit_manifest_size,
+                                            p_dfu_ctx->suit_manifest_crc);
+    return true;
+
+metadata_fail:
+    NRF_LOG_ERROR("Failed to decode SUIT manifest metadata.");
+    return false;
 }
 
 /*

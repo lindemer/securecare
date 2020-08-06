@@ -73,6 +73,8 @@ static char* strndup(const char* s1, size_t n)
 
 #include <coap2/coap.h>
 
+#include "nanocbor/nanocbor.h"
+
 // URI queries allowed.
 static char * query_crc32 = "crc32";
 static char * query_size  = "size";
@@ -274,26 +276,30 @@ static void hnd_get(coap_context_t *ctx UNUSED_PARAM,
 		
             uint32_t crc;
             crc32(buf, flen, &crc);
+	    nanocbor_encoder_t nc;
+            nanocbor_encoder_init(&nc, reply, len_reply);
 
             // [meta] Return the size and the CRC32 of the requested resource.
-	    if (!memcmp(option.value, query_meta, option.length)) {
+            if (!memcmp(option.value, query_meta, option.length)) {
                 printf(" - resource metadata queried");
-                sprintf((char *)reply, "%ld,%d", flen, crc);
-                len_reply = strlen(reply);
+                nanocbor_fmt_array(&nc, 2);
+                nanocbor_fmt_int(&nc, flen);
+                nanocbor_fmt_int(&nc, crc);
+                len_reply = nanocbor_encoded_len(&nc);
 	    }
 
             // [crc] Return the CRC32 of the requested resource.
 	    else if (!memcmp(option.value, query_crc32, option.length)) {
                 printf(" - resource CRC32 queried");
-                sprintf((char *)reply, "%d", crc);
-                len_reply = strlen(reply);
+                nanocbor_fmt_int(&nc, crc);
+                len_reply = nanocbor_encoded_len(&nc);
 	    }
 
             // [size] Return the size of the requested resource.
             else if (!memcmp(option.value, query_size, option.length)) {
                 printf(" - resource size queried");
-                sprintf((char *)reply, "%ld", flen);
-		len_reply = strlen(reply);
+                nanocbor_fmt_int(&nc, flen);
+                len_reply = nanocbor_encoded_len(&nc);
             }
 
         }
