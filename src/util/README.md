@@ -1,7 +1,7 @@
 ## SUIT Command Line Interface
 The `suit-cli` tool is catered specifically to a secure download/install/reboot use case. It does not generate any other instruction sequences at this time. To generate a new SUIT manifest:
 ```
-./build/suit-cli -k keys/priv.pem -n 0 -u coaps://[fd00::1]/firmware.hex -i firmware.hex > manifest.cbor
+./build/suit-cli -k keys/priv.pem -n 0 -u coaps://[fd00::1]/app.bin -i app.bin > manifest.cbor
 ```
 
 To verify the contents of a SUIT manifest:
@@ -25,5 +25,11 @@ Component details:
 (0) Image size		1994 [B]
 ```
 
-## CoAPs File Server
-This directory also contains a simple CoAP(s) simple, which hosts all files (non-recursively) in a specified directory as CoAP GET resources. Use the `-d` flag to specify a directory. Refer to the help text for a complete list of options, including certificate and key configuration.
+## CoAPs SUIT Demo Server
+The `demo-server` tool can be used to test the SUIT DFU protocol. This is, in essence, a file server, which will host all files in the current directory as CoAP GET resources. (Another directory can also be specified with the `-d` flag.) The SUIT DFU protocol in this demonstration consists of three steps:
+
+  1. The client requests the size and CRC32 value of the SUIT manifest on the demo server using the `?meta` URI query option.
+  2. The client downloads the manifest using the `block2` option. (The data retrieved in step 1 are used to confirm that the download is complete.
+  3. The client verifies the SUIT manifest and parses the size and remote URI of the specified firmware image. These values are used to initiate the firmware download using another `block2` request.
+  
+The simplest way to run this example is to generate a SUIT manifest with the `suit-cli` tool which specifies the demo server's IPv6 address as the remote host of the firmware image. This image can then be hosted as a `GET` resource on the same server bu placing it in the designated directory.
