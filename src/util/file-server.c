@@ -283,22 +283,22 @@ static void hnd_get(coap_context_t *ctx UNUSED_PARAM,
             if (!memcmp(option.value, query_meta, option.length)) {
                 printf(" - resource metadata queried");
                 nanocbor_fmt_array(&nc, 2);
-                nanocbor_fmt_int(&nc, flen);
-                nanocbor_fmt_int(&nc, crc);
+                nanocbor_fmt_uint(&nc, flen);
+                nanocbor_fmt_uint(&nc, crc);
                 len_reply = nanocbor_encoded_len(&nc);
 	    }
 
             // [crc] Return the CRC32 of the requested resource.
 	    else if (!memcmp(option.value, query_crc32, option.length)) {
                 printf(" - resource CRC32 queried");
-                nanocbor_fmt_int(&nc, crc);
+                nanocbor_fmt_uint(&nc, crc);
                 len_reply = nanocbor_encoded_len(&nc);
 	    }
 
             // [size] Return the size of the requested resource.
             else if (!memcmp(option.value, query_size, option.length)) {
                 printf(" - resource size queried");
-                nanocbor_fmt_int(&nc, flen);
+                nanocbor_fmt_uint(&nc, flen);
                 len_reply = nanocbor_encoded_len(&nc);
             }
 
