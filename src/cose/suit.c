@@ -374,7 +374,7 @@ int suit_parse(suit_context_t * ctx, const uint8_t * man, size_t len_man)
     return SUIT_ERROR_NONE;
 }
 
-bool suit_match_digest(suit_context_t * ctx, size_t idx, 
+bool suit_match_digest(const suit_context_t * ctx, size_t idx, 
         const uint8_t * digest, size_t len_digest)
 {
     if (ctx->components[idx].digest_alg != 0 
@@ -385,7 +385,7 @@ bool suit_match_digest(suit_context_t * ctx, size_t idx,
     return false;
 }
 
-bool suit_match_class_id(suit_context_t * ctx, size_t idx,
+bool suit_match_class_id(const suit_context_t * ctx, size_t idx,
         const uint8_t * class_id, size_t len_class_id)
 {
     if (ctx->components[idx].class_id != NULL)
@@ -395,7 +395,7 @@ bool suit_match_class_id(suit_context_t * ctx, size_t idx,
     return false;
 }
 
-bool suit_match_vendor_id(suit_context_t * ctx, size_t idx,
+bool suit_match_vendor_id(const suit_context_t * ctx, size_t idx,
         const uint8_t * vendor_id, size_t len_vendor_id)
 {
     if (ctx->components[idx].vendor_id != NULL)

@@ -319,45 +319,6 @@ static void handle_manifest_metadata_response(uint32_t status, void * p_arg, coa
                                                  p_response->p_payload,
                                                  p_response->payload_len);
     }
-
-    /*
-    if (background_dfu_validate_manifest(&m_dfu_ctx,
-                            p_response->p_payload, p_response->payload_len))
-    {
-        bool m_use_dtls;
-        char * m_urn;
-        size_t m_urn_len;
-
-        if (NRF_SUCCESS == addr_parse_uri((uint8_t *)&m_coap_dfu_ctx.remote.addr,
-                                          &m_coap_dfu_ctx.remote.port_number,
-                                          &m_urn, &m_urn_len,
-                                          &m_use_dtls,
-                                          m_suit_ctx.components[0].uri,
-                                          (uint8_t)m_suit_ctx.components[0].len_uri))
-        {
-            // Copy resource name into NULL-terminated string.
-            image_resource_name[m_urn_len] = 0;
-            memcpy(image_resource_name, m_urn, m_urn_len);
-
-            NRF_LOG_INFO("Remote firmware resource at URN: %s", image_resource_name);
-            NRF_LOG_HEXDUMP_INFO(&m_coap_dfu_ctx.remote.addr, 16);
-
-            if (!m_use_dtls) {
-                background_dfu_process_manifest(&m_dfu_ctx,
-                                                p_response->p_payload,
-                                                p_response->payload_len);
-            }
-            else
-            {
-                NRF_LOG_ERROR("CoAPs support not yet implemented.");
-            }
-        }
-        else
-        {
-            NRF_LOG_ERROR("Failed to extract remote URI from SUIT manifest");
-        }
-    }
-    */
 }
 
 /**@brief CoAP response handler for request sent to a firmware image resource.

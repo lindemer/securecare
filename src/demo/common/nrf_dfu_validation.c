@@ -200,12 +200,10 @@ nrf_dfu_result_t nrf_dfu_validation_manifest_append(uint8_t const * p_data, uint
     {
         // Copy the received data to RAM, update offset and calculate CRC.
         memcpy(&s_dfu_settings.suit_manifest[s_dfu_settings.progress.manifest_offset],
-                p_data,
-                length);
+                p_data, length);
 
         s_dfu_settings.progress.manifest_offset += length;
-        s_dfu_settings.progress.manifest_crc = crc32_compute(p_data,
-                                                            length,
+        s_dfu_settings.progress.manifest_crc = crc32_compute(p_data, length,
                                                             &s_dfu_settings.progress.manifest_crc);
     }
     return ret_val;
@@ -479,7 +477,6 @@ bool fw_hash_ok(suit_context_t const * p_suit_ctx, uint32_t fw_start_addr, uint3
 }
 
 static bool boot_validation_extract(boot_validation_t * p_boot_validation,
-                                    suit_context_t const * p_suit_ctx,
                                     uint32_t index,
                                     uint32_t start_addr,
                                     uint32_t data_len,
@@ -526,7 +523,7 @@ static bool postvalidate_app(suit_context_t const * p_suit_ctx, uint32_t src_add
 {
     boot_validation_t boot_validation;
 
-    if (!boot_validation_extract(&boot_validation, p_suit_ctx, 0, src_addr, data_len, VALIDATE_SHA256))
+    if (!boot_validation_extract(&boot_validation, 0, src_addr, data_len, VALIDATE_SHA256))
     {
         return false;
     }
