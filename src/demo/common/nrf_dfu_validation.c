@@ -65,6 +65,8 @@ NRF_LOG_MODULE_REGISTER();
  */
 static bool               m_valid_manifest_present = false;
 
+static suit_context_t     m_suit_ctx;
+
 __ALIGN(4) extern const uint8_t pk[64];
 
 /** @brief Value length structure holding the public key.
@@ -84,8 +86,6 @@ static bool                                         m_crypto_initialized = false
 /** @brief Flag used by parser code to indicate that the manifest has been found to be invalid.
  */
 static bool                                         m_manifest_valid = false;
-
-suit_context_t m_suit_ctx;
 
 static void crypto_init(void)
 {
@@ -114,23 +114,16 @@ static void crypto_init(void)
     m_crypto_initialized = true;
 }
 
-bool nrf_dfu_manifest_decode(const uint8_t * env, uint32_t len)
+bool nrf_dfu_validation_manifest_decode()
 {
     crypto_init();
+
+    const uint8_t * env = s_dfu_settings.suit_manifest;
+    uint32_t len = s_dfu_settings.progress.manifest_size;
 
     uint32_t err;
     uint8_t * man;
     size_t len_man;
-
-    // If this function is called with an argument, it performs an initial check on a manifest
-    // received over-the-wire. On successful decoding, it will be saved to persistent storage. 
-    bool is_prevalidation = (env != NULL);
-
-    if (env == NULL)
-    {
-        env = s_dfu_settings.suit_manifest;
-        len = s_dfu_settings.progress.manifest_size;
-    }
 
     // Verify manifest signature
     if ((err = suit_raw_unwrap(&m_public_key, env, len, (const uint8_t **)&man, &len_man)))
@@ -148,22 +141,7 @@ bool nrf_dfu_manifest_decode(const uint8_t * env, uint32_t len)
 	}
     }
 
-    if (is_prevalidation)
-    {
-        // Store manifest in persistent memory.
-        if (nrf_dfu_validation_manifest_create(len) != NRF_DFU_RES_CODE_SUCCESS)
-        {
-            NRF_LOG_ERROR("Failed to create manifest.");
-            return false;
-        }
-
-        if (nrf_dfu_validation_manifest_append(env, len) != NRF_DFU_RES_CODE_SUCCESS)
-        {
-            NRF_LOG_ERROR("Failed to append manifest.");
-            return false;
-        }
-        m_manifest_valid = true;
-    }
+    m_manifest_valid = true;
 
     return true;
 }
@@ -172,7 +150,7 @@ void nrf_dfu_validation_init(void)
 {
     // If the manifest is stored to flash, it was already validated.
     if ((s_dfu_settings.progress.manifest_size != 0) &&
-         nrf_dfu_manifest_decode(NULL, 0))
+         nrf_dfu_validation_manifest_decode())
     {
         NRF_LOG_INFO("Valid manifest found in flash.")
         m_valid_manifest_present = true;
@@ -183,7 +161,6 @@ void nrf_dfu_validation_init(void)
         m_valid_manifest_present = false;
     }
 }
-
 
 nrf_dfu_result_t nrf_dfu_validation_manifest_create(uint32_t size)
 {
@@ -235,7 +212,7 @@ nrf_dfu_result_t nrf_dfu_validation_manifest_append(uint8_t const * p_data, uint
 }
 
 
-void nrf_dfu_validation_init_cmd_status_get(uint32_t * p_offset,
+void nrf_dfu_validation_suit_manifest_status_get(uint32_t * p_offset,
                                             uint32_t * p_crc,
                                             uint32_t * p_max_size)
 {
@@ -245,9 +222,36 @@ void nrf_dfu_validation_init_cmd_status_get(uint32_t * p_offset,
 }
 
 
-bool nrf_dfu_validation_init_cmd_present(void)
+bool nrf_dfu_validation_suit_manifest_present(void)
 {
     return m_valid_manifest_present;
+}
+
+nrf_dfu_result_t nrf_dfu_validation_get_component_uri(int comp, char * uri)
+{
+    if (comp >= m_suit_ctx.component_count)
+    {
+        NRF_LOG_ERROR("Component identifier exceeds manifest content.");
+        return NRF_DFU_RES_CODE_INVALID_OBJECT;
+    } 
+
+    memcpy(uri, m_suit_ctx.components[comp].uri, m_suit_ctx.components[comp].len_uri);
+    uri[m_suit_ctx.components[comp].len_uri] = 0; // NULL-termination
+
+    return NRF_SUCCESS;
+}
+
+nrf_dfu_result_t nrf_dfu_validation_get_component_size(int comp, uint32_t * size)
+{
+    if (comp >= m_suit_ctx.component_count)
+    {
+        NRF_LOG_ERROR("Component identifier exceeds manifest content.");
+        return NRF_DFU_RES_CODE_INVALID_OBJECT;
+    }
+    
+    *size = m_suit_ctx.components[comp].size;
+
+    return NRF_SUCCESS;
 }
 
 // Function to calculate the total size of the firmware(s) in the update.
@@ -355,8 +359,8 @@ nrf_dfu_result_t nrf_dfu_validation_prevalidate(void)
 }
 
 
-nrf_dfu_result_t nrf_dfu_validation_init_cmd_execute(uint32_t * p_dst_data_addr,
-                                                     uint32_t * p_data_len)
+nrf_dfu_result_t nrf_dfu_validation_suit_manifest_execute(uint32_t * p_dst_data_addr,
+                                                          uint32_t * p_data_len)
 {
     nrf_dfu_result_t ret_val = NRF_DFU_RES_CODE_SUCCESS;
 
@@ -371,7 +375,7 @@ nrf_dfu_result_t nrf_dfu_validation_init_cmd_execute(uint32_t * p_dst_data_addr,
         *p_dst_data_addr = nrf_dfu_bank1_start_addr();
         ret_val          = update_data_size_get(&m_suit_ctx, p_data_len);
     }
-    else if (nrf_dfu_manifest_decode(NULL, 0))
+    else if (nrf_dfu_validation_manifest_decode())
     {
         // Will only get here if SUIT manifest was received since last reset.
         // An SUIT manifest should not be written to flash until after it's been checked here.

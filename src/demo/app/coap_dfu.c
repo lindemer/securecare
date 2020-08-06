@@ -65,6 +65,7 @@
 #include "nrf_dfu_settings.h"
 #include "nrf_dfu_req_handler.h"
 #include "nrf_dfu_utils.h"
+#include "nrf_dfu_validation.h"
 #include "nordic_common.h"
 #include "addr_parse.h"
 #include "iot_errors.h"
@@ -73,13 +74,10 @@
 #include "coap_option.h"
 #include "background_dfu_block.h"
 #include "openthread/random_noncrypto.h"
-#include "suit.h"
 
 // Remote SUIT resource URNs. 
 static char * manifest_resource_name = "manifest.cbor";
 static char image_resource_name[256];
-
-extern suit_context_t m_suit_ctx;
 
 #define NRF_LOG_LEVEL 4
 #define NRF_LOG_MODULE_NAME COAP_DFU
@@ -106,9 +104,6 @@ NRF_LOG_MODULE_REGISTER();
 
 #define DIAG_RESOURCE_NAME      "diagnostic"
 #define RESET_RESOURCE_NAME     "reset"
-
-#define INIT_RESOURCE_NAME      "init"
-#define BITMAP_RESOURCE_NAME    "bitmap"
 
 // Maximum number of events in the scheduler queue.
 #define SCHED_QUEUE_SIZE 32
@@ -320,6 +315,9 @@ static void handle_manifest_metadata_response(uint32_t status, void * p_arg, coa
                             p_response->p_payload, p_response->payload_len))
     {
         NRF_LOG_INFO("Manifest metadata received.");
+	background_dfu_process_manifest_metadata(&m_dfu_ctx,
+                                                 p_response->p_payload,
+                                                 p_response->payload_len);
     }
 
     /*
@@ -415,6 +413,48 @@ static void handle_block_response(uint32_t status, void * p_arg, coap_message_t 
 /***************************************************************************************************
  * @section Message helpers
  **************************************************************************************************/
+
+/** @brief Extract and parse a URI from the current SUIT manifest.
+ *
+ *  @return NRF_SUCCESS if succesful, error code otherwise.
+ */
+static uint32_t parse_manifest_uri(background_dfu_context_t * p_dfu_ctx, char * resource_name)
+{
+        char uri[256];
+        uint32_t err;
+
+        if ((err = nrf_dfu_validation_get_component_uri(0, uri)))
+        {
+            return err;
+        }
+
+        bool use_dtls;
+        char * urn;
+        size_t urn_len;
+
+        if ((err = addr_parse_uri((uint8_t *)&m_coap_dfu_ctx.remote.addr,
+                                  &m_coap_dfu_ctx.remote.port_number,
+                                  &urn, &urn_len, &use_dtls,
+                                  uri, (uint8_t)(strlen(uri)))))
+        {
+            return err;
+        }
+        else
+        {
+            // Copy resource name into NULL-terminated string.
+            resource_name[urn_len] = 0;
+            memcpy(resource_name, urn, urn_len);
+
+            NRF_LOG_INFO("Remote firmware resource at URN: %s", resource_name);
+            NRF_LOG_HEXDUMP_INFO(&m_coap_dfu_ctx.remote.addr, 16);
+
+            if (use_dtls) {
+                NRF_LOG_WARNING("CoAPs support not yet implemented.");
+            }
+        }
+
+        return NRF_SUCCESS;
+}
 
 /** @brief Set CoAP URI option on a given message.
  *
@@ -588,13 +628,12 @@ static coap_message_t * diagnostic_response_create(coap_msg_type_t         type,
     // Create a copy and invert endianess.
     background_dfu_diagnostic_t diag = m_dfu_ctx.dfu_diag;
 
-    diag.state                       = m_dfu_ctx.dfu_state;
-    diag.build_id                    = uint32_big_decode((const uint8_t *)&diag.build_id);
-    diag.image_blocks_requested      = uint16_big_decode((const uint8_t *)&diag.image_blocks_requested);
-    diag.init_blocks_requested       = uint16_big_decode((const uint8_t *)&diag.init_blocks_requested);
-    diag.total_image_blocks_received = uint16_big_decode((const uint8_t *)&diag.total_image_blocks_received);
-    diag.total_init_blocks_received  = uint16_big_decode((const uint8_t *)&diag.total_init_blocks_received);
-    diag.triggers_received           = uint16_big_decode((const uint8_t *)&diag.triggers_received);
+    diag.state                           = m_dfu_ctx.dfu_state;
+    diag.build_id                        = uint32_big_decode((const uint8_t *)&diag.build_id);
+    diag.image_blocks_requested          = uint16_big_decode((const uint8_t *)&diag.image_blocks_requested);
+    diag.manifest_blocks_requested       = uint16_big_decode((const uint8_t *)&diag.manifest_blocks_requested);
+    diag.total_image_blocks_received     = uint16_big_decode((const uint8_t *)&diag.total_image_blocks_received);
+    diag.total_manifest_blocks_received  = uint16_big_decode((const uint8_t *)&diag.total_manifest_blocks_received);
 
 
     return message_create(&message_conf,
@@ -958,13 +997,13 @@ void background_dfu_transport_block_request_send(background_dfu_context_t       
 
     if (m_dfu_ctx.dfu_state == BACKGROUND_DFU_GET_MANIFEST_BLOCKWISE)
     {
-        m_dfu_ctx.dfu_diag.init_blocks_requested += blocks_count(p_req_bmp);
-        p_resource_name = BITMAP_RESOURCE_NAME "/" INIT_RESOURCE_NAME;
+        m_dfu_ctx.dfu_diag.manifest_blocks_requested += blocks_count(p_req_bmp);
+        p_resource_name = manifest_resource_name;
     }
     else if (m_dfu_ctx.dfu_state == BACKGROUND_DFU_GET_FIRMWARE_BLOCKWISE)
     {
-        p_resource_name = (char *)image_resource_name;
         m_dfu_ctx.dfu_diag.image_blocks_requested += blocks_count(p_req_bmp);
+        p_resource_name = (char *)image_resource_name;
     }
 
     coap_message_t * p_message =  message_create(&message_conf,
@@ -992,15 +1031,13 @@ void background_dfu_transport_state_update(background_dfu_context_t * p_dfu_ctx)
             m_coap_dfu_ctx.handler         = handle_manifest_metadata_response;
             break;
 
-        // FIXME: This state is effectively skipped because the previous state downloads the
-        // manifest in a one-shot GET request. In order to download the manifest with blockwise
-        // transfer, its size must be known a priori.
         case BACKGROUND_DFU_GET_MANIFEST_BLOCKWISE:
-            m_coap_dfu_ctx.p_resource_path = INIT_RESOURCE_NAME;
+            m_coap_dfu_ctx.p_resource_path = manifest_resource_name;
             m_coap_dfu_ctx.handler         = handle_block_response;
             break;
 
         case BACKGROUND_DFU_GET_FIRMWARE_BLOCKWISE:
+            parse_manifest_uri(p_dfu_ctx, image_resource_name);
             m_coap_dfu_ctx.p_resource_path = image_resource_name;
             m_coap_dfu_ctx.handler         = handle_block_response;
             break;
@@ -1017,10 +1054,14 @@ void background_dfu_transport_state_update(background_dfu_context_t * p_dfu_ctx)
 
 void background_dfu_transport_send_request(background_dfu_context_t * p_dfu_ctx)
 {
+    // Manifest metadata requests are sent with a URI query "meta" and no block2 option. All others
+    // use block2 without a query.
+
     uint16_t block_size = (p_dfu_ctx->dfu_state == BACKGROUND_DFU_GET_MANIFEST_METADATA) ?
                             0 : DEFAULT_BLOCK_SIZE;
 
-    char * query = "meta"; 
+    char * query = (p_dfu_ctx->dfu_state == BACKGROUND_DFU_GET_MANIFEST_METADATA) ?
+                            "meta" : NULL;
 
     coap_message_t * p_request = coap_dfu_create_request(&m_coap_dfu_ctx.remote,
                                                          m_coap_dfu_ctx.p_resource_path,

@@ -61,13 +61,10 @@ void nrf_dfu_validation_init(void);
 
 /** @brief Function for decoding byte stream into variable.
  *
- *  @param[in]  env Pointer to wrapped SUIT manifest, or NULL to use stored manifest.
- *  @param[in]  len Length of wrapped SUIT manifest.
- *
  *  @retval true   If the manifest was successfully decoded.
  *  @retval false  If there was no stored manifest, or the decoding failed.
  */
-bool nrf_dfu_manifest_decode(const uint8_t * env, uint32_t len);
+bool nrf_dfu_validation_manifest_decode();
 
 /**
  * @brief Function called on reception of manifest creation request.
@@ -95,9 +92,9 @@ nrf_dfu_result_t nrf_dfu_validation_manifest_append(uint8_t const * p_data, uint
  * @param[out] p_crc      Current CRC.
  * @param[out] p_max_size Maximum size of SUIT manifest.
  */
-void nrf_dfu_validation_init_cmd_status_get(uint32_t * p_offset,
-                                            uint32_t * p_crc,
-                                            uint32_t * p_max_size);
+void nrf_dfu_validation_suit_manifest_status_get(uint32_t * p_offset,
+                                                 uint32_t * p_crc,
+                                                 uint32_t * p_max_size);
 
 /**
  * @brief Function for inquiring whether a valid SUIT manifest has been received.
@@ -105,14 +102,30 @@ void nrf_dfu_validation_init_cmd_status_get(uint32_t * p_offset,
  * @return true  if there is a valid SUIT manifest. This can be true at boot time
  *               if the device was reset during a DFU operation.
  */
-bool nrf_dfu_validation_init_cmd_present(void);
+bool nrf_dfu_validation_suit_manifest_present(void);
+
+/**
+ * @brief Function for retrieving the URI of a component in the SUIT manifest.
+ *
+ * @param[in] comp   The manifest component identifier.
+ * @param[out] uri   The component URI string.
+ */
+nrf_dfu_result_t nrf_dfu_validation_get_component_uri(int comp, char * uri);
+
+/**
+ * @brief Function for retrieving the size of a component in the SUIT manifest.
+ *
+ * @param[in] comp   The manifest component identifier.
+ * @param[out] size  The component size.
+ */
+nrf_dfu_result_t nrf_dfu_validation_get_component_size(int comp, uint32_t * size);
 
 /**
  * @brief Function for validating SUIT manifest and retrieving the address and length of the firmware.
  *
  * If SUIT manifest is successfully validated Bank 1 details are written to out parameters.
  *
- * Until @ref nrf_dfu_validation_init_cmd_create is called, this function can be called
+ * Until @ref nrf_dfu_validation_suit_manifest_create is called, this function can be called
  * again after the first time without side effects to retrieve address and length.
  *
  * @param[out] p_dst_data_addr  Start address of received data, if validation is successful.
@@ -120,8 +133,8 @@ bool nrf_dfu_validation_init_cmd_present(void);
  *
  * @return       Operation result. See @ref nrf_dfu_result_t
  */
-nrf_dfu_result_t nrf_dfu_validation_init_cmd_execute(uint32_t * p_dst_data_addr,
-                                                     uint32_t * p_data_len);
+nrf_dfu_result_t nrf_dfu_validation_suit_manifest_execute(uint32_t * p_dst_data_addr,
+                                                          uint32_t * p_data_len);
 
 /**
  * @brief Function for validating the SUIT manifest.

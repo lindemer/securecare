@@ -88,27 +88,16 @@ typedef enum
     BACKGROUND_DFU_MODE_MULTICAST
 } background_dfu_mode_t;
 
-/** @brief Trigger packet structure. */
-typedef PACKED_STRUCT 
-{
-    uint8_t  flags;         /**< Trigger message flags. Bits 7:4 (oldest) - trigger version, bit 3 - DFU mode, bits 2:0 - reserved. */
-    uint32_t init_length;
-    uint32_t init_crc;
-    uint32_t image_length;
-    uint32_t image_crc;
-} background_dfu_trigger_t;
-
 /**@brief Structure with DFU diagnostic information. */
 typedef PACKED_STRUCT background_dfu_diagnostic
 {
-    uint32_t build_id;                      /**< Build identifier, based on compilation time. */
-    uint8_t  state;                         /**< Current DFU state. */
-    uint8_t  prev_state;                    /**< Previous DFU state. */
-    uint16_t init_blocks_requested;         /**< Number of requested missing init blocks. */
-    uint16_t image_blocks_requested;        /**< Number of requested missing image blocks. */
-    uint16_t triggers_received;             /**< Number of triggers received. */
-    uint16_t total_init_blocks_received;    /**< Total number of init blocks received, including retransmitted ones. */
-    uint16_t total_image_blocks_received;   /**< Total number of image blocks received, including retransmitted ones. */
+    uint32_t build_id;                       /**< Build identifier, based on compilation time. */
+    uint8_t  state;                          /**< Current DFU state. */
+    uint8_t  prev_state;                     /**< Previous DFU state. */
+    uint16_t manifest_blocks_requested;      /**< Number of requested missing SUIT manifest blocks. */
+    uint16_t image_blocks_requested;         /**< Number of requested missing image blocks. */
+    uint16_t total_manifest_blocks_received; /**< Total number of SUIT manifest blocks received, including retransmitted ones. */
+    uint16_t total_image_blocks_received;    /**< Total number of image blocks received, including retransmitted ones. */
 } background_dfu_diagnostic_t;
 
 /** @brief DFU client state. */
@@ -123,7 +112,6 @@ typedef struct dfu_context
     uint32_t                       suit_manifest_size;   /**< Current SUIT manifest size. */
     uint32_t                       suit_manifest_crc;    /**< Current SUIT manifest checksum. */
     uint32_t                       firmware_size;        /**< Current firmware command size. */
-    uint32_t                       firmware_crc;         /**< Current firmware command checksum. */
     uint32_t                       max_obj_size;         /**< Maximum size of the DFU object. */
     uint32_t                       remaining_size;       /**< Remaining size, in bytes, of the resource which
                                                               is being downloaded. */

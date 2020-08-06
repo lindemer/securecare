@@ -110,7 +110,7 @@ typedef struct
 typedef struct
 {
     uint32_t                      image_size;                /**< Size of currently stored image. */
-    uint32_t                      image_type;                /**< Image type (init command or firmware). */
+    uint32_t                      image_type;                /**< Image type (SUIT manifest or firmware). */
     int32_t                       last_block_stored;         /**< Number of the last block written in the flash. */
     int32_t                       current_block;             /**< Last received (or expected) block. */
     uint8_t                       data[BLOCK_BUFFER_SIZE];   /**< Block buffer. */

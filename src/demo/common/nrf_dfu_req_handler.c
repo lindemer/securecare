@@ -300,7 +300,7 @@ static void on_cmd_obj_execute_request(nrf_dfu_request_t const * p_req, nrf_dfu_
     NRF_LOG_DEBUG("Handle NRF_DFU_OP_OBJECT_EXECUTE (command)");
 
     nrf_dfu_result_t ret_val;
-    ret_val = nrf_dfu_validation_init_cmd_execute(&m_firmware_start_addr, &m_firmware_size_req);
+    ret_val = nrf_dfu_validation_suit_manifest_execute(&m_firmware_start_addr, &m_firmware_size_req);
     p_res->result = ext_err_code_handle(ret_val);
 
     if (p_res->result == NRF_DFU_RES_CODE_SUCCESS)
@@ -396,7 +396,7 @@ static void on_data_obj_create_request(nrf_dfu_request_t * p_req, nrf_dfu_respon
 {
     NRF_LOG_DEBUG("Handle NRF_DFU_OP_OBJECT_CREATE (data)");
 
-    if (!nrf_dfu_validation_init_cmd_present())
+    if (!nrf_dfu_validation_suit_manifest_present())
     {
         /* Can't accept data because DFU isn't initialized by SUIT manifest. */
         NRF_LOG_ERROR("Cannot create data object without valid SUIT manifest");
@@ -465,7 +465,7 @@ static void on_data_obj_write_request(nrf_dfu_request_t * p_req, nrf_dfu_respons
 {
     NRF_LOG_DEBUG("Handle NRF_DFU_OP_OBJECT_WRITE (data)");
 
-    if (!nrf_dfu_validation_init_cmd_present())
+    if (!nrf_dfu_validation_suit_manifest_present())
     {
         /* Can't accept data because DFU isn't initialized by SUIT manifest. */
         p_res->result = NRF_DFU_RES_CODE_OPERATION_NOT_PERMITTED;
@@ -841,10 +841,10 @@ ret_code_t nrf_dfu_req_handler_init(nrf_dfu_observer_t observer)
     }
 
     nrf_dfu_validation_init();
-    if (nrf_dfu_validation_init_cmd_present())
+    if (nrf_dfu_validation_suit_manifest_present())
     {
         /* Execute a previously received init packed. Subsequent executes will have no effect. */
-        result = nrf_dfu_validation_init_cmd_execute(&m_firmware_start_addr, &m_firmware_size_req);
+        result = nrf_dfu_validation_suit_manifest_execute(&m_firmware_start_addr, &m_firmware_size_req);
         if (result != NRF_DFU_RES_CODE_SUCCESS)
         {
             /* Init packet in flash is not valid! */
