@@ -149,6 +149,36 @@ static __INLINE void restart_block_timeout_timer(background_dfu_context_t * p_df
 
 // TODO: Check if this has security implications. This should probably be declared static so
 // application code cannot modify it directly.
+
+bool background_dfu_validate_manifest_metadata(background_dfu_context_t * p_dfu_ctx,
+                                               const uint8_t            * p_payload,
+                                               uint32_t                   payload_len)
+{
+    if ((p_dfu_ctx->dfu_state != BACKGROUND_DFU_IDLE) &&
+        (p_dfu_ctx->dfu_state != BACKGROUND_DFU_GET_MANIFEST_METADATA))
+    {
+        NRF_LOG_ERROR("Validate manifest metadata: DFU already in progress (s:%s).",
+                (uint32_t)background_dfu_state_to_string(p_dfu_ctx->dfu_state));
+        return false;
+    }
+
+    int parsed = sscanf((const char *)p_payload, "%ld,%ld", &p_dfu_ctx->suit_manifest_size, 
+		                                            &p_dfu_ctx->suit_manifest_crc);
+    if (parsed != 2)
+    {
+        NRF_LOG_ERROR("Failed to decode SUIT manifest.");
+        return false;
+    }
+    else
+    {
+        NRF_LOG_INFO("size = %ld, crc32 = %ld", p_dfu_ctx->suit_manifest_size,
+                                                p_dfu_ctx->suit_manifest_crc);
+        return true;
+    }
+	
+}
+
+/*
 extern suit_context_t m_suit_ctx;
 
 bool background_dfu_validate_manifest(background_dfu_context_t * p_dfu_ctx,
@@ -156,7 +186,7 @@ bool background_dfu_validate_manifest(background_dfu_context_t * p_dfu_ctx,
                                       uint32_t                   payload_len)
 {
     if ((p_dfu_ctx->dfu_state != BACKGROUND_DFU_IDLE) &&
-        (p_dfu_ctx->dfu_state != BACKGROUND_DFU_GET_MANIFEST))
+        (p_dfu_ctx->dfu_state != BACKGROUND_DFU_GET_MANIFEST_METADATA))
     {
         NRF_LOG_ERROR("Validate manifest: DFU already in progress (s:%s).",
                 (uint32_t)background_dfu_state_to_string(p_dfu_ctx->dfu_state));
@@ -184,7 +214,7 @@ bool background_dfu_process_manifest(background_dfu_context_t * p_dfu_ctx,
                                      const uint8_t            * p_payload,
                                      uint32_t                   payload_len)
 {
-    p_dfu_ctx->dfu_state = BACKGROUND_DFU_GET_MANIFEST;
+    p_dfu_ctx->dfu_state = BACKGROUND_DFU_GET_MANIFEST_METADATA;
 
     uint32_t err;
     if ((err = background_dfu_handle_event(p_dfu_ctx, BACKGROUND_DFU_EVENT_TRANSFER_COMPLETE)))
@@ -200,6 +230,7 @@ bool background_dfu_process_manifest(background_dfu_context_t * p_dfu_ctx,
 
     return true;
 }
+*/
 
 /***************************************************************************************************
  * @section DFU checks
@@ -509,7 +540,7 @@ const char * background_dfu_state_to_string(const background_dfu_state_t state)
     {
         "DFU_GET_MANIFEST_BLOCKWISE",
         "DFU_GET_FIRMWARE_BLOCKWISE",
-        "DFU_GET_MANIFEST",
+        "DFU_GET_MANIFEST_METADATA",
         "DFU_WAIT_FOR_RESET",
         "DFU_IDLE",
         "DFU_ERROR",
@@ -553,7 +584,7 @@ uint32_t background_dfu_handle_event(background_dfu_context_t * p_dfu_ctx,
             {
                 p_dfu_ctx->dfu_diag.prev_state = BACKGROUND_DFU_IDLE;
 
-                p_dfu_ctx->dfu_state     = BACKGROUND_DFU_GET_MANIFEST;
+                p_dfu_ctx->dfu_state     = BACKGROUND_DFU_GET_MANIFEST_METADATA;
                 p_dfu_ctx->block_num     = 0;
                 p_dfu_ctx->retry_count   = DEFAULT_RETRIES;
 
@@ -563,7 +594,7 @@ uint32_t background_dfu_handle_event(background_dfu_context_t * p_dfu_ctx,
             break;
         }
 
-        case BACKGROUND_DFU_GET_MANIFEST:
+        case BACKGROUND_DFU_GET_MANIFEST_METADATA:
         {
             if (event == BACKGROUND_DFU_EVENT_TRANSFER_COMPLETE)
             {
@@ -575,7 +606,7 @@ uint32_t background_dfu_handle_event(background_dfu_context_t * p_dfu_ctx,
                     break;
                 }
 
-                p_dfu_ctx->dfu_diag.prev_state = BACKGROUND_DFU_GET_MANIFEST;
+                p_dfu_ctx->dfu_diag.prev_state = BACKGROUND_DFU_GET_MANIFEST_METADATA;
 
                 p_dfu_ctx->dfu_state = BACKGROUND_DFU_GET_MANIFEST_BLOCKWISE;
 

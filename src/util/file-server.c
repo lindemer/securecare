@@ -73,8 +73,10 @@ static char* strndup(const char* s1, size_t n)
 
 #include <coap2/coap.h>
 
+// URI queries allowed.
 static char * query_crc32 = "crc32";
 static char * query_size  = "size";
+static char * query_meta  = "meta";
 
 #ifndef min
 #define min(a,b) ((a) < (b) ? (a) : (b))
@@ -269,22 +271,31 @@ static void hnd_get(coap_context_t *ctx UNUSED_PARAM,
     if (opt != NULL) {
         coap_option_t option;
         if (coap_opt_parse(opt, (size_t) - 1, &option)) {
+		
+            uint32_t crc;
+            crc32(buf, flen, &crc);
 
-            // Return the CRC32 of the requested resource.
-            if (!memcmp(option.value, query_crc32, option.length)) {
+            // [meta] Return the size and the CRC32 of the requested resource.
+	    if (!memcmp(option.value, query_meta, option.length)) {
+                printf(" - resource metadata queried");
+                sprintf((char *)reply, "%ld,%d", flen, crc);
+                len_reply = strlen(reply);
+	    }
+
+            // [crc] Return the CRC32 of the requested resource.
+	    else if (!memcmp(option.value, query_crc32, option.length)) {
                 printf(" - resource CRC32 queried");
-                uint32_t crc;
-                crc32(buf, flen, &crc);
                 sprintf((char *)reply, "%d", crc);
                 len_reply = strlen(reply);
+	    }
 
-            // Return the size of the requested resource.
-            } else if (!memcmp(option.value, query_size, option.length)) {
+            // [size] Return the size of the requested resource.
+            else if (!memcmp(option.value, query_size, option.length)) {
                 printf(" - resource size queried");
                 sprintf((char *)reply, "%ld", flen);
-                len_reply = strlen(reply);
-
+		len_reply = strlen(reply);
             }
+
         }
     }
 

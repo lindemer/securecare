@@ -295,15 +295,15 @@ static bool is_valid_response_received(uint32_t status, const coap_message_t * p
     return true;
 }
 
-/**@brief CoAP response handler for request sent to a SUIT manifest resource.
+/**@brief CoAP response handler for metadata request sent to a SUIT manifest resource.
  *
  * An implementation of @ref coap_response_callback_t function type.
  */
-static void handle_manifest_response(uint32_t status, void * p_arg, coap_message_t * p_response)
+static void handle_manifest_metadata_response(uint32_t status, void * p_arg, coap_message_t * p_response)
 {
     background_dfu_context_t * p_dfu_ctx = (background_dfu_context_t *)p_arg;
 
-    if (p_dfu_ctx->dfu_state != BACKGROUND_DFU_GET_MANIFEST)
+    if (p_dfu_ctx->dfu_state != BACKGROUND_DFU_GET_MANIFEST_METADATA)
     {
         NRF_LOG_WARNING("Token response callback called in invalid state (s:%s)",
                 (uint32_t)background_dfu_state_to_string(p_dfu_ctx->dfu_state));
@@ -316,6 +316,13 @@ static void handle_manifest_response(uint32_t status, void * p_arg, coap_message
         return;
     }
 
+    if (background_dfu_validate_manifest_metadata(&m_dfu_ctx,
+                            p_response->p_payload, p_response->payload_len))
+    {
+        NRF_LOG_INFO("Manifest metadata received.");
+    }
+
+    /*
     if (background_dfu_validate_manifest(&m_dfu_ctx,
                             p_response->p_payload, p_response->payload_len))
     {
@@ -352,6 +359,7 @@ static void handle_manifest_response(uint32_t status, void * p_arg, coap_message
             NRF_LOG_ERROR("Failed to extract remote URI from SUIT manifest");
         }
     }
+    */
 }
 
 /**@brief CoAP response handler for request sent to a firmware image resource.
@@ -979,9 +987,9 @@ void background_dfu_transport_state_update(background_dfu_context_t * p_dfu_ctx)
 {
     switch (p_dfu_ctx->dfu_state)
     {
-        case BACKGROUND_DFU_GET_MANIFEST:
+        case BACKGROUND_DFU_GET_MANIFEST_METADATA:
             m_coap_dfu_ctx.p_resource_path = manifest_resource_name;
-            m_coap_dfu_ctx.handler         = handle_manifest_response;
+            m_coap_dfu_ctx.handler         = handle_manifest_metadata_response;
             break;
 
         // FIXME: This state is effectively skipped because the previous state downloads the
@@ -1009,7 +1017,7 @@ void background_dfu_transport_state_update(background_dfu_context_t * p_dfu_ctx)
 
 void background_dfu_transport_send_request(background_dfu_context_t * p_dfu_ctx)
 {
-    uint16_t block_size = (p_dfu_ctx->dfu_state == BACKGROUND_DFU_GET_MANIFEST) ?
+    uint16_t block_size = (p_dfu_ctx->dfu_state == BACKGROUND_DFU_GET_MANIFEST_METADATA) ?
                             0 : DEFAULT_BLOCK_SIZE;
 
     char * query = "size"; 
