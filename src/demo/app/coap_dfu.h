@@ -76,12 +76,6 @@ void coap_dfu_reset_state(void);
  */
 void coap_dfu_diagnostic_get(struct background_dfu_diagnostic * p_diag);
 
-/** @brief Process CoAP DFU pending operations.
- *
- * This function shall be called in the main loop.
- */
-void coap_dfu_process(void);
-
 /** @brief Handle DFU error.
  *
  *  This function can be implemented in the application to undertake application-specific action on DFU error.

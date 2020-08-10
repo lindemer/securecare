@@ -860,11 +860,6 @@ uint32_t coap_dfu_init(const void * p_context)
     return err_code;
 }
 
-void coap_dfu_process(void)
-{
-    app_sched_execute();
-}
-
 void coap_dfu_reset_state(void)
 {
     background_dfu_reset_state(&m_dfu_ctx);
