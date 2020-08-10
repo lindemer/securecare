@@ -1580,14 +1580,6 @@
 // <h> coap_config - Nordic's smartCoAP library - config definitions
 
 //==========================================================
-// <q> COAP_DISABLE_DTLS_API  - Disable CoAPs API
- 
-
-// <i> 
-
-#ifndef COAP_DISABLE_DTLS_API
-#define COAP_DISABLE_DTLS_API 1
-#endif
 
 // <o> COAP_ACK_RANDOM_FACTOR - Random factor to calculate the initial time-out value for a Confirmable message.  <0-65535> 
 

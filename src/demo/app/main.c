@@ -78,19 +78,7 @@
 // Maximum app_scheduler event size.
 #define SCHED_EVENT_DATA_SIZE           APP_TIMER_SCHED_EVENT_DATA_SIZE
 
-extern const app_timer_id_t nrf_dfu_inactivity_timeout_timer_id;
 void handle_dfu_command(uint8_t argc, char *argv[]);
-
-// Timer used by this module.
-APP_TIMER_DEF(m_coap_tick_timer);
-
-// Remote firmware manifest server address.
-static coap_remote_t suit_remote =
-{
-    .addr = { 0xfd, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-	      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01 },
-    .port_number = 5683
-};
 
 /* Override default network settings with the OpenThread border router defaults. This is for
  * development purposes only. Commissioning should be used to add devices to the network in
@@ -118,7 +106,6 @@ static otCliCommand m_user_commands[] =
     }
 };
 
-
 void handle_dfu_command(uint8_t argc, char *argv[])
 {
     if (argc == 0)
@@ -142,7 +129,6 @@ void handle_dfu_command(uint8_t argc, char *argv[])
     }
 }
 
-
 void coap_dfu_handle_error(void)
 {
     coap_dfu_reset_state();
@@ -164,7 +150,6 @@ static void address_print(const otIp6Address *addr)
 
     NRF_LOG_INFO("%s\r\n", (uint32_t)ipstr);
 }
-
 
 static void addresses_print(otInstance * aInstance)
 {
@@ -200,7 +185,7 @@ static void state_changed_callback(uint32_t aFlags, void *aContext)
             case OT_DEVICE_ROLE_DETACHED:
                 break;
             case OT_DEVICE_ROLE_CHILD:
-                coap_dfu_trigger(&suit_remote);
+                coap_dfu_trigger();
                 break;
             case OT_DEVICE_ROLE_ROUTER:
                 break;
@@ -211,31 +196,6 @@ static void state_changed_callback(uint32_t aFlags, void *aContext)
         }
     }
 }
-
-/**@brief Handle events from m_coap_tick_timer.
- */
-static void nrf_coap_time_tick_handler(void * p_context)
-{
-    UNUSED_VARIABLE(p_context);
-    coap_time_tick();
-}
-
-
-/**@brief Function for creating coap tick timer.
- */
-static ret_code_t coap_tick_timer_create(void)
-{
-     ret_code_t ret_code = app_timer_create(&m_coap_tick_timer,
-                                           APP_TIMER_MODE_REPEATED,
-                                           nrf_coap_time_tick_handler);
-    if (ret_code != NRF_SUCCESS)
-    {
-        return ret_code;
-    }
-
-    return app_timer_start(m_coap_tick_timer, APP_TIMER_TICKS(1000), NULL);
-}
-
 
 /**@brief Function for initializing the Thread Board Support Package.
  */
@@ -317,7 +277,6 @@ static void log_init(void)
     NRF_LOG_DEFAULT_BACKENDS_INIT();
 }
 
-
 /***************************************************************************************************
  * @section Main
  **************************************************************************************************/
@@ -343,16 +302,15 @@ int main(int argc, char *argv[])
 
     thread_bsp_init();
 
-    coap_tick_timer_create();
-
     while (true)
     {
-        coap_dfu_process();
-
         thread_process();
         app_sched_execute();
 
-        NRF_LOG_PROCESS();
+        if (NRF_LOG_PROCESS() == false)
+        {
+            thread_sleep();
+        }
     }
 }
 

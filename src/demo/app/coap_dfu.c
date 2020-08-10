@@ -69,74 +69,69 @@
 #include "nordic_common.h"
 #include "addr_parse.h"
 #include "iot_errors.h"
-#include "coap_api.h"
-#include "coap_block.h"
-#include "coap_option.h"
 #include "background_dfu_block.h"
-#include "openthread/random_noncrypto.h"
+#include "coap_block.h"
 
-// Remote SUIT resource URNs. 
-static char * manifest_resource_name = "manifest.cbor";
-static char image_resource_name[256];
+#include "thread_utils.h"
+
+#include <openthread/coap.h>
+#include <openthread/coap_secure.h>
+#include <openthread/crypto.h>
+#include <openthread/ip6.h>
+#include <openthread/link.h>
+#include <openthread/message.h>
+#include <openthread/random_noncrypto.h>
 
 #define NRF_LOG_LEVEL 4
 #define NRF_LOG_MODULE_NAME COAP_DFU
 #include "nrf_log.h"
 NRF_LOG_MODULE_REGISTER();
 
+// Remote firmware manifest server address.
+static const uint8_t suit_remote_addr[16] =
+        { 0xfd, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+          0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01 };
+
+static const uint16_t suit_remote_port = 5683;
+
 // Maximum delay (in ms) between requesting consecutive image blocks.
 #define DEFAULT_DELAY_MAX_MS    128
 
-// Enable random init block loss for debugging purposes.
-#ifndef DFU_DEBUG_RANDOM_INIT_BLOCK_LOSS_ENABLE
-#define DFU_DEBUG_RANDOM_INIT_BLOCK_LOSS_ENABLE  0
-#endif
+// Maximum number of events in the scheduler queue
+#define SCHED_QUEUE_SIZE 	32
 
-// Enable random image block loss for debugging purposes.
-#ifndef DFU_DEBUG_RANDOM_IMAGE_BLOCK_LOSS_ENABLE
-#define DFU_DEBUG_RANDOM_IMAGE_BLOCK_LOSS_ENABLE 0
-#endif
-
-// Block loss rate, in percent.
-#ifndef DFU_DEBUG_RANDOM_BLOCK_LOSS_RATE
-#define DFU_DEBUG_RANDOM_BLOCK_LOSS_RATE         50
-#endif
-
-#define DIAG_RESOURCE_NAME      "diagnostic"
-#define RESET_RESOURCE_NAME     "reset"
-
-// Maximum number of events in the scheduler queue.
-#define SCHED_QUEUE_SIZE 32
-
-// Maximum app_scheduler event size.
+// Maximum app_scheduler event size
 #define SCHED_EVENT_DATA_SIZE MAX(sizeof(nrf_dfu_request_t), APP_TIMER_SCHED_EVENT_DATA_SIZE)
+
+// CoAP temporary buffer size
+#define BUFFER_LENGTH            512
 
 typedef struct
 {
-    coap_resource_t          root;            /**< Root resource. */
-    coap_resource_t          diagnostic;      /**< Diagnostic resource. */
-    coap_resource_t          reset;           /**< Reset resource. */
-
-    coap_response_callback_t handler;         /**< A pointer to the current response handler. */
-    const char             * p_resource_path; /**< Downloaded resource path on the remote host. */
-    coap_remote_t            remote;          /**< Remote host from which the resource is being downloaded. */
-    bool                     timer_active;    /**< True if a CoAP request is pending, false otherwise. */
+    uint8_t                  buffer[BUFFER_LENGTH]; // Last received CoAP payload.
+    uint32_t                 buffer_length;         // Length of the last received CoAP payload.
+    const char             * resource_path;         // Downloaded resource path on the remote host.
+    uint8_t                  remote_addr[16];       // Remote address from which the resource is being downloaded.
+    uint16_t                 remote_port;           // Remote port from which the resource is being downloaded.
+    otCoapResponseHandler    handler;               // A pointer to the current response handler.
+    bool                     timer_active;          // True if a CoAP request is pending, false otherwise.
 } coap_dfu_context_t;
 
-/** @brief Coap Message Id. */
-static uint16_t m_coap_message_id = 0;
-
-/** @brief CoAP token. */
+// CoAP token
 static uint16_t m_coap_token;
 
-/** @brief DFU client context. */
+// DFU client context
 static background_dfu_context_t m_dfu_ctx;
 static coap_dfu_context_t       m_coap_dfu_ctx;
 
-/** @brief Request delay timer. */
+// Timers
 APP_TIMER_DEF(m_send_timer);
 APP_TIMER_DEF(m_reset_timer);
 APP_TIMER_DEF(m_coap_delayed_error_handling_timer);
+
+// Remote SUIT resource URNs
+static char * manifest_resource_name = "manifest.cbor";
+static char image_resource_name[256];
 
 static void reset_application(void)
 {
@@ -158,6 +153,7 @@ static void dfu_observer(nrf_dfu_evt_type_t evt_type)
     switch (evt_type)
     {
         case NRF_DFU_EVT_DFU_COMPLETED:
+            // TODO: Terminate DTLS session.
             if (!m_dfu_ctx.reset_suppress)
             {
                 NRF_LOG_INFO("Reset after DFU");
@@ -180,69 +176,102 @@ static void dfu_observer(nrf_dfu_evt_type_t evt_type)
 
 /** @brief Parse and return CoAP block option from a given message.
  *
- *  @param[in]  p_message        A pointer to CoAP message.
+ *  @param[in]  aMessage         A pointer to CoAP message.
  *  @param[out] p_block2_option  A pointer to parsed block 2 option.
  *
  *  @return True if message has Block2 option, false otherwise.
  */
-static bool get_block2_opt(const coap_message_t    * p_message,
-                           coap_block_opt_block2_t * p_block2_option)
+static bool get_block2_opt(const otMessage          * aMessage, 
+                           coap_block_opt_block2_t  * p_block2_option)
 {
-    uint32_t        err_code;
-    uint8_t         option_index;
-    uint32_t        option_value;
-    coap_option_t * p_option;
+    otError error = OT_ERROR_NONE;
+    otCoapOptionIterator aIterator;
 
-    if (coap_message_opt_index_get(&option_index,
-                                   (coap_message_t *)p_message,
-                                   COAP_OPT_BLOCK2) != NRF_SUCCESS)
+    error = otCoapOptionIteratorInit(&aIterator, aMessage);
+    if (error == OT_ERROR_PARSE)
     {
+        NRF_LOG_ERROR("Failed to initialize option iterator.");
         return false;
     }
 
-    p_option = (coap_option_t * )&p_message->options[option_index];
-    err_code = coap_opt_uint_decode(&option_value,
-                                    p_option->length,
-                                    p_option->p_data);
+    const otCoapOption * aOption;
+    aOption = otCoapOptionIteratorGetNextOptionMatching(&aIterator, OT_COAP_OPTION_BLOCK2);
 
-    if (err_code != NRF_SUCCESS)
+    if (aOption == NULL)
     {
+        NRF_LOG_ERROR("block2 option not found.");
         return false;
     }
 
-    err_code = coap_block_opt_block2_decode(p_block2_option, option_value);
+    uint64_t aValue;
+    error = otCoapOptionIteratorGetOptionUintValue(&aIterator, &aValue);
+    if (error != OT_ERROR_NONE)
+    {
+        NRF_LOG_ERROR("Failed to copy block2 option from message.");
+        return false;
+    }
 
-    return (err_code == NRF_SUCCESS);
+    if (coap_block_opt_block2_decode(p_block2_option, (uint32_t)aValue))
+    {
+        NRF_LOG_ERROR("Failed to decode block2 option.");
+        return false;
+    }
+
+    return true;
 }
 
 /** @brief Set CoAP block2 option on a given message.
  *
- *  @param[inout]  p_message    A pointer to CoAP message.
+ *  @param[inout]  aMessage     A pointer to CoAP message.
  *  @param[in]     block_size   Block size to set.
  *  @param[in]     block_number Block number to set.
  *
  *  @return NRF_SUCCESS if succesful, error code otherwise.
  */
-static uint32_t set_block2_opt(coap_message_t * p_message,
+static uint32_t set_block2_opt(otMessage      * aMessage,
                                uint16_t         block_size,
                                uint32_t         block_number)
 {
-    uint32_t err_code;
-    uint32_t option_value;
+    otError error = OT_ERROR_NONE;
+    otCoapBlockSize aSize;
 
-    coap_block_opt_block2_t block2_option =
+    switch(block_size)
     {
-        .number = block_number,
-        .size   = block_size
-    };
-
-    err_code = coap_block_opt_block2_encode(&option_value, &block2_option);
-    if (err_code == NRF_SUCCESS)
-    {
-        err_code = coap_message_opt_uint_add(p_message, COAP_OPT_BLOCK2, option_value);
+        case 16:
+            aSize = OT_COAP_BLOCK_SIZE_16;
+            break;
+        case 32:
+            aSize = OT_COAP_BLOCK_SIZE_32;
+            break;
+        case 64:
+            aSize = OT_COAP_BLOCK_SIZE_64;
+            break;
+        case 128:
+            aSize = OT_COAP_BLOCK_SIZE_128;
+            break;
+        case 256:
+            aSize = OT_COAP_BLOCK_SIZE_256;
+            break;
+        case 512:
+            aSize = OT_COAP_BLOCK_SIZE_512;
+            break;
+        case 1024:
+            aSize = OT_COAP_BLOCK_SIZE_1024;
+            break;
+        default:
+            NRF_LOG_ERROR("Invalid block size.");
+            return NRF_ERROR_DATA_SIZE;
     }
 
-    return err_code;
+    error = otCoapMessageAppendBlock2Option(aMessage, block_number, false, aSize);
+
+    if (error)
+    {
+        NRF_LOG_ERROR("Failed to set block2 option.");
+        return NRF_ERROR_DATA_SIZE;
+    }
+    
+    return NRF_SUCCESS;
 }
 
 /***************************************************************************************************
@@ -251,16 +280,16 @@ static uint32_t set_block2_opt(coap_message_t * p_message,
 
 /**@brief Check status and common CoAP parameters for a response.
  *
- * @param[in] status     Status code indicating if response was received.
- * @param[in] p_response A response recevied. May be invalid if status is not NRF_SUCCESS.
+ * @param[in] aResult    Response status code.
+ * @param[in] aMessage   A response recevied. May be invalid if status is not NRF_SUCCESS.
  *
  * @return True if a valid response was received, false otherwise.
  */
-static bool is_valid_response_received(uint32_t status, const coap_message_t * p_response)
+static bool is_valid_response_received(otError aResult, const otMessage * aMessage)
 {
-    if (status != NRF_SUCCESS)
+    if (aResult != OT_ERROR_NONE)
     {
-        if (status == COAP_TRANSMISSION_TIMEOUT)
+        if (aResult == OT_ERROR_RESPONSE_TIMEOUT)
         {
             NRF_LOG_WARNING("Request timeout");
         }
@@ -272,17 +301,18 @@ static bool is_valid_response_received(uint32_t status, const coap_message_t * p
         return false;
     }
 
-    if (p_response->header.code != COAP_CODE_205_CONTENT)
+    if (otCoapMessageGetCode(aMessage) != OT_COAP_CODE_CONTENT)
     {
-        NRF_LOG_WARNING("Request response code: %d", p_response->header.code);
+        NRF_LOG_WARNING("Request response code: %d", otCoapMessageGetCode(aMessage));
 
         return false;
     }
 
-    if ((p_response->header.token_len != sizeof(m_coap_token)) ||
-        (memcmp(p_response->token, &m_coap_token, p_response->header.token_len) != 0))
+    if ((otCoapMessageGetTokenLength(aMessage) != sizeof(m_coap_token)) ||
+        (memcmp(otCoapMessageGetToken(aMessage), &m_coap_token,
+                otCoapMessageGetTokenLength(aMessage)) != 0))
     {
-        NRF_LOG_WARNING("Token mismatch");
+        NRF_LOG_WARNING("Token mismatch.");
 
         return false;
     }
@@ -292,11 +322,15 @@ static bool is_valid_response_received(uint32_t status, const coap_message_t * p
 
 /**@brief CoAP response handler for metadata request sent to a SUIT manifest resource.
  *
- * An implementation of @ref coap_response_callback_t function type.
+ * An implementation of the otCoapRequestHandler function type.
  */
-static void handle_manifest_metadata_response(uint32_t status, void * p_arg, coap_message_t * p_response)
+static void handle_manifest_metadata_response(void *aContext,
+                                              otMessage *aMessage,
+                                              const otMessageInfo *aMessageInfo,
+                                              otError aResult)
+
 {
-    background_dfu_context_t * p_dfu_ctx = (background_dfu_context_t *)p_arg;
+    background_dfu_context_t * p_dfu_ctx = (background_dfu_context_t *)aContext;
 
     if (p_dfu_ctx->dfu_state != BACKGROUND_DFU_GET_MANIFEST_METADATA)
     {
@@ -305,30 +339,37 @@ static void handle_manifest_metadata_response(uint32_t status, void * p_arg, coa
         return;
     }
 
-    if (!is_valid_response_received(status, p_response))
+    if (!is_valid_response_received(aResult, aMessage))
     {
         background_dfu_handle_event(&m_dfu_ctx, BACKGROUND_DFU_EVENT_TRANSFER_ERROR);
         return;
     }
 
+    m_coap_dfu_ctx.buffer_length = otMessageRead(aMessage,
+                                                 otMessageGetOffset(aMessage),
+                                                 m_coap_dfu_ctx.buffer,
+                                                 otMessageGetLength(aMessage));
+
     if (background_dfu_validate_manifest_metadata(&m_dfu_ctx,
-                            p_response->p_payload, p_response->payload_len))
+                            m_coap_dfu_ctx.buffer, m_coap_dfu_ctx.buffer_length))
     {
         NRF_LOG_INFO("Manifest metadata received.");
 	background_dfu_process_manifest_metadata(&m_dfu_ctx,
-                                                 p_response->p_payload,
-                                                 p_response->payload_len);
+                            m_coap_dfu_ctx.buffer, m_coap_dfu_ctx.buffer_length);
     }
 }
 
-/**@brief CoAP response handler for request sent to a firmware image resource.
+/**@brief CoAP response handler for requests sent with a block2 option.
  *
- * An implementation of @ref coap_response_callback_t function type.
+ * An implementation of the otCoapRequestHandler function type.
  */
-static void handle_block_response(uint32_t status, void * p_arg, coap_message_t * p_response)
+static void handle_block_response(void *aContext,
+                                  otMessage *aMessage,
+                                  const otMessageInfo *aMessageInfo,
+                                  otError aResult)
 {
     coap_block_opt_block2_t    block_opt = {0};
-    background_dfu_context_t * p_dfu_ctx = (background_dfu_context_t *)p_arg;
+    background_dfu_context_t * p_dfu_ctx = (background_dfu_context_t *)aContext;
 
     do
     {
@@ -340,13 +381,13 @@ static void handle_block_response(uint32_t status, void * p_arg, coap_message_t 
             return;
         }
 
-        if (!is_valid_response_received(status, p_response))
+        if (!is_valid_response_received(aResult, aMessage))
         {
             background_dfu_handle_event(&m_dfu_ctx, BACKGROUND_DFU_EVENT_TRANSFER_ERROR);
             break;
         }
 
-        if (!get_block2_opt(p_response, &block_opt))
+        if (!get_block2_opt(aMessage, &block_opt))
         {
             NRF_LOG_WARNING("No block 2 option in response message.");
             background_dfu_handle_event(p_dfu_ctx, BACKGROUND_DFU_EVENT_TRANSFER_CONTINUE);
@@ -362,12 +403,18 @@ static void handle_block_response(uint32_t status, void * p_arg, coap_message_t 
             break;
         }
 
+        m_coap_dfu_ctx.buffer_length = otMessageRead(aMessage,
+                                       otMessageGetOffset(aMessage),
+                                       m_coap_dfu_ctx.buffer,
+                                       otMessageGetLength(aMessage));
+
         background_dfu_block_t block;
         block.number    = block_opt.number;
         block.size      = block_opt.size;
-        block.p_payload = p_response->p_payload;
+	block.p_payload = m_coap_dfu_ctx.buffer;
 
         background_dfu_process_block(p_dfu_ctx, &block);
+
     } while (0);
 }
 
@@ -381,241 +428,142 @@ static void handle_block_response(uint32_t status, void * p_arg, coap_message_t 
  */
 static uint32_t parse_manifest_uri(background_dfu_context_t * p_dfu_ctx, char * resource_name)
 {
-        char uri[256];
-        uint32_t err;
+    char uri[256];
+    uint32_t err;
 
-        if ((err = nrf_dfu_validation_get_component_uri(0, uri)))
-        {
-            return err;
-        }
-
-        bool use_dtls;
-        char * urn;
-        size_t urn_len;
-
-        if ((err = addr_parse_uri((uint8_t *)&m_coap_dfu_ctx.remote.addr,
-                                  &m_coap_dfu_ctx.remote.port_number,
-                                  &urn, &urn_len, &use_dtls,
-                                  uri, (uint8_t)(strlen(uri)))))
-        {
-            return err;
-        }
-        else
-        {
-            // Copy resource name into NULL-terminated string.
-            resource_name[urn_len] = 0;
-            memcpy(resource_name, urn, urn_len);
-
-            NRF_LOG_INFO("Remote firmware resource at URN: %s", resource_name);
-            NRF_LOG_HEXDUMP_INFO(&m_coap_dfu_ctx.remote.addr, 16);
-
-            if (use_dtls) {
-                NRF_LOG_WARNING("CoAPs support not yet implemented.");
-            }
-        }
-
-        return NRF_SUCCESS;
-}
-
-/** @brief Set CoAP URI option on a given message.
- *
- *  @param[inout] p_message  A pointer to CoAP message.
- *  @param[in]    p_resource An URI as NULL terminated string which should be converted to CoAP options.
- *
- *  @return NRF_SUCCESS if succesful, error code otherwise.
- */
-static uint32_t set_uri_opt(coap_message_t * p_message, const char * p_resource)
-{
-    uint32_t     err_code;
-    const char * p_start = p_resource;
-    const char * p_end;
-    uint32_t     len;
-
-    if (*p_start == '/')
+    if ((err = nrf_dfu_validation_get_component_uri(0, uri)))
     {
-        p_start++;
+        return err;
     }
 
-    do {
-        p_end = strchr(p_start, '/');
-        if (p_end)
+    char * urn;
+    size_t urn_len;
+    bool use_dtls;
+
+    if ((err = addr_parse_uri((uint8_t *)&m_coap_dfu_ctx.remote_addr,
+                              &m_coap_dfu_ctx.remote_port,
+                              &urn, &urn_len, &use_dtls,
+                              uri, (uint8_t)(strlen(uri)))))
+    {
+        if (use_dtls)
         {
-            len = p_end - p_start;
+            NRF_LOG_INFO("Remote resource requires CoAPs.");
         }
-        else
-        {
-            len = strlen(p_start);
-        }
+        return err;
+    }
+    else
+    {
+        // Copy resource name into NULL-terminated string.
+        resource_name[urn_len] = 0;
+        memcpy(resource_name, urn, urn_len);
 
-        err_code = coap_message_opt_str_add(p_message,
-                                            COAP_OPT_URI_PATH,
-                                            (uint8_t *) p_start,
-                                            len);
-        p_start += (len + 1);
+        NRF_LOG_INFO("Remote firmware resource at URN: %s", resource_name);
+        NRF_LOG_HEXDUMP_INFO(&m_coap_dfu_ctx.remote_addr, 16);
+    }
 
-    } while ((err_code == NRF_SUCCESS) && p_end);
-
-    return err_code;
-}
-
-/** @brief Set CoAP URI option on a given message.
- *
- *  @param[inout] p_message  A pointer to CoAP message.
- *  @param[in]    p_query    A query as a NULL terminated string which should be converted to CoAP options.
- *
- *  @return NRF_SUCCESS if succesful, error code otherwise.
- */
-static uint32_t set_query_opt(coap_message_t * p_message, const char * p_query)
-{
-    uint32_t err_code = coap_message_opt_str_add(p_message,
-                                                 COAP_OPT_URI_QUERY,
-                                                 (uint8_t *) p_query,
-                                                 strlen(p_query) - 1);
-    return err_code;
-}
-
-/**@brief Get next message id.
- *
- * @return An unique message id.
- */
-static uint16_t message_id_get(void)
-{
-    return m_coap_message_id++;
+    return NRF_SUCCESS;
 }
 
 /**@brief Create a CoAP message with specific payload and remote.
  *
- * @param[in] p_conf      A pointer to the message configuration.
- * @param[in] p_resource  A pointer to a string with resource name.
- * @param[in] p_query     A pointer to a string with query string or NULL.
- * @param[in] p_payload   A pointer to the message payload. NULL if message shall not contain any payload.
- * @param[in] payload_len Payload length in bytes, ignored if p_payload is NULL.
- * @param[in] p_remote    An address of the remote endpoint.
+ * @param[in]  p_resource  A pointer to a string with resource name.
+ * @param[in]  p_query     A pointer to a string with query string or NULL.
+ * @param[in]  p_payload   A pointer to the message payload. NULL if message shall not contain any payload.
+ * @param[in]  payload_len Payload length in bytes, ignored if p_payload is NULL.
+ * @param[in]  aCode       CoAP message code.
+ * @param[in]  aType       CoAP message type.
+ * @param[in]  new_token   Generate new token if true.
  *
  * @return A pointer to the message created or NULL if could not be created.
  */
-static coap_message_t * message_create(const coap_message_conf_t * p_conf,
-                                       const char                * p_resource,
-                                       const char                * p_query,
-                                       const uint8_t             * p_payload,
-                                       uint16_t                    payload_len,
-                                       const coap_remote_t       * p_remote)
+static otMessage * message_create(const char                * p_resource,
+                                  const char                * p_query,
+                                  const uint8_t             * p_payload,
+                                  uint16_t                    payload_len,
+				  otCoapCode                  aCode,
+				  otCoapType                  aType,
+				  bool                        new_token)
 {
-    uint32_t         err_code;
-    coap_message_t * p_message = NULL;
+    uint32_t        err_code = NRF_SUCCESS;
+    otMessage     * aMessage = otCoapNewMessage(thread_ot_instance_get(), NULL);
+
+    otCoapMessageInit(aMessage, aType, aCode);
+
+    if (new_token)
+    {
+    	otCoapMessageGenerateToken(aMessage, 2);
+    	memcpy(&m_coap_token, otCoapMessageGetToken(aMessage), 2);
+    }
 
     do
     {
-        err_code = coap_message_new(&p_message, (coap_message_conf_t *)p_conf);
-        if (err_code != NRF_SUCCESS)
-        {
-            break;
-        }
-
-        err_code = coap_message_remote_addr_set(p_message, (coap_remote_t *)p_remote);
-        if (err_code != NRF_SUCCESS)
-        {
-            break;
-        }
-
         if (p_resource != NULL)
         {
-            err_code = set_uri_opt(p_message, p_resource);
-            if (err_code != NRF_SUCCESS)
+            if (otCoapMessageAppendUriPathOptions(aMessage, p_resource) != OT_ERROR_NONE)
             {
-                break;
-            }
-        }
-
-        if (p_query != NULL)
-        {
-            err_code = set_query_opt(p_message, p_query);
-            if (err_code != NRF_SUCCESS)
-            {
+                NRF_LOG_ERROR("Failed to append URI path options.");
+                err_code = NRF_ERROR_INTERNAL;
                 break;
             }
         }
 
         if (p_payload != NULL)
         {
-            err_code = coap_message_payload_set(p_message, (void *)p_payload, payload_len);
-            if (err_code != NRF_SUCCESS)
+            if (otMessageAppend(aMessage, p_payload, payload_len) != OT_ERROR_NONE)
             {
+                NRF_LOG_ERROR("Failed to append message payload.");
+                err_code = NRF_ERROR_INTERNAL;
                 break;
             }
         }
+
+        if (p_query != NULL)
+        {
+            NRF_LOG_INFO("Appending URI query: %s", p_query);
+            if (otCoapMessageAppendUriQueryOption(aMessage, p_query) != OT_ERROR_NONE)
+            {
+                NRF_LOG_ERROR("Failed to append URI query options.");
+                err_code = NRF_ERROR_INTERNAL;
+                break;
+            }
+        }
+
     } while (0);
 
-    if ((err_code != NRF_SUCCESS) && (p_message != NULL))
+    if ((err_code != NRF_SUCCESS))
     {
-        coap_message_delete(p_message);
-        p_message = NULL;
+        otMessageFree(aMessage);
     }
 
-    return p_message;
-}
-
-/**@brief Create a response with diag resource.
- *
- * @param[in] type      A message type of the response.
- * @param[in] code      A message code to send back.
- * @param[in] p_request A pointer to the request.
- *
- * @return A pointer to the response message or NULL if could not be created.
- */
-static coap_message_t * diagnostic_response_create(coap_msg_type_t         type,
-                                                   coap_msg_code_t         code,
-                                                   const coap_message_t  * p_request)
-{
-    coap_message_conf_t message_conf;
-
-    memset(&message_conf, 0, sizeof(message_conf));
-
-    message_conf.type             = type;
-    message_conf.code             = code;
-    message_conf.port.port_number = DFU_UDP_PORT;
-    message_conf.token_len        = p_request->header.token_len;
-    memcpy(message_conf.token, p_request->token, message_conf.token_len);
-
-    if (type == COAP_TYPE_ACK)
-    {
-        message_conf.id = p_request->header.id;
-    }
-    else
-    {
-        message_conf.id = message_id_get();
-    }
-
-    // Create a copy and invert endianess.
-    background_dfu_diagnostic_t diag = m_dfu_ctx.dfu_diag;
-
-    diag.state                           = m_dfu_ctx.dfu_state;
-    diag.build_id                        = uint32_big_decode((const uint8_t *)&diag.build_id);
-    diag.image_blocks_requested          = uint16_big_decode((const uint8_t *)&diag.image_blocks_requested);
-    diag.manifest_blocks_requested       = uint16_big_decode((const uint8_t *)&diag.manifest_blocks_requested);
-    diag.total_image_blocks_received     = uint16_big_decode((const uint8_t *)&diag.total_image_blocks_received);
-    diag.total_manifest_blocks_received  = uint16_big_decode((const uint8_t *)&diag.total_manifest_blocks_received);
-
-
-    return message_create(&message_conf,
-                          NULL, NULL,
-                          (uint8_t *)&diag,
-                          sizeof(diag),
-                          &p_request->remote);
+    return aMessage;
 }
 
 /**@brief A function for sending CoAP messages.
  *
  * @param[inout] p_request A pointer to CoAP message which should be sent.
  */
-static void coap_dfu_message_send(coap_message_t * p_message)
+static void coap_dfu_message_send(otMessage * aMessage)
 {
-    uint32_t handle;
+    //NRF_LOG_DEBUG("Sending message [mid:%d]", otCoapGetMessageId(aMessage));
 
-    NRF_LOG_DEBUG("Sending message [mid:%d]", p_message->header.id);
+    otMessageInfo aMessageInfo;
+    memset(&aMessageInfo, 0, sizeof(aMessageInfo));
+    memcpy(aMessageInfo.mPeerAddr.mFields.m8, m_coap_dfu_ctx.remote_addr, 16);
+    aMessageInfo.mPeerPort = m_coap_dfu_ctx.remote_port;
 
-    if (coap_message_send(&handle, p_message) != NRF_SUCCESS)
+    otError error = otCoapSendRequest(thread_ot_instance_get(),
+                                      aMessage,
+                                      &aMessageInfo,
+                                      m_coap_dfu_ctx.handler,
+                                      &m_dfu_ctx);
+
+    if (error != OT_ERROR_NONE)
     {
+        if (aMessage != NULL)
+        {
+            otMessageFree(aMessage);
+        }
+
         // Notify application about internal error.
         if (m_coap_dfu_ctx.handler)
         {
@@ -624,155 +572,6 @@ static void coap_dfu_message_send(coap_message_t * p_message)
 
         NRF_LOG_ERROR("Failed to send CoAP message");
     }
-
-    coap_message_delete(p_message);
-}
-
-/**@brief A function for sending delayed CoAP messages.
- *
- * Maximum delay is specified by @ref DEFAULT_DELAY_MAX_MS.
- * In case that another message is pending for sending, the message is dropped.
- *
- * @param[inout] p_request A pointer to CoAP message which should be sent.
- */
-static void coap_dfu_delayed_message_send(coap_message_t * p_message)
-{
-    if (!m_coap_dfu_ctx.timer_active)
-    {
-        uint8_t delay = (background_dfu_random() % DEFAULT_DELAY_MAX_MS) + 1;
-
-        m_coap_dfu_ctx.timer_active = true;
-        app_timer_start(m_send_timer, APP_TIMER_TICKS(delay), p_message);
-    }
-    else
-    {
-        // Drop the message in case another message is pending for transmission.
-        coap_message_delete(p_message);
-    }
-}
-
-/***************************************************************************************************
- * @section Resources
- **************************************************************************************************/
-
-/**@brief A request callback for /diagnostic resource.
- *
- * An implementation of @ref coap_method_callback_t function type.
- *
- * @param[in] p_resource A pointer to resource.
- * @param[in] p_request  A pointer to request.
- */
-static void diagnostic_request_callback(coap_resource_t * p_resource, coap_message_t * p_request)
-{
-    coap_message_t * p_response = NULL;
-
-    // Process only CON messages.
-    if (p_request->header.type == COAP_TYPE_CON)
-    {
-        p_response = diagnostic_response_create(COAP_TYPE_ACK, COAP_CODE_205_CONTENT, p_request);
-    }
-    else
-    {
-        p_response = diagnostic_response_create(COAP_TYPE_NON, COAP_CODE_205_CONTENT, p_request);
-    }
-
-    // Send response, if created.
-    if (p_response != NULL)
-    {
-        coap_dfu_delayed_message_send(p_response);
-    }
-}
-
-/**@brief A request callback for /reset resource.
- *
- * An implementation of @ref coap_method_callback_t function type.
- *
- * @param[in] p_resource A pointer to resource.
- * @param[in] p_request  A pointer to request.
- */
-static void reset_request_callback(coap_resource_t * p_resource, coap_message_t * p_request)
-{
-    uint32_t reset_delay_ms;
-
-    do
-    {
-        if (m_dfu_ctx.dfu_state != BACKGROUND_DFU_WAIT_FOR_RESET)
-        {
-            NRF_LOG_WARNING("Reset command received in invalid state: (m:%d s:%d).",
-                    m_dfu_ctx.dfu_mode, m_dfu_ctx.dfu_state);
-
-            break;
-        }
-
-        if (p_request->payload_len != sizeof(uint32_t))
-        {
-            NRF_LOG_WARNING("Invalid reset command payload length (l:%d).",
-                    p_request->payload_len);
-
-            break;
-        }
-
-        reset_delay_ms = uint32_big_decode((const uint8_t *)p_request->p_payload);
-
-        app_timer_start(m_reset_timer, APP_TIMER_TICKS(reset_delay_ms), NULL);
-
-    } while (0);
-}
-
-/**@brief Initialize DFU Server resources.
- *
- * @param[in] p_dfu_ctx A pointer to DFU client context.
- *
- * @return NRF_SUCCESS on success, otherwise an error code is returned.
- */
-static uint32_t endpoints_init(coap_dfu_context_t * p_coap_dfu_ctx)
-{
-    uint32_t err_code = NRF_SUCCESS;
-
-    do
-    {
-        err_code = coap_resource_create(&(p_coap_dfu_ctx->root), "/");
-        if (err_code != NRF_SUCCESS)
-        {
-            break;
-        }
-
-        err_code = coap_resource_create(&(p_coap_dfu_ctx->diagnostic), DIAG_RESOURCE_NAME);
-        if (err_code != NRF_SUCCESS)
-        {
-            break;
-        }
-
-        p_coap_dfu_ctx->diagnostic.permission = COAP_PERM_GET;
-        p_coap_dfu_ctx->diagnostic.callback   = diagnostic_request_callback;
-
-        err_code = coap_resource_create(&(p_coap_dfu_ctx->reset), RESET_RESOURCE_NAME);
-        if (err_code != NRF_SUCCESS)
-        {
-            break;
-        }
-
-        p_coap_dfu_ctx->reset.permission = COAP_PERM_PUT;
-        p_coap_dfu_ctx->reset.callback   = reset_request_callback;
-
-        // Create resource hierarchy.
-
-        err_code = coap_resource_child_add(&(p_coap_dfu_ctx->root), &(p_coap_dfu_ctx->diagnostic));
-        if (err_code != NRF_SUCCESS)
-        {
-            break;
-        }
-
-        err_code = coap_resource_child_add(&(p_coap_dfu_ctx->root), &(p_coap_dfu_ctx->reset));
-        if (err_code != NRF_SUCCESS)
-        {
-            break;
-        }
-
-        NRF_LOG_INFO("Endpoints initialized");
-    } while (0);
-
-    return err_code;
 }
 
 /***************************************************************************************************
@@ -781,7 +580,7 @@ static uint32_t endpoints_init(coap_dfu_context_t * p_coap_dfu_ctx)
 
 static void delayed_send_handler(void * p_context)
 {
-    coap_dfu_message_send((coap_message_t *)p_context);
+    coap_dfu_message_send((otMessage *)p_context);
 
     m_coap_dfu_ctx.timer_active = false;
 }
@@ -810,51 +609,31 @@ static void coap_delayed_error_handler(void * p_context)
 
 /**@brief Create COAP GET request.
  *
- * @param[in] p_remote        A pointer to host.
- * @param[in] p_resource_path An URI of the resource which should be requested.
+ * @param[in] resource_path   The URI of the resource which should be requested.
  * @param[in] p_query         A pointer to a string with query string or NULL.
  * @param[in] block_size      Requested block size.
  * @param[in] block_num       Requested block number.
- * @param[in] callback        A pointer to the callback function that is called on response reception or error.
  *
  * @return A pointer to CoAP message or NULL on error.
  */
-static coap_message_t * coap_dfu_create_request(coap_remote_t            * p_remote,
-                                                const char               * p_resource_path,
-                                                const char               * p_query,
-                                                uint16_t                   block_size,
-                                                uint32_t                   block_num,
-                                                coap_response_callback_t   callback)
+static otMessage * coap_dfu_create_request(const char * resource_path,
+                                           const char * p_query,
+                                           uint16_t     block_size,
+                                           uint32_t     block_num)
 {
     uint32_t              err_code = NRF_SUCCESS;
-    coap_message_t      * p_request;
-    coap_message_conf_t   message_conf;
+    otMessage           * aMessage;
 
     do
     {
-        memset(&message_conf, 0, sizeof(message_conf));
+        aMessage = message_create(resource_path, p_query, NULL, 0,
+			OT_COAP_CODE_GET, OT_COAP_TYPE_CONFIRMABLE, true);
 
-        message_conf.type              = COAP_TYPE_CON;
-        message_conf.code              = COAP_CODE_GET;
-        message_conf.port.port_number  = p_remote->port_number;
-        message_conf.id                = message_id_get();
-        message_conf.response_callback = callback;
-        message_conf.token_len         = 2;
-
-        m_coap_token = (uint16_t)background_dfu_random();
-        memcpy(message_conf.token, &m_coap_token, 2);
-
-        p_request = message_create(&message_conf, p_resource_path, p_query, NULL, 0, p_remote);
-        if (p_request == NULL)
-        {
-            break;
-        }
-
-        p_request->p_arg = (void *)&m_dfu_ctx;
+        //p_request->p_arg = (void *)&m_dfu_ctx;
 
         if (block_size > 0)
         {
-            err_code = set_block2_opt(p_request, block_size, block_num);
+            err_code = set_block2_opt(aMessage, block_size, block_num);
             if (err_code != NRF_SUCCESS)
             {
                 break;
@@ -862,13 +641,23 @@ static coap_message_t * coap_dfu_create_request(coap_remote_t            * p_rem
         }
     } while (0);
 
-    if ((err_code != NRF_SUCCESS) && (p_request != NULL))
+    if ((err_code != NRF_SUCCESS) && (aMessage != NULL))
     {
-        coap_message_delete(p_request);
-        p_request = NULL;
+        otMessageFree(aMessage);
     }
 
-    return p_request;
+    return aMessage;
+}
+
+static void coap_default_handler(void                * p_context,
+                                 otMessage           * p_message,
+                                 const otMessageInfo * p_message_info)
+{
+    (void)p_context;
+    (void)p_message;
+    (void)p_message_info;
+
+    NRF_LOG_INFO("Received CoAP message that does not match any request or resource\r\n");
 }
 
 /**@brief Count blocks present in a block bitmap.
@@ -895,47 +684,18 @@ static uint16_t blocks_count(const background_dfu_request_bitmap_t * p_req_bmp)
     return count;
 }
 
-/**@brief An implmentation of @ref coap_error_callback_t type. */
-static void coap_error_handler(uint32_t error_code, coap_message_t * p_message)
-{
-    UNUSED_PARAMETER(error_code);
-    UNUSED_PARAMETER(p_message);
-
-    // Intentionally empty.
-}
-
 /**@brief Initialize CoAP protocol.
- *
- * @param[in] p_context An application specific context.
  *
  * @return NRF_SUCCESS on success, otherwise an error code is returned.
  */
-static uint32_t coap_protocol_init(const void * p_context)
+static uint32_t thread_coap_init()
 {
-    uint32_t    err_code;
-    coap_port_t local_port_list[COAP_PORT_COUNT] =
-    {
-        {
-            .port_number = DFU_UDP_PORT
-        }
-    };
+    otError error = otCoapStart(thread_ot_instance_get(), OT_DEFAULT_COAP_PORT);
+    ASSERT(error == OT_ERROR_NONE);
 
-    coap_transport_init_t transport_params;
-    transport_params.p_port_table = &local_port_list[0];
-    transport_params.p_arg        = (void *)p_context;
+    otCoapSetDefaultHandler(thread_ot_instance_get(), coap_default_handler, NULL);
 
-    NRF_LOG_DEBUG("Init coap");
-
-    m_coap_message_id = background_dfu_random();
-
-    err_code = coap_init(otRandomNonCryptoGetUint32(), &transport_params);
-
-    if (err_code == NRF_SUCCESS)
-    {
-        err_code = coap_error_handler_register(coap_error_handler);
-    }
-
-    return err_code;
+    return NRF_SUCCESS;
 }
 
 void background_dfu_transport_block_request_send(background_dfu_context_t        * p_dfu_ctx,
@@ -943,16 +703,7 @@ void background_dfu_transport_block_request_send(background_dfu_context_t       
 {
     uint16_big_encode(p_req_bmp->offset, (uint8_t *)&p_req_bmp->offset);
 
-    coap_message_conf_t message_conf;
-
-    memset(&message_conf, 0, sizeof(message_conf));
-
     NRF_LOG_INFO("Sending block request!");
-
-    message_conf.type             = COAP_TYPE_NON;
-    message_conf.code             = COAP_CODE_PUT;
-    message_conf.port.port_number = DFU_UDP_PORT;
-    message_conf.id               = message_id_get();
 
     const char * p_resource_name  = NULL;
 
@@ -967,15 +718,14 @@ void background_dfu_transport_block_request_send(background_dfu_context_t       
         p_resource_name = (char *)image_resource_name;
     }
 
-    coap_message_t * p_message =  message_create(&message_conf,
-                                                 p_resource_name, NULL,
-                                                 (uint8_t *)(&p_req_bmp->offset),
-                                                 sizeof(p_req_bmp->bitmap) + sizeof(uint16_t),
-                                                 &m_coap_dfu_ctx.remote);
-    if (p_message != NULL)
-    {
-        coap_dfu_message_send(p_message);
-    }
+    otMessage * aMessage =  message_create(p_resource_name, NULL,
+                                           (uint8_t *)(&p_req_bmp->offset),
+                                           sizeof(p_req_bmp->bitmap) + sizeof(uint16_t),
+                                           OT_COAP_CODE_PUT,
+                                           OT_COAP_TYPE_NON_CONFIRMABLE,
+                                           false);
+
+    coap_dfu_message_send(aMessage);
 }
 
 uint32_t background_dfu_random(void)
@@ -988,19 +738,22 @@ void background_dfu_transport_state_update(background_dfu_context_t * p_dfu_ctx)
     switch (p_dfu_ctx->dfu_state)
     {
         case BACKGROUND_DFU_GET_MANIFEST_METADATA:
-            m_coap_dfu_ctx.p_resource_path = manifest_resource_name;
-            m_coap_dfu_ctx.handler         = handle_manifest_metadata_response;
+            m_coap_dfu_ctx.resource_path = manifest_resource_name;
+            m_coap_dfu_ctx.handler       = (otCoapResponseHandler)handle_manifest_metadata_response;
             break;
 
         case BACKGROUND_DFU_GET_MANIFEST_BLOCKWISE:
-            m_coap_dfu_ctx.p_resource_path = manifest_resource_name;
-            m_coap_dfu_ctx.handler         = handle_block_response;
+            m_coap_dfu_ctx.resource_path = manifest_resource_name;
+            m_coap_dfu_ctx.handler       = (otCoapResponseHandler)handle_block_response;
             break;
 
         case BACKGROUND_DFU_GET_FIRMWARE_BLOCKWISE:
+
+            // Get the remote URI and resource name from the stored manifest.
             parse_manifest_uri(p_dfu_ctx, image_resource_name);
-            m_coap_dfu_ctx.p_resource_path = image_resource_name;
-            m_coap_dfu_ctx.handler         = handle_block_response;
+
+            m_coap_dfu_ctx.resource_path = image_resource_name;
+            m_coap_dfu_ctx.handler       = (otCoapResponseHandler)handle_block_response;
             break;
 
         case BACKGROUND_DFU_WAIT_FOR_RESET:
@@ -1024,26 +777,17 @@ void background_dfu_transport_send_request(background_dfu_context_t * p_dfu_ctx)
     char * query = (p_dfu_ctx->dfu_state == BACKGROUND_DFU_GET_MANIFEST_METADATA) ?
                             "meta" : NULL;
 
-    coap_message_t * p_request = coap_dfu_create_request(&m_coap_dfu_ctx.remote,
-                                                         m_coap_dfu_ctx.p_resource_path,
-                                                         query,
-                                                         block_size,
-                                                         p_dfu_ctx->block_num,
-                                                         m_coap_dfu_ctx.handler);
+    otMessage * aMessage = coap_dfu_create_request(m_coap_dfu_ctx.resource_path,
+                                                   query,
+                                                   block_size,
+                                                   p_dfu_ctx->block_num);
 
-    if (p_request != NULL)
-    {
-        NRF_LOG_INFO("Requesting [%s] (block:%u mid:%d)",
-                    (uint32_t)m_coap_dfu_ctx.p_resource_path,
-                    p_dfu_ctx->block_num,
-                    p_request->header.id);
+    NRF_LOG_INFO("Requesting [%s] (block:%u)",
+                    (uint32_t)m_coap_dfu_ctx.resource_path,
+                    p_dfu_ctx->block_num);
+                    //otCoapMessageGetMessageId(aMessage));
 
-        coap_dfu_delayed_message_send(p_request);
-    }
-    else
-    {
-        NRF_LOG_ERROR("Failed to create a request.")
-    }
+    coap_dfu_message_send(aMessage);
 }
 
 /***************************************************************************************************
@@ -1069,7 +813,7 @@ void coap_dfu_diagnostic_get(struct background_dfu_diagnostic *p_diag)
     }
 }
 
-uint32_t coap_dfu_trigger(const coap_remote_t * p_remote)
+uint32_t coap_dfu_trigger()
 {
     NRF_LOG_INFO("Starting DFU.");
 
@@ -1077,15 +821,6 @@ uint32_t coap_dfu_trigger(const coap_remote_t * p_remote)
     {
         NRF_LOG_WARNING("Invalid state");
         return NRF_ERROR_INVALID_STATE;
-    }
-
-    if (p_remote != NULL)
-    {
-        memcpy(&m_coap_dfu_ctx.remote, p_remote, sizeof(*p_remote));
-    }
-    else
-    {
-        return NRF_ERROR_FORBIDDEN;
     }
 
     // Transition from DFU_IDLE to DFU_DOWNLOAD_TRIG.
@@ -1100,13 +835,10 @@ uint32_t coap_dfu_init(const void * p_context)
     {
         memset(&m_coap_dfu_ctx, 0, sizeof(m_coap_dfu_ctx));
 
-        err_code = coap_protocol_init(p_context);
-        if (err_code != NRF_SUCCESS)
-        {
-            break;
-        }
+        memcpy(&m_coap_dfu_ctx.remote_addr, suit_remote_addr, 16);
+        m_coap_dfu_ctx.remote_port = suit_remote_port;
 
-        err_code = endpoints_init(&m_coap_dfu_ctx);
+        err_code = thread_coap_init();
         if (err_code != NRF_SUCCESS)
         {
             break;
@@ -1116,12 +848,13 @@ uint32_t coap_dfu_init(const void * p_context)
         nrf_dfu_req_handler_init(dfu_observer);
 
         background_dfu_state_init(&m_dfu_ctx);
-
+        
         app_timer_create(&m_send_timer, APP_TIMER_MODE_SINGLE_SHOT, delayed_send_handler);
         app_timer_create(&m_reset_timer, APP_TIMER_MODE_SINGLE_SHOT, delayed_reset_handler);
         app_timer_create(&m_coap_delayed_error_handling_timer, APP_TIMER_MODE_SINGLE_SHOT, coap_delayed_error_handler);
 
         APP_SCHED_INIT(SCHED_EVENT_DATA_SIZE, SCHED_QUEUE_SIZE);
+
     } while (0);
 
     return err_code;
