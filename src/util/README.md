@@ -40,7 +40,7 @@ This example uses the OpenThread border router as the demo server machine.
   1. Run `make` from the `src/demo` directory to flash the bootloader, master boot record and application code to a connected nRF52840 device. The application binary will be placed in `src/demo/app/build`.
   2. Copy `src/demo/app/build/app.bin` to the `src/util` directory (on the border router) to host it using the demo server.
   3. Run `sudo ip addr add fd00::1 dev eth0` on the border router to give the demo server a routable IPv6 address from the Thread network.
-  4. Run `./build/suit-cli -k ../../keyriv.pem -n 0 -u coap://[fd00::1]/app.bin -i app.bin > manifest.cbor` from the `src/util` directory to generate a manifest for the application binary.
+  4. Run `./build/suit-cli -k ../../key/priv.pem -n 0 -u coap://[fd00::1]/app.bin -i app.bin > manifest.cbor` from the `src/util` directory to generate a manifest for the application binary.
   5. Run `./build/demo-server` to start the server.
   6. (Optional) Run `JLinkRTTLogger` on the machine connected to the nRF52840 to view logs in real time. Use the following settings: device name `NRF52840_XXAA`, target interface `SWD`, channel `0`, output file `/dev/stdout`.
   7. Reset the device to initiate the DFU process.
