@@ -13,9 +13,9 @@ This should produce output similar to the following:
 ```
 Signature OK!
 
-SUIT version		  1
-Component count		1
-Sequence number		0
+SUIT version      1
+Component count   1
+Sequence number   0
 
 Component details:
 (0) Remote URI		coaps://[::1]/app.bin
