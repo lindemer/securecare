@@ -73,6 +73,13 @@ static char* strndup(const char* s1, size_t n)
 
 #include <coap2/coap.h>
 
+#include "nanocbor/nanocbor.h"
+
+// URI queries allowed.
+static char * query_crc32 = "crc32";
+static char * query_size  = "size";
+static char * query_meta  = "meta";
+
 #ifndef min
 #define min(a,b) ((a) < (b) ? (a) : (b))
 #endif
@@ -159,7 +166,7 @@ static uint8_t * read_file_mem(const char * file, size_t * length)
         return NULL;
     }
 
-    buf = malloc(statbuf.st_size+1);
+    buf = malloc(statbuf.st_size);
     if (!buf) {
         fclose(f);
         return NULL;
@@ -170,18 +177,32 @@ static uint8_t * read_file_mem(const char * file, size_t * length)
         free(buf);
         return NULL;
     }
-    buf[statbuf.st_size] = '\000';
-    *length = (size_t)(statbuf.st_size + 1);
+    *length = (size_t)statbuf.st_size;
     fclose(f);
     return buf;
+}
+
+uint32_t crc32_for_byte(uint32_t r) {
+  for(int j = 0; j < 8; ++j)
+    r = (r & 1? 0: (uint32_t)0xEDB88320L) ^ r >> 1;
+  return r ^ (uint32_t)0xFF000000L;
+}
+
+void crc32(const void *data, size_t n_bytes, uint32_t* crc) {
+  static uint32_t table[0x100];
+  if(!*table)
+    for(size_t i = 0; i < 0x100; ++i)
+      table[i] = crc32_for_byte(i);
+  for(size_t i = 0; i < n_bytes; ++i)
+    *crc = table[(uint8_t)*crc ^ ((uint8_t*)data)[i]] ^ *crc >> 8;
 }
 
 /*******************************************************************************
  * @section Index handler
  ******************************************************************************/
 
-#define INDEX "This is a test server made with libcoap (see https://libcoap.net)\n" \
-              "Copyright (C) 2010--2020 Olaf Bergmann <bergmann@tzi.org> and others\n\n"
+#define INDEX "This is a simple CoAP(s) file server made with libcoap.\n" \
+              "Copyright (c) 2020, RISE Research Institutes of Sweden AB"
 
 static void hnd_get_index(coap_context_t *ctx UNUSED_PARAM,
               struct coap_resource_t *resource,
@@ -209,35 +230,85 @@ static void hnd_get(coap_context_t *ctx UNUSED_PARAM,
         coap_string_t *query UNUSED_PARAM,
         coap_pdu_t *response)
 {
+    uint8_t * reply;
+    size_t len_reply;
+
+    // Check if URI path is valid.
     coap_str_const_t * uri_path = coap_resource_get_uri_path(resource);
     if (!uri_path) {
         response->code = COAP_RESPONSE_CODE(404);
         return;
     }
-
+    
+    // Parse requested file.
     size_t flen;
     char * full_path = malloc(strlen(uri_path->s) + strlen(fsdir));
     sprintf(full_path, "%s/%s", fsdir, uri_path->s);
     uint8_t * buf = read_file_mem(full_path, &flen);
 
+    // File contents returned if no query is present.
+    reply = buf;
+    len_reply = flen;
+
+    // Get requester's IP address.
     struct sockaddr_in * remote = &session->addr_info.remote.addr.sin;
     char * ip = inet_ntoa(remote->sin_addr);
-    printf("/%s requested by remote %s - ", uri_path->s, ip);
+    printf("/%s requested by remote %s", uri_path->s, ip);
 
+    // Check for block option.
     coap_block_t block2 = { 0, 0, 0 };
     if (coap_get_block(request, COAP_OPTION_BLOCK2, &block2)) {
         int block_size = 16 << block2.szx;
         int total_blocks = (flen / block_size) +
                 ((flen % block_size) == 0 ? 0 : 1);
-        printf("block [%d/%d], size %d\n",
-                     block2.num, total_blocks, block_size);
-    } else {
-        printf("no block option\n");
+	if (block2.num == (total_blocks - 1)) block_size = flen % block_size;
+        printf(" - block [%d/%d], size %d ",
+                     block2.num, total_blocks - 1, block_size);
     }
 
+    // Check if a URI query is present.
+    coap_opt_iterator_t oi;
+    coap_opt_t * opt = coap_check_option(request, COAP_OPTION_URI_QUERY, &oi);
+
+    if (opt != NULL) {
+        coap_option_t option;
+        if (coap_opt_parse(opt, (size_t) - 1, &option)) {
+		
+            uint32_t crc;
+            crc32(buf, flen, &crc);
+	    nanocbor_encoder_t nc;
+            nanocbor_encoder_init(&nc, reply, len_reply);
+
+            // [meta] Return the size and the CRC32 of the requested resource.
+            if (!memcmp(option.value, query_meta, option.length)) {
+                printf(" - resource metadata queried");
+                nanocbor_fmt_array(&nc, 2);
+                nanocbor_fmt_uint(&nc, flen);
+                nanocbor_fmt_uint(&nc, crc);
+                len_reply = nanocbor_encoded_len(&nc);
+	    }
+
+            // [crc] Return the CRC32 of the requested resource.
+	    else if (!memcmp(option.value, query_crc32, option.length)) {
+                printf(" - resource CRC32 queried");
+                nanocbor_fmt_uint(&nc, crc);
+                len_reply = nanocbor_encoded_len(&nc);
+	    }
+
+            // [size] Return the size of the requested resource.
+            else if (!memcmp(option.value, query_size, option.length)) {
+                printf(" - resource size queried");
+                nanocbor_fmt_uint(&nc, flen);
+                len_reply = nanocbor_encoded_len(&nc);
+            }
+
+        }
+    }
+
+    printf("\n");
 
     coap_add_data_blocked_response(resource, session, request, response, token,
-            COAP_MEDIATYPE_ANY, -1, flen, buf);
+            COAP_MEDIATYPE_ANY, -1, len_reply, reply);
     
     free(full_path);
     free(buf);

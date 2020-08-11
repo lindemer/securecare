@@ -75,7 +75,7 @@ typedef enum
                                                              and @ref NRF_DFU_RES_CODE_INVALID_PARAMETER cover all
                                                              possible format errors. */
     NRF_DFU_EXT_ERROR_UNKNOWN_COMMAND           = 0x03, /**< The command was successfully parsed, but it is not supported or unknown. */
-    NRF_DFU_EXT_ERROR_INIT_COMMAND_INVALID      = 0x04, /**< The init command is invalid. The init packet either has
+    NRF_DFU_EXT_ERROR_SUIT_MANIFEST_INVALID     = 0x04, /**< The SUIT manifest is invalid. The init packet either has
                                                              an invalid update type or it is missing required fields for the update type
                                                              (for example, the init packet for a SoftDevice update is missing the SoftDevice size field). */
     NRF_DFU_EXT_ERROR_FW_VERSION_FAILURE        = 0x05, /**< The firmware version is too low. For an application or SoftDevice, the version must be greater than

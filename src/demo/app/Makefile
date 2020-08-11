@@ -83,13 +83,8 @@ SRC_FILES += \
   $(PROJ_DIR)/../common/nrf_dfu_utils.c \
   $(PROJ_DIR)/../common/nrf_dfu_validation.c \
   $(PROJ_DIR)/../common/nrf_dfu_ver_validation.c \
-  $(SDK_ROOT)/components/iot/coap/coap.c \
   $(SDK_ROOT)/components/iot/coap/coap_block.c \
-  $(SDK_ROOT)/components/iot/coap/coap_message.c \
-  $(SDK_ROOT)/components/iot/coap/coap_option.c \
-  $(SDK_ROOT)/components/iot/coap/coap_queue.c \
-  $(SDK_ROOT)/components/iot/coap/coap_resource.c \
-  $(SDK_ROOT)/components/iot/coap/coap_transport_ot.c \
+  $(SDK_ROOT)/components/iot/ipv6_parse/ipv6_parse.c \
   $(SDK_ROOT)/components/iot/ipv6_parse/ipv6_parse.c \
   $(SDK_ROOT)/external/segger_rtt/SEGGER_RTT.c \
   $(SDK_ROOT)/external/segger_rtt/SEGGER_RTT_Syscalls_GCC.c \

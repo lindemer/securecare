@@ -68,10 +68,10 @@ NRF_LOG_MODULE_REGISTER();
 #endif
 
 // FIXME
-//STATIC_ASSERT(DFU_SIGNED_COMMAND_SIZE <= INIT_COMMAND_MAX_SIZE);
+//STATIC_ASSERT(DFU_SIGNED_COMMAND_SIZE <= SUIT_MANIFEST_MAX_SIZE);
 
 static uint32_t m_firmware_start_addr;          /**< Start address of the current firmware image. */
-static uint32_t m_firmware_size_req;            /**< The size of the entire firmware image. Defined by the init command. */
+static uint32_t m_firmware_size_req;            /**< The size of the entire firmware image. Defined by the SUIT manifest. */
 
 static nrf_dfu_observer_t m_observer;
 
@@ -237,8 +237,8 @@ static void cmd_response_offset_and_crc_set(nrf_dfu_response_t * const p_res)
     ASSERT(p_res);
 
     /* Copy the CRC and offset of the init packet. */
-    p_res->crc.offset = s_dfu_settings.progress.command_offset;
-    p_res->crc.crc    = s_dfu_settings.progress.command_crc;
+    p_res->crc.offset = s_dfu_settings.progress.manifest_offset;
+    p_res->crc.crc    = s_dfu_settings.progress.manifest_crc;
 }
 
 
@@ -247,7 +247,7 @@ static void on_cmd_obj_select_request(nrf_dfu_request_t const * p_req, nrf_dfu_r
     UNUSED_PARAMETER(p_req);
     NRF_LOG_DEBUG("Handle NRF_DFU_OP_OBJECT_SELECT (command)");
 
-    p_res->select.max_size = INIT_COMMAND_MAX_SIZE;
+    p_res->select.max_size = SUIT_MANIFEST_MAX_SIZE;
     cmd_response_offset_and_crc_set(p_res);
 }
 
@@ -300,7 +300,7 @@ static void on_cmd_obj_execute_request(nrf_dfu_request_t const * p_req, nrf_dfu_
     NRF_LOG_DEBUG("Handle NRF_DFU_OP_OBJECT_EXECUTE (command)");
 
     nrf_dfu_result_t ret_val;
-    ret_val = nrf_dfu_validation_init_cmd_execute(&m_firmware_start_addr, &m_firmware_size_req);
+    ret_val = nrf_dfu_validation_suit_manifest_execute(&m_firmware_start_addr, &m_firmware_size_req);
     p_res->result = ext_err_code_handle(ret_val);
 
     if (p_res->result == NRF_DFU_RES_CODE_SUCCESS)
@@ -308,7 +308,7 @@ static void on_cmd_obj_execute_request(nrf_dfu_request_t const * p_req, nrf_dfu_
         if (nrf_dfu_settings_write_and_backup(NULL) == NRF_SUCCESS)
         {
             /* Setting DFU to initialized */
-            NRF_LOG_DEBUG("Writing valid init command to flash.");
+            NRF_LOG_DEBUG("Writing valid SUIT manifest to flash.");
         }
         else
         {
@@ -396,10 +396,10 @@ static void on_data_obj_create_request(nrf_dfu_request_t * p_req, nrf_dfu_respon
 {
     NRF_LOG_DEBUG("Handle NRF_DFU_OP_OBJECT_CREATE (data)");
 
-    if (!nrf_dfu_validation_init_cmd_present())
+    if (!nrf_dfu_validation_suit_manifest_present())
     {
-        /* Can't accept data because DFU isn't initialized by init command. */
-        NRF_LOG_ERROR("Cannot create data object without valid init command");
+        /* Can't accept data because DFU isn't initialized by SUIT manifest. */
+        NRF_LOG_ERROR("Cannot create data object without valid SUIT manifest");
         p_res->result = NRF_DFU_RES_CODE_OPERATION_NOT_PERMITTED;
         return;
     }
@@ -465,9 +465,9 @@ static void on_data_obj_write_request(nrf_dfu_request_t * p_req, nrf_dfu_respons
 {
     NRF_LOG_DEBUG("Handle NRF_DFU_OP_OBJECT_WRITE (data)");
 
-    if (!nrf_dfu_validation_init_cmd_present())
+    if (!nrf_dfu_validation_suit_manifest_present())
     {
-        /* Can't accept data because DFU isn't initialized by init command. */
+        /* Can't accept data because DFU isn't initialized by SUIT manifest. */
         p_res->result = NRF_DFU_RES_CODE_OPERATION_NOT_PERMITTED;
         return;
     }
@@ -841,10 +841,10 @@ ret_code_t nrf_dfu_req_handler_init(nrf_dfu_observer_t observer)
     }
 
     nrf_dfu_validation_init();
-    if (nrf_dfu_validation_init_cmd_present())
+    if (nrf_dfu_validation_suit_manifest_present())
     {
         /* Execute a previously received init packed. Subsequent executes will have no effect. */
-        result = nrf_dfu_validation_init_cmd_execute(&m_firmware_start_addr, &m_firmware_size_req);
+        result = nrf_dfu_validation_suit_manifest_execute(&m_firmware_start_addr, &m_firmware_size_req);
         if (result != NRF_DFU_RES_CODE_SUCCESS)
         {
             /* Init packet in flash is not valid! */

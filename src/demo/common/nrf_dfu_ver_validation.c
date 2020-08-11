@@ -59,169 +59,79 @@ NRF_LOG_MODULE_REGISTER();
 
 #define EXT_ERR(err) (nrf_dfu_result_t)((uint32_t)NRF_DFU_RES_CODE_EXT_ERROR + (uint32_t)err)
 
-static bool fw_hash_type_ok(suit_context_t const * p_suit_ctx)
+static bool fw_hash_type_ok(suit_component_t const * p_component)
 {
-    // FIXME
-    return true;
-
-    /*
-    ASSERT(p_suit_ctx != NULL);
-
-    return (p_suit_ctx->hash.hash_type == DFU_HASH_TYPE_SHA256);
-    */
+    ASSERT(p_component != NULL);
+    return (p_component->digest_alg == suit_digest_alg_sha256);
 }
-
-
-/*
-static bool fw_version_required(suit_context_t const * p_suit_ctx)
-{
-    bool result = true;
-
-    if (new_fw_type == DFU_FW_TYPE_SOFTDEVICE)
-    {
-        result = false; // fw_version is optional in SoftDevice updates. If present, it will be checked against the app version.
-    }
-    else if (new_fw_type == DFU_FW_TYPE_APPLICATION)
-    {
-        result = NRF_DFU_APP_DOWNGRADE_PREVENTION; // fw_version is configurable in app updates.
-    }
-#if NRF_DFU_SUPPORTS_EXTERNAL_APP
-#if !NRF_DFU_EXTERNAL_APP_VERSIONING
-    else if (new_fw_type == DFU_FW_TYPE_EXTERNAL_APPLICATION)
-    {
-        return false;
-    }
-#endif //!NRF_DFU_EXTERNAL_APP_VERSIONING
-#endif // NRF_DFU_SUPPORTS_EXTERNAL_APP
-
-    return result;
-}
-*/
-
-
-static bool fw_type_ok(suit_context_t const * p_suit_ctx)
-{
-    ASSERT(p_suit_ctx != NULL);
-
-    // FIXME
-    return true;
-
-    /*
-    return ((p_suit_ctx->has_type)
-            && (  (p_suit_ctx->type == DFU_FW_TYPE_APPLICATION)
-               || (p_suit_ctx->type == DFU_FW_TYPE_SOFTDEVICE)
-               || (p_suit_ctx->type == DFU_FW_TYPE_BOOTLOADER)
-               || (p_suit_ctx->type == DFU_FW_TYPE_SOFTDEVICE_BOOTLOADER)
-#if NRF_DFU_SUPPORTS_EXTERNAL_APP
-               || (p_suit_ctx->type == DFU_FW_TYPE_EXTERNAL_APPLICATION)
-#endif // NRF_DFU_SUPPORTS_EXTERNAL_APP
-            ));
-    */
-
-}
-
 
 #ifndef NRF_DFU_APP_ACCEPT_SAME_VERSION
 #define NRF_DFU_APP_ACCEPT_SAME_VERSION 1
 #endif
 
-
-/*
-// This function assumes p_suit_ctx->has_fw_version.
 static bool fw_version_ok(suit_context_t const * p_suit_ctx)
 {
     ASSERT(p_suit_ctx != NULL);
-    ASSERT(p_suit_ctx->has_fw_version);
 
-    if ((p_suit_ctx->type == DFU_FW_TYPE_APPLICATION) ||
-        (p_suit_ctx->type == DFU_FW_TYPE_SOFTDEVICE))
+    if (p_suit_ctx->version == s_dfu_settings.app_version)
     {
-        if (!NRF_DFU_APP_DOWNGRADE_PREVENTION)
-        {
-            return true;
-        }
-        else if ((p_suit_ctx->fw_version > s_dfu_settings.app_version))
-        {
-            return true;
-        }
-        else if ((p_suit_ctx->fw_version == s_dfu_settings.app_version))
-        {
-            return NRF_DFU_APP_ACCEPT_SAME_VERSION;
-        }
-        else
-        {
-            return false;
-        }
+        return NRF_DFU_APP_ACCEPT_SAME_VERSION;
     }
-#if NRF_DFU_SUPPORTS_EXTERNAL_APP
-#if NRF_DFU_EXTERNAL_APP_VERSIONING
-    else if (p_suit_ctx->type == DFU_FW_TYPE_EXTERNAL_APPLICATION)
+    else if (p_suit_ctx->version < s_dfu_settings.app_version)
     {
-        return (p_suit_ctx->fw_version >= s_dfu_settings.app_version);
+        return false;
     }
-#else
-    else if(p_suit_ctx->type == DFU_FW_TYPE_EXTERNAL_APPLICATION)
-    {
-        return true;
-    }
-#endif // NRF_DFU_EXTERNAL_APP_VERSIONING
-#endif // NRF_DFU_SUPPORTS_EXTERNAL_APP
-    else
-    {
-        return  (p_suit_ctx->fw_version > s_dfu_settings.bootloader_version);
-    }
+
+    return true;
 }
-*/
-
 
 nrf_dfu_result_t nrf_dfu_ver_validation_check(suit_context_t const * p_suit_ctx)
 {
-    nrf_dfu_result_t ret_val = NRF_DFU_RES_CODE_SUCCESS;
-    if (!fw_type_ok(p_suit_ctx))
+    if (!fw_version_ok(p_suit_ctx))
     {
-        NRF_LOG_ERROR("Invalid firmware type.");
-        ret_val = EXT_ERR(NRF_DFU_EXT_ERROR_INIT_COMMAND_INVALID);
-    }
-    else if (!fw_hash_type_ok(p_suit_ctx))
-    {
-        NRF_LOG_ERROR("Invalid hash type.");
-        ret_val = EXT_ERR(NRF_DFU_EXT_ERROR_WRONG_HASH_TYPE);
+        NRF_LOG_WARNING("FW version too low.");
+        return EXT_ERR(NRF_DFU_EXT_ERROR_FW_VERSION_FAILURE);
     }
 
-    // FIXME
+    uint8_t m_class_id[]  = SUIT_CLASS_ID;
+    uint8_t m_vendor_id[] = SUIT_VENDOR_ID;
 
-    /*
-    else if (!NRF_DFU_DEBUG)
+    // Iterate through all the components in the manifest.
+    for (int idx = 0; idx < p_suit_ctx->component_count; idx++)
     {
-        if (p_suit_ctx->has_hw_version == false)
+        if (!fw_hash_type_ok(&p_suit_ctx->components[idx]))
         {
-            NRF_LOG_ERROR("No HW version.");
-            ret_val = EXT_ERR(NRF_DFU_EXT_ERROR_INIT_COMMAND_INVALID);
-        }
-        else if (p_suit_ctx->hw_version != NRF_DFU_HW_VERSION)
-        {
-            NRF_LOG_WARNING("Faulty HW version.");
-            ret_val = EXT_ERR( NRF_DFU_EXT_ERROR_HW_VERSION_FAILURE);
+            NRF_LOG_ERROR("Invalid hash type.");
+            return EXT_ERR(NRF_DFU_EXT_ERROR_WRONG_HASH_TYPE);
         }
 
-        else if (p_suit_ctx->has_fw_version)
+        else if (!NRF_DFU_DEBUG)
         {
-            if (!fw_version_ok(p_suit_ctx))
+            if (p_suit_ctx->components[idx].len_class_id == 0)
             {
-                NRF_LOG_WARNING("FW version too low.");
-                ret_val = EXT_ERR(NRF_DFU_EXT_ERROR_FW_VERSION_FAILURE);
+                NRF_LOG_ERROR("SUIT manifest: no class ID.");
+                return EXT_ERR(NRF_DFU_EXT_ERROR_SUIT_MANIFEST_INVALID);
             }
-        }
-        else
-        {
-            if (fw_version_required(p_suit_ctx->type))
+            else if (!suit_match_class_id(p_suit_ctx, idx,
+                     (uint8_t *)m_class_id, sizeof(m_class_id)))
             {
-                NRF_LOG_ERROR("FW version missing.");
-                ret_val = EXT_ERR(NRF_DFU_EXT_ERROR_INIT_COMMAND_INVALID);
+                NRF_LOG_ERROR("SUIT manifest: class ID mismatch.");
+                return EXT_ERR(NRF_DFU_EXT_ERROR_HW_VERSION_FAILURE);
             }
+            else if (p_suit_ctx->components[idx].len_vendor_id == 0)
+            {
+                NRF_LOG_ERROR("SUIT manifest: no vendor ID.");
+                return EXT_ERR(NRF_DFU_EXT_ERROR_SUIT_MANIFEST_INVALID);
+            }
+            else if (!suit_match_vendor_id(p_suit_ctx, idx,
+                     (uint8_t *)m_vendor_id, sizeof(m_class_id)))
+            {
+                NRF_LOG_ERROR("SUIT manifest: vendor ID mismatch.");
+                return EXT_ERR(NRF_DFU_EXT_ERROR_HW_VERSION_FAILURE);
+            }
+
         }
     }
-    */
 
-    return ret_val;
+    return NRF_DFU_RES_CODE_SUCCESS;
 }

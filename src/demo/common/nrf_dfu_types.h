@@ -65,9 +65,8 @@
 extern "C" {
 #endif
 
-
-#define INIT_COMMAND_MAX_SIZE      512 /**< Maximum size of the init command stored in dfu_settings. */
-#define INIT_COMMAND_MAX_SIZE_v1   256 /**< Maximum size of the init command in settings version 1. */
+#define INIT_COMMAND_MAX_SIZE_v1    256 //  Maximum size of the init command in nRF DFU settings version 1 (deprecated).
+#define SUIT_MANIFEST_MAX_SIZE      512 //  Maximum size of the SUIT manifest envelope stored in dfu_settings.
 
 /** @brief  Size of a flash page. This value is used for calculating the size of the reserved
  *          flash space in the bootloader region.
@@ -185,9 +184,9 @@ typedef struct
 ANON_UNIONS_ENABLE;
 typedef struct
 {
-    uint32_t command_size;              /**< The size of the current init command stored in the DFU settings. */
-    uint32_t command_offset;            /**< The offset of the currently received init command data. The offset will increase as the init command is received. */
-    uint32_t command_crc;               /**< The calculated CRC of the init command (calculated after the transfer is completed). */
+    uint32_t manifest_size;              /**< The size of the current SUIT manifest stored in the DFU settings. */
+    uint32_t manifest_offset;            /**< The offset of the currently received SUIT manifest data. The offset will increase as the SUIT manifest is received. */
+    uint32_t manifest_crc;               /**< The calculated CRC of the SUIT manifest (calculated after the transfer is completed). */
     uint32_t data_object_size;          /**< The size of the last object created. Note that this size is not the size of the whole firmware image.*/
     union
     {
@@ -316,7 +315,7 @@ typedef struct
     dfu_progress_t      progress;           /**< Current DFU progress. */
 
     uint32_t            enter_buttonless_dfu;
-    uint8_t             init_command[INIT_COMMAND_MAX_SIZE];  /**< Buffer for storing the init command. */
+    uint8_t             suit_manifest[SUIT_MANIFEST_MAX_SIZE];  // Buffer for storing the SUIT manifest envelope.
 
     uint32_t            boot_validation_crc;
     boot_validation_t   boot_validation_softdevice;

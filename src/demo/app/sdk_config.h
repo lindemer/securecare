@@ -49,6 +49,19 @@
 // <h> Application 
 
 //==========================================================
+// Unique device identifiers for the SUIT DFU.
+
+#ifndef SUIT_CLASS_ID
+#define SUIT_CLASS_ID { 0x14, 0x92, 0xaf, 0x14, 0x25, 0x69, 0x5e, 0x48, \
+                        0xbf, 0x42, 0x9b, 0x2d, 0x51, 0xf2, 0xab, 0x45 };
+#endif
+
+#ifndef SUIT_VENDOR_ID
+#define SUIT_VENDOR_ID { 0xfa, 0x6b, 0x4a, 0x53, 0xd5, 0xad, 0x5f, 0xdf, \
+                         0xbe, 0x9d, 0xe6, 0x63, 0xe4, 0xd4, 0x1f, 0xfe };
+#endif
+
+//==========================================================
 // <s> DFU_RESOURCE_PREFIX - A common prefix for DFU resources.
 #ifndef DFU_RESOURCE_PREFIX
 #define DFU_RESOURCE_PREFIX "dfu"
@@ -1567,14 +1580,6 @@
 // <h> coap_config - Nordic's smartCoAP library - config definitions
 
 //==========================================================
-// <q> COAP_DISABLE_DTLS_API  - Disable CoAPs API
- 
-
-// <i> 
-
-#ifndef COAP_DISABLE_DTLS_API
-#define COAP_DISABLE_DTLS_API 1
-#endif
 
 // <o> COAP_ACK_RANDOM_FACTOR - Random factor to calculate the initial time-out value for a Confirmable message.  <0-65535> 
 

@@ -324,13 +324,13 @@ int suit_pem_wrap(const char * pem,
         const uint8_t * man, const size_t len_man,
         uint8_t * env, size_t * len_env);
 
-bool suit_match_digest(suit_context_t * ctx, size_t idx,
+bool suit_match_digest(const suit_context_t * ctx, size_t idx,
         const uint8_t * digest, size_t len_digest);
 
-bool suit_match_class_id(suit_context_t * ctx, size_t idx,
+bool suit_match_class_id(const suit_context_t * ctx, size_t idx,
         const uint8_t * class_id, size_t len_class_id);
 
-bool suit_match_vendor_id(suit_context_t * ctx, size_t idx,
+bool suit_match_vendor_id(const suit_context_t * ctx, size_t idx,
         const uint8_t * vendor_id, size_t len_vendor_id);
 
 /**

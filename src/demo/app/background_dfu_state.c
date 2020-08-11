@@ -61,6 +61,7 @@
 #include "sha256.h"
 #include "background_dfu_transport.h"
 #include "background_dfu_operation.h"
+#include "nanocbor/nanocbor.h"
 
 #define NRF_LOG_MODULE_NAME background_dfu
 
@@ -147,8 +148,58 @@ static __INLINE void restart_block_timeout_timer(background_dfu_context_t * p_df
  * @section Handle SUIT Manifest (DFU Trigger)
  **************************************************************************************************/
 
+bool background_dfu_validate_manifest_metadata(background_dfu_context_t * p_dfu_ctx,
+                                               const uint8_t            * p_payload,
+                                               uint32_t                   payload_len)
+{
+    if ((p_dfu_ctx->dfu_state != BACKGROUND_DFU_IDLE) &&
+        (p_dfu_ctx->dfu_state != BACKGROUND_DFU_GET_MANIFEST_METADATA))
+    {
+        NRF_LOG_ERROR("Validate manifest metadata: DFU already in progress (s:%s).",
+                (uint32_t)background_dfu_state_to_string(p_dfu_ctx->dfu_state));
+        return false;
+    }
+
+    // The SUIT manifest metadata is encoded as a CBOR array: [size::uint32, crc32::uint32].
+    nanocbor_value_t nc, arr;
+    nanocbor_decoder_init(&nc, p_payload, payload_len);
+    if (nanocbor_enter_array(&nc, &arr) < 0) goto metadata_fail;
+    if (nanocbor_get_uint32(&arr, &p_dfu_ctx->suit_manifest_size) < 0) goto metadata_fail;
+    if (nanocbor_get_uint32(&arr, &p_dfu_ctx->suit_manifest_crc) < 0) goto metadata_fail;
+
+    p_dfu_ctx->dfu_mode = BACKGROUND_DFU_MODE_UNICAST;
+
+    return true;
+
+metadata_fail:
+
+    NRF_LOG_ERROR("Failed to decode SUIT manifest metadata.");
+    return false;
+}
+
+bool background_dfu_process_manifest_metadata(background_dfu_context_t * p_dfu_ctx,
+                                              const uint8_t            * p_payload,
+                                              uint32_t                   payload_len)
+{
+    p_dfu_ctx->dfu_state = BACKGROUND_DFU_GET_MANIFEST_METADATA;
+
+    uint32_t err;
+    if ((err = background_dfu_handle_event(p_dfu_ctx, BACKGROUND_DFU_EVENT_TRANSFER_COMPLETE)))
+    {
+        NRF_LOG_ERROR("Error in background_dfu_handle_event (0x%d)", err);
+    }
+
+    NRF_LOG_INFO("SUIT DFU: manifest (sz=%d, crc=%0X)",
+            p_dfu_ctx->suit_manifest_size,
+            p_dfu_ctx->suit_manifest_crc);
+
+    return true;
+}
+
+/*
 // TODO: Check if this has security implications. This should probably be declared static so
 // application code cannot modify it directly.
+
 extern suit_context_t m_suit_ctx;
 
 bool background_dfu_validate_manifest(background_dfu_context_t * p_dfu_ctx,
@@ -156,7 +207,7 @@ bool background_dfu_validate_manifest(background_dfu_context_t * p_dfu_ctx,
                                       uint32_t                   payload_len)
 {
     if ((p_dfu_ctx->dfu_state != BACKGROUND_DFU_IDLE) &&
-        (p_dfu_ctx->dfu_state != BACKGROUND_DFU_DOWNLOAD_MANIFEST))
+        (p_dfu_ctx->dfu_state != BACKGROUND_DFU_GET_MANIFEST_METADATA))
     {
         NRF_LOG_ERROR("Validate manifest: DFU already in progress (s:%s).",
                 (uint32_t)background_dfu_state_to_string(p_dfu_ctx->dfu_state));
@@ -170,8 +221,8 @@ bool background_dfu_validate_manifest(background_dfu_context_t * p_dfu_ctx,
     }
     else
     {
-        p_dfu_ctx->init_cmd_size = payload_len;
-        p_dfu_ctx->init_cmd_crc  = crc32_compute(p_payload, payload_len, NULL);
+        p_dfu_ctx->suit_manifest_size = payload_len;
+        p_dfu_ctx->suit_manifest_crc  = crc32_compute(p_payload, payload_len, NULL);
         p_dfu_ctx->firmware_size = m_suit_ctx.components[0].size;
         p_dfu_ctx->firmware_crc  = 0;
         p_dfu_ctx->dfu_mode = BACKGROUND_DFU_MODE_UNICAST;
@@ -179,27 +230,7 @@ bool background_dfu_validate_manifest(background_dfu_context_t * p_dfu_ctx,
 
     return true;
 }
-
-bool background_dfu_process_manifest(background_dfu_context_t * p_dfu_ctx,
-                                     const uint8_t            * p_payload,
-                                     uint32_t                   payload_len)
-{
-    p_dfu_ctx->dfu_state = BACKGROUND_DFU_DOWNLOAD_MANIFEST;
-
-    uint32_t err;
-    if ((err = background_dfu_handle_event(p_dfu_ctx, BACKGROUND_DFU_EVENT_TRANSFER_COMPLETE)))
-    {
-        NRF_LOG_ERROR("Error in background_dfu_handle_event (0x%d)", err);
-    }
-
-    NRF_LOG_INFO("SUIT DFU: manifest (sz=%d, crc=%0X) image (sz=%d, crc=%0X)",
-            p_dfu_ctx->init_cmd_size,
-            p_dfu_ctx->init_cmd_crc,
-            p_dfu_ctx->firmware_size,
-            p_dfu_ctx->firmware_crc);
-
-    return true;
-}
+*/
 
 /***************************************************************************************************
  * @section DFU checks
@@ -238,30 +269,6 @@ background_dfu_block_result_t background_dfu_process_block(background_dfu_contex
     }
 
     return result;
-}
-
-/**@brief Check if installed image is different from the incoming one.
- *
- * @param[in] p_dfu_ctx A pointer to DFU client context.
- *
- * @return True if image different, false otherwise.
- *
- */
-static bool is_image_different(const background_dfu_context_t * p_dfu_ctx)
-{
-    if (s_dfu_settings.bank_0.bank_code == NRF_DFU_BANK_INVALID)
-    {
-        NRF_LOG_WARNING("No image in bank 0");
-        return true;
-    }
-
-    if (s_dfu_settings.bank_0.image_crc != p_dfu_ctx->firmware_crc)
-    {
-        NRF_LOG_WARNING("Installed image CRC is different");
-        return true;
-    }
-
-    return false;
 }
 
 /**
@@ -312,11 +319,11 @@ static void dfu_block_manager_result_handler(background_dfu_block_result_t resul
 }
 
 /**
- * @brief Prepare state machine to download init command.
+ * @brief Prepare state machine to download SUIT manifest.
  */
-static void setup_download_init_command(background_dfu_context_t * p_dfu_ctx)
+static void setup_download_suit_manifest(background_dfu_context_t * p_dfu_ctx)
 {
-    p_dfu_ctx->p_resource_size = &p_dfu_ctx->init_cmd_size;
+    p_dfu_ctx->p_resource_size = &p_dfu_ctx->suit_manifest_size;
     p_dfu_ctx->retry_count     = DEFAULT_RETRIES;
     p_dfu_ctx->block_num       = 0;
 
@@ -350,7 +357,7 @@ static void setup_download_init_command(background_dfu_context_t * p_dfu_ctx)
 /**
  * @brief A callback function for DFU command operations.
  */
-static void dfu_init_check_callback(nrf_dfu_response_t * p_res, void * p_context)
+static void dfu_manifest_check_callback(nrf_dfu_response_t * p_res, void * p_context)
 {
     background_dfu_context_t * p_dfu_ctx = (background_dfu_context_t *)p_context;
 
@@ -359,8 +366,8 @@ static void dfu_init_check_callback(nrf_dfu_response_t * p_res, void * p_context
         case NRF_DFU_OP_OBJECT_SELECT:
             if (p_res->result != NRF_DFU_RES_CODE_SUCCESS)
             {
-                NRF_LOG_ERROR("No valid init command - select failed");
-                setup_download_init_command((background_dfu_context_t *)p_context);
+                NRF_LOG_ERROR("No valid SUIT manifest - select failed.");
+                setup_download_suit_manifest((background_dfu_context_t *)p_context);
 
                 UNUSED_RETURN_VALUE(background_dfu_handle_event(p_dfu_ctx, BACKGROUND_DFU_EVENT_TRANSFER_CONTINUE));
             }
@@ -368,10 +375,10 @@ static void dfu_init_check_callback(nrf_dfu_response_t * p_res, void * p_context
             p_dfu_ctx->max_obj_size = p_res->select.max_size;
             p_dfu_ctx->block_num    = p_res->select.offset / DEFAULT_BLOCK_SIZE;
 
-            if (background_dfu_op_execute(dfu_init_check_callback, p_context) != NRF_SUCCESS)
+            if (background_dfu_op_execute(dfu_manifest_check_callback, p_context) != NRF_SUCCESS)
             {
-                NRF_LOG_ERROR("No valid init command - execute error");
-                setup_download_init_command((background_dfu_context_t *)p_context);
+                NRF_LOG_ERROR("No valid SUIT manifest - execute error.");
+                setup_download_suit_manifest((background_dfu_context_t *)p_context);
 
                 UNUSED_RETURN_VALUE(background_dfu_handle_event(p_dfu_ctx, BACKGROUND_DFU_EVENT_TRANSFER_CONTINUE));
             }
@@ -380,18 +387,19 @@ static void dfu_init_check_callback(nrf_dfu_response_t * p_res, void * p_context
 
         case NRF_DFU_OP_OBJECT_EXECUTE:
             if ((p_res->result != NRF_DFU_RES_CODE_SUCCESS) ||
-                (s_dfu_settings.progress.command_crc != p_dfu_ctx->init_cmd_crc))
+                (s_dfu_settings.progress.manifest_crc != p_dfu_ctx->suit_manifest_crc))
             {
-                NRF_LOG_ERROR("Init commad has changed");
+                NRF_LOG_ERROR("SUIT manifest has changed.");
                 p_dfu_ctx->remaining_size = 0;
-                setup_download_init_command((background_dfu_context_t *)p_context);
+                setup_download_suit_manifest((background_dfu_context_t *)p_context);
 
                 UNUSED_RETURN_VALUE(background_dfu_handle_event(p_dfu_ctx, BACKGROUND_DFU_EVENT_TRANSFER_CONTINUE));
             }
             else
             {
-                // Valid init command stored, download firmware.
-                p_dfu_ctx->dfu_diag.state = BACKGROUND_DFU_DOWNLOAD_INIT_CMD;
+                // Valid SUIT manifest stored, download firmware.
+                nrf_dfu_validation_get_component_size(0, &p_dfu_ctx->firmware_size);
+                p_dfu_ctx->dfu_diag.state = BACKGROUND_DFU_GET_MANIFEST_BLOCKWISE;
 
                 UNUSED_RETURN_VALUE(background_dfu_handle_event(p_dfu_ctx, BACKGROUND_DFU_EVENT_TRANSFER_COMPLETE));
             }
@@ -418,7 +426,7 @@ static void dfu_data_select_callback(nrf_dfu_response_t * p_res, void * p_contex
         return;
     }
 
-    p_dfu_ctx->dfu_state       = BACKGROUND_DFU_DOWNLOAD_FIRMWARE;
+    p_dfu_ctx->dfu_state       = BACKGROUND_DFU_GET_FIRMWARE_BLOCKWISE;
     p_dfu_ctx->p_resource_size = &p_dfu_ctx->firmware_size;
     p_dfu_ctx->retry_count     = DEFAULT_RETRIES;
     p_dfu_ctx->block_num       = (p_res->select.offset / DEFAULT_BLOCK_SIZE);
@@ -448,8 +456,8 @@ static void block_request_handler(void * p_context)
 {
     background_dfu_context_t * p_dfu_ctx = (background_dfu_context_t *)p_context;
 
-    if ((p_dfu_ctx->dfu_state != BACKGROUND_DFU_DOWNLOAD_FIRMWARE) &&
-        (p_dfu_ctx->dfu_state != BACKGROUND_DFU_DOWNLOAD_INIT_CMD))
+    if ((p_dfu_ctx->dfu_state != BACKGROUND_DFU_GET_FIRMWARE_BLOCKWISE) &&
+        (p_dfu_ctx->dfu_state != BACKGROUND_DFU_GET_MANIFEST_BLOCKWISE))
     {
         return;
     }
@@ -481,8 +489,8 @@ static void block_timeout_handler(void * p_context)
     NRF_LOG_INFO("Block timeout! (b: %d)",
             block_manager_get_current_block(&p_dfu_ctx->block_manager));
 
-    if ((p_dfu_ctx->dfu_state != BACKGROUND_DFU_DOWNLOAD_FIRMWARE) &&
-        (p_dfu_ctx->dfu_state != BACKGROUND_DFU_DOWNLOAD_INIT_CMD))
+    if ((p_dfu_ctx->dfu_state != BACKGROUND_DFU_GET_FIRMWARE_BLOCKWISE) &&
+        (p_dfu_ctx->dfu_state != BACKGROUND_DFU_GET_MANIFEST_BLOCKWISE))
     {
         return;
     }
@@ -507,15 +515,15 @@ const char * background_dfu_state_to_string(const background_dfu_state_t state)
 {
     static const char * const names[] =
     {
-        "DFU_DOWNLOAD_INIT_CMD",
-        "DFU_DOWNLOAD_FIRMWARE",
-        "DFU_DOWNLOAD_MANIFEST",
+        "DFU_GET_MANIFEST_BLOCKWISE",
+        "DFU_GET_FIRMWARE_BLOCKWISE",
+        "DFU_GET_MANIFEST_METADATA",
         "DFU_WAIT_FOR_RESET",
         "DFU_IDLE",
         "DFU_ERROR",
     };
 
-    return names[(uint32_t)state - BACKGROUND_DFU_DOWNLOAD_INIT_CMD];
+    return names[(uint32_t)state - BACKGROUND_DFU_GET_MANIFEST_BLOCKWISE];
 }
 
 /** @brief Helper function convering DFU event name to string.
@@ -553,7 +561,7 @@ uint32_t background_dfu_handle_event(background_dfu_context_t * p_dfu_ctx,
             {
                 p_dfu_ctx->dfu_diag.prev_state = BACKGROUND_DFU_IDLE;
 
-                p_dfu_ctx->dfu_state     = BACKGROUND_DFU_DOWNLOAD_MANIFEST;
+                p_dfu_ctx->dfu_state     = BACKGROUND_DFU_GET_MANIFEST_METADATA;
                 p_dfu_ctx->block_num     = 0;
                 p_dfu_ctx->retry_count   = DEFAULT_RETRIES;
 
@@ -563,29 +571,20 @@ uint32_t background_dfu_handle_event(background_dfu_context_t * p_dfu_ctx,
             break;
         }
 
-        case BACKGROUND_DFU_DOWNLOAD_MANIFEST:
+        case BACKGROUND_DFU_GET_MANIFEST_METADATA:
         {
             if (event == BACKGROUND_DFU_EVENT_TRANSFER_COMPLETE)
             {
-                if (!is_image_different(p_dfu_ctx))
-                {
-                    NRF_LOG_INFO("Image is already installed");
-                    background_dfu_reset_state(p_dfu_ctx);
-                    background_dfu_transport_state_update(p_dfu_ctx);
-                    break;
-                }
+                p_dfu_ctx->dfu_diag.prev_state = BACKGROUND_DFU_GET_MANIFEST_METADATA;
+                p_dfu_ctx->dfu_state = BACKGROUND_DFU_GET_MANIFEST_BLOCKWISE;
 
-                p_dfu_ctx->dfu_diag.prev_state = BACKGROUND_DFU_DOWNLOAD_MANIFEST;
-
-                p_dfu_ctx->dfu_state = BACKGROUND_DFU_DOWNLOAD_INIT_CMD;
-
-                // Initiate init command check procedure.
+                // Initiate SUIT manifest check procedure.
                 if (background_dfu_op_select(NRF_DFU_OBJ_TYPE_COMMAND,
-                                             dfu_init_check_callback,
+                                             dfu_manifest_check_callback,
                                              p_dfu_ctx) != NRF_SUCCESS)
                 {
                     NRF_LOG_ERROR("No valid init command - select error");
-                    setup_download_init_command(p_dfu_ctx);
+                    setup_download_suit_manifest(p_dfu_ctx);
                 }
                 else
                 {
@@ -597,11 +596,11 @@ uint32_t background_dfu_handle_event(background_dfu_context_t * p_dfu_ctx,
             break;
         }
 
-        case BACKGROUND_DFU_DOWNLOAD_INIT_CMD:
+        case BACKGROUND_DFU_GET_MANIFEST_BLOCKWISE:
         {
             if (event == BACKGROUND_DFU_EVENT_TRANSFER_COMPLETE)
             {
-                p_dfu_ctx->dfu_diag.prev_state = BACKGROUND_DFU_DOWNLOAD_INIT_CMD;
+                p_dfu_ctx->dfu_diag.prev_state = BACKGROUND_DFU_GET_MANIFEST_BLOCKWISE;
 
                 if (p_dfu_ctx->dfu_mode == BACKGROUND_DFU_MODE_MULTICAST)
                 {
@@ -616,6 +615,13 @@ uint32_t background_dfu_handle_event(background_dfu_context_t * p_dfu_ctx,
                     dfu_handle_error(p_dfu_ctx);
                     err_code = NRF_ERROR_INTERNAL;
                 }
+
+                if (nrf_dfu_validation_manifest_decode())
+                {
+                    // Assumes single-component SUIT manifest.
+                    nrf_dfu_validation_get_component_size(0, &p_dfu_ctx->firmware_size);
+                    NRF_LOG_INFO("Firmware size: %d", p_dfu_ctx->firmware_size);
+                }
                 else
                 {
                     return NRF_SUCCESS;
@@ -623,7 +629,7 @@ uint32_t background_dfu_handle_event(background_dfu_context_t * p_dfu_ctx,
             }
             else if (event == BACKGROUND_DFU_EVENT_PROCESSING_ERROR)
             {
-                p_dfu_ctx->dfu_diag.prev_state = BACKGROUND_DFU_DOWNLOAD_INIT_CMD;
+                p_dfu_ctx->dfu_diag.prev_state = BACKGROUND_DFU_GET_MANIFEST_BLOCKWISE;
 
                 if (p_dfu_ctx->dfu_mode == BACKGROUND_DFU_MODE_MULTICAST)
                 {
@@ -636,11 +642,11 @@ uint32_t background_dfu_handle_event(background_dfu_context_t * p_dfu_ctx,
             break;
         }
 
-        case BACKGROUND_DFU_DOWNLOAD_FIRMWARE:
+        case BACKGROUND_DFU_GET_FIRMWARE_BLOCKWISE:
         {
             if (event == BACKGROUND_DFU_EVENT_TRANSFER_COMPLETE)
             {
-                p_dfu_ctx->dfu_diag.prev_state = BACKGROUND_DFU_DOWNLOAD_FIRMWARE;
+                p_dfu_ctx->dfu_diag.prev_state = BACKGROUND_DFU_GET_FIRMWARE_BLOCKWISE;
 
                 p_dfu_ctx->dfu_state           = BACKGROUND_DFU_WAIT_FOR_RESET;
 
@@ -653,7 +659,7 @@ uint32_t background_dfu_handle_event(background_dfu_context_t * p_dfu_ctx,
             }
             else if (event == BACKGROUND_DFU_EVENT_PROCESSING_ERROR)
             {
-                p_dfu_ctx->dfu_diag.prev_state = BACKGROUND_DFU_DOWNLOAD_FIRMWARE;
+                p_dfu_ctx->dfu_diag.prev_state = BACKGROUND_DFU_GET_FIRMWARE_BLOCKWISE;
 
                 if (p_dfu_ctx->dfu_mode == BACKGROUND_DFU_MODE_MULTICAST)
                 {
@@ -679,9 +685,9 @@ uint32_t background_dfu_handle_event(background_dfu_context_t * p_dfu_ctx,
         (p_dfu_ctx->dfu_state != BACKGROUND_DFU_ERROR) &&
         (p_dfu_ctx->dfu_state != BACKGROUND_DFU_WAIT_FOR_RESET))
     {
-        if (((p_dfu_ctx->dfu_state == BACKGROUND_DFU_DOWNLOAD_FIRMWARE) ||
-             (p_dfu_ctx->dfu_state == BACKGROUND_DFU_DOWNLOAD_INIT_CMD)) &&
-            (p_dfu_ctx->dfu_mode == BACKGROUND_DFU_MODE_MULTICAST))
+        if (((p_dfu_ctx->dfu_state == BACKGROUND_DFU_GET_FIRMWARE_BLOCKWISE) ||
+             (p_dfu_ctx->dfu_state == BACKGROUND_DFU_GET_MANIFEST_BLOCKWISE)) &&
+             (p_dfu_ctx->dfu_mode  == BACKGROUND_DFU_MODE_MULTICAST))
         {
             // In multicast DFU firmware download, client doesn't initiate block requests.
         }
@@ -716,7 +722,7 @@ void background_dfu_reset_state(background_dfu_context_t * p_dfu_ctx)
 
     p_dfu_ctx->dfu_state      = BACKGROUND_DFU_IDLE;
     p_dfu_ctx->dfu_mode       = BACKGROUND_DFU_MODE_UNICAST;
-    p_dfu_ctx->init_cmd_size  = 0;
+    p_dfu_ctx->suit_manifest_size  = 0;
     p_dfu_ctx->firmware_size  = 0;
     p_dfu_ctx->remaining_size = 0;
 

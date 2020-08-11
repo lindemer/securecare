@@ -393,13 +393,13 @@ static void postvalidate(void)
     NRF_LOG_INFO("Postvalidating update after reset.");
     nrf_dfu_validation_init();
 
-    if (nrf_dfu_validation_init_cmd_present())
+    if (nrf_dfu_validation_suit_manifest_present())
     {
         uint32_t firmware_start_addr;
         uint32_t firmware_size;
 
         // Execute a previously received init packed. Subsequent executes will have no effect.
-        if (nrf_dfu_validation_init_cmd_execute(&firmware_start_addr, &firmware_size) == NRF_DFU_RES_CODE_SUCCESS)
+        if (nrf_dfu_validation_suit_manifest_execute(&firmware_start_addr, &firmware_size) == NRF_DFU_RES_CODE_SUCCESS)
         {
             if (nrf_dfu_validation_prevalidate() == NRF_DFU_RES_CODE_SUCCESS)
             {

@@ -50,8 +50,6 @@
 #ifndef BACKGROUND_DFU_COAP_API_H_
 #define BACKGROUND_DFU_COAP_API_H_
 
-#include "coap_api.h"
-
 struct background_dfu_diagnostic;
 
 /** @brief Initialize DFU client.
@@ -62,20 +60,11 @@ struct background_dfu_diagnostic;
  */
 uint32_t coap_dfu_init(const void * p_context);
 
-/** @brief Process CoAP DFU pending operations.
- *
- * This function shall be called in the main loop.
- */
-void coap_dfu_process(void);
-
 /** @brief Trigger DFU.
- *
- *  @param[in] p_remote Address of a host which should be queried for DFU. If NULL then the
- *                      function will default to coap://[fd00::1]:5683.
  *
  *  @return NRF_SUCCESS on success, otherwise an error code is returned.
  */
-uint32_t coap_dfu_trigger(const coap_remote_t * p_remote);
+uint32_t coap_dfu_trigger();
 
 /** @brief Reset DFU state. */
 void coap_dfu_reset_state(void);

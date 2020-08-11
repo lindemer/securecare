@@ -64,9 +64,9 @@
  */
 typedef enum
 {
-    BACKGROUND_DFU_DOWNLOAD_INIT_CMD = NRF_DFU_OBJ_TYPE_COMMAND,
-    BACKGROUND_DFU_DOWNLOAD_FIRMWARE = NRF_DFU_OBJ_TYPE_DATA,
-    BACKGROUND_DFU_DOWNLOAD_MANIFEST,
+    BACKGROUND_DFU_GET_MANIFEST_BLOCKWISE = NRF_DFU_OBJ_TYPE_COMMAND,
+    BACKGROUND_DFU_GET_FIRMWARE_BLOCKWISE = NRF_DFU_OBJ_TYPE_DATA,
+    BACKGROUND_DFU_GET_MANIFEST_METADATA,
     BACKGROUND_DFU_WAIT_FOR_RESET,
     BACKGROUND_DFU_IDLE,
     BACKGROUND_DFU_ERROR,
@@ -88,27 +88,16 @@ typedef enum
     BACKGROUND_DFU_MODE_MULTICAST
 } background_dfu_mode_t;
 
-/** @brief Trigger packet structure. */
-typedef PACKED_STRUCT 
-{
-    uint8_t  flags;         /**< Trigger message flags. Bits 7:4 (oldest) - trigger version, bit 3 - DFU mode, bits 2:0 - reserved. */
-    uint32_t init_length;
-    uint32_t init_crc;
-    uint32_t image_length;
-    uint32_t image_crc;
-} background_dfu_trigger_t;
-
 /**@brief Structure with DFU diagnostic information. */
 typedef PACKED_STRUCT background_dfu_diagnostic
 {
-    uint32_t build_id;                      /**< Build identifier, based on compilation time. */
-    uint8_t  state;                         /**< Current DFU state. */
-    uint8_t  prev_state;                    /**< Previous DFU state. */
-    uint16_t init_blocks_requested;         /**< Number of requested missing init blocks. */
-    uint16_t image_blocks_requested;        /**< Number of requested missing image blocks. */
-    uint16_t triggers_received;             /**< Number of triggers received. */
-    uint16_t total_init_blocks_received;    /**< Total number of init blocks received, including retransmitted ones. */
-    uint16_t total_image_blocks_received;   /**< Total number of image blocks received, including retransmitted ones. */
+    uint32_t build_id;                       /**< Build identifier, based on compilation time. */
+    uint8_t  state;                          /**< Current DFU state. */
+    uint8_t  prev_state;                     /**< Previous DFU state. */
+    uint16_t manifest_blocks_requested;      /**< Number of requested missing SUIT manifest blocks. */
+    uint16_t image_blocks_requested;         /**< Number of requested missing image blocks. */
+    uint16_t total_manifest_blocks_received; /**< Total number of SUIT manifest blocks received, including retransmitted ones. */
+    uint16_t total_image_blocks_received;    /**< Total number of image blocks received, including retransmitted ones. */
 } background_dfu_diagnostic_t;
 
 /** @brief DFU client state. */
@@ -120,13 +109,12 @@ typedef struct dfu_context
                                                          downloading firmware. */
     background_dfu_diagnostic_t    dfu_diag;        /**< DFU diagnostic information. */
 
-    uint32_t                       init_cmd_size;   /**< Current init command size. */
-    uint32_t                       init_cmd_crc;    /**< Current init command checksum. */
-    uint32_t                       firmware_size;   /**< Current firmware command size. */
-    uint32_t                       firmware_crc;    /**< Current firmware command checksum. */
-    uint32_t                       max_obj_size;    /**< Maximum size of the DFU object. */
-    uint32_t                       remaining_size;  /**< Remaining size, in bytes, of the resource which
-                                                         is being downloaded. */
+    uint32_t                       suit_manifest_size;   /**< Current SUIT manifest size. */
+    uint32_t                       suit_manifest_crc;    /**< Current SUIT manifest checksum. */
+    uint32_t                       firmware_size;        /**< Current firmware command size. */
+    uint32_t                       max_obj_size;         /**< Maximum size of the DFU object. */
+    uint32_t                       remaining_size;       /**< Remaining size, in bytes, of the resource which
+                                                              is being downloaded. */
     /* TODO Move the block num to the block manager. */
     uint32_t                       block_num;       /**< Currently requested block number. */
     uint32_t      *                p_resource_size; /**< Downloaded resource size. */
@@ -134,20 +122,19 @@ typedef struct dfu_context
     uint8_t                        retry_count;     /**< Number of remaining retires. */
 } background_dfu_context_t;
 
-/**@brief Check if payload contains valid SUIT manifest and parse its contents.
+/**@brief Check if payload contains valid SUIT manifest metadata and parse its contents.
  *
  * @param[inout] p_dfu_ctx   DFU context.
- * @param[out]   p_suit_ctx  SUIT context to populate with manifest contents.
  * @param[in]    p_payload   A pointer to the message payload.
  * @param[in]    payload_len Payload length.
  *
  * @return True if manifest was valid, false otherwise.
  */
-bool background_dfu_validate_manifest(background_dfu_context_t * p_dfu_ctx,
-                                      const uint8_t            * p_payload,
-                                      uint32_t                   payload_len);
+bool background_dfu_validate_manifest_metadata(background_dfu_context_t * p_dfu_ctx,
+                                               const uint8_t            * p_payload,
+                                               uint32_t                   payload_len);
 
-/**@brief Process a payload with a SUIT manifest.
+/**@brief Process a payload with SUIT manifest metadata.
  *
  * @param[inout] p_dfu_ctx   DFU context.
  * @param[in]    p_payload   A pointer to the message payload.
@@ -155,9 +142,9 @@ bool background_dfu_validate_manifest(background_dfu_context_t * p_dfu_ctx,
  *
  * @return True if SUIT manifest was successfully processed, false otherwise.
  */
-bool background_dfu_process_manifest(background_dfu_context_t * p_dfu_ctx,
-                                     const uint8_t            * p_payload,
-                                     uint32_t                   payload_len);
+bool background_dfu_process_manifest_metadata(background_dfu_context_t * p_dfu_ctx,
+                                              const uint8_t            * p_payload,
+                                              uint32_t                   payload_len);
 
 /**@brief Process the block and return CoAP result code corresponding to the result of operation.
  *
