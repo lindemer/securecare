@@ -185,7 +185,7 @@ static void state_changed_callback(uint32_t aFlags, void *aContext)
             case OT_DEVICE_ROLE_DETACHED:
                 break;
             case OT_DEVICE_ROLE_CHILD:
-                coap_dfu_trigger();
+                coap_dfu_start();
                 break;
             case OT_DEVICE_ROLE_ROUTER:
                 break;

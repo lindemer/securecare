@@ -60,11 +60,11 @@ struct background_dfu_diagnostic;
  */
 uint32_t coap_dfu_init(const void * p_context);
 
-/** @brief Trigger DFU.
+/** @brief Start DFU client.
  *
  *  @return NRF_SUCCESS on success, otherwise an error code is returned.
  */
-uint32_t coap_dfu_trigger();
+uint32_t coap_dfu_start();
 
 /** @brief Reset DFU state. */
 void coap_dfu_reset_state(void);

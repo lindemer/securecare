@@ -44,3 +44,5 @@ This example uses the OpenThread border router as the demo server machine.
   5. Run `./build/demo-server` to start the server.
   6. (Optional) Run `JLinkRTTLogger` on the machine connected to the nRF52840 to view logs in real time. Use the following settings: device name `NRF52840_XXAA`, target interface `SWD`, channel `0`, output file `/dev/stdout`.
   7. Reset the device to initiate the DFU process.
+
+*For CoAP(s)* set the firmware URI to `coaps://[fd00::1]/app.bin` in step 4 and run `./build/demo-server -k secret` in step 5 to run the demo server with the hard-coded PSK.

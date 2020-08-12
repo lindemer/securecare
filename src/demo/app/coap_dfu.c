@@ -87,12 +87,24 @@
 #include "nrf_log.h"
 NRF_LOG_MODULE_REGISTER();
 
-// Remote firmware manifest server address.
+// Remote firmware manifest server paramters.
 static const uint8_t suit_remote_addr[16] =
         { 0xfd, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
           0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01 };
 
-static const uint16_t suit_remote_port = 5683;
+#ifndef COAP_DFU_DTLS_ENABLE
+#define COAP_DFU_DTLS_ENABLE 1
+#endif
+
+#if COAP_DFU_DTLS_ENABLE
+static void coaps_connect(const uint8_t addr[16], const uint16_t port);
+
+static const char * suit_psk_secret = "secret";
+static const char * suit_psk_id = "identity";
+static const uint16_t suit_remote_port = OT_DEFAULT_COAP_SECURE_PORT;
+#else
+static const uint16_t suit_remote_port = OT_DEFAULT_COAP_PORT;
+#endif
 
 // Maximum number of events in the scheduler queue
 #define SCHED_QUEUE_SIZE 	32
@@ -440,9 +452,9 @@ static uint32_t parse_uri_string(background_dfu_context_t * p_dfu_ctx, char * re
                               &urn, &urn_len, &use_dtls,
                               uri, (uint8_t)(strlen(uri)))))
     {
-        if (use_dtls)
+        if (!use_dtls)
         {
-            NRF_LOG_INFO("Remote resource requires CoAPs.");
+            NRF_LOG_ERROR("Remote firmware resource does not use DTLS!");
         }
         return err;
     }
@@ -514,6 +526,18 @@ static otMessage * message_create(const char    * p_resource,
  */
 static void coap_dfu_message_send(otMessage * aMessage)
 {
+#if COAP_DFU_DTLS_ENABLE
+    if (!otCoapSecureIsConnected(thread_ot_instance_get()) ||
+        !otCoapSecureIsConnectionActive(thread_ot_instance_get()))
+    {
+        NRF_LOG_ERROR("DTLS connection not established.");
+    }
+
+    otError error = otCoapSecureSendRequest(thread_ot_instance_get(),
+                                            aMessage,
+                                            m_coap_dfu_ctx.handler,
+                                            &m_dfu_ctx);
+#else
     otMessageInfo aMessageInfo;
     memset(&aMessageInfo, 0, sizeof(aMessageInfo));
     memcpy(aMessageInfo.mPeerAddr.mFields.m8, m_coap_dfu_ctx.remote_addr, 16);
@@ -524,6 +548,7 @@ static void coap_dfu_message_send(otMessage * aMessage)
                                       &aMessageInfo,
                                       m_coap_dfu_ctx.handler,
                                       &m_dfu_ctx);
+#endif
 
     if (error != OT_ERROR_NONE)
     {
@@ -575,17 +600,6 @@ static otMessage * coap_dfu_create_request(const char * resource_path,
     return aMessage;
 }
 
-static void coap_default_handler(void                * p_context,
-                                 otMessage           * p_message,
-                                 const otMessageInfo * p_message_info)
-{
-    (void)p_context;
-    (void)p_message;
-    (void)p_message_info;
-
-    NRF_LOG_INFO("Received CoAP message that does not match any request or resource\r\n");
-}
-
 /**@brief Count blocks present in a block bitmap.
  *
  * @param[in] p_req_bmp A block bitmap to count.
@@ -608,16 +622,6 @@ static uint16_t blocks_count(const background_dfu_request_bitmap_t * p_req_bmp)
     }
 
     return count;
-}
-
-static uint32_t thread_coap_init()
-{
-    otError error = otCoapStart(thread_ot_instance_get(), OT_DEFAULT_COAP_PORT);
-    ASSERT(error == OT_ERROR_NONE);
-
-    otCoapSetDefaultHandler(thread_ot_instance_get(), coap_default_handler, NULL);
-
-    return NRF_SUCCESS;
 }
 
 /***************************************************************************************************
@@ -672,11 +676,19 @@ void background_dfu_transport_state_update(background_dfu_context_t * p_dfu_ctx)
             m_coap_dfu_ctx.handler       = (otCoapResponseHandler)handle_block_response;
             break;
 
-        case BACKGROUND_DFU_GET_FIRMWARE_BLOCKWISE:
-
+        case BACKGROUND_DFU_WAIT_FOR_CONNECTION:
             // Get the remote URI and resource name from the stored manifest.
             parse_uri_string(p_dfu_ctx, image_resource_name);
 
+#if COAP_DFU_DTLS_ENABLE
+            coaps_connect(m_coap_dfu_ctx.remote_addr, m_coap_dfu_ctx.remote_port);
+#else
+            // The firmware image download can begin immediately if DTLS is disabled.
+            background_dfu_handle_event(&m_dfu_ctx, BACKGROUND_DFU_EVENT_TRANSFER_COMPLETE);
+#endif
+            break;
+
+        case BACKGROUND_DFU_GET_FIRMWARE_BLOCKWISE:
             m_coap_dfu_ctx.resource_path = image_resource_name;
             m_coap_dfu_ctx.handler       = (otCoapResponseHandler)handle_block_response;
             break;
@@ -726,6 +738,91 @@ void background_dfu_handle_error(void)
 }
 
 /***************************************************************************************************
+ * @section CoAP(s) initialization
+ **************************************************************************************************/
+
+static void coap_default_handler(void                * p_context,
+                                 otMessage           * p_message,
+                                 const otMessageInfo * p_message_info)
+{
+    (void)p_context;
+    (void)p_message;
+    (void)p_message_info;
+
+    NRF_LOG_INFO("Received CoAP message that does not match any request or resource\r\n");
+}
+
+#if COAP_DFU_DTLS_ENABLE
+static void coaps_connect_handler(bool connected, void *aContext)
+{
+    if (connected)
+    {
+        NRF_LOG_INFO("CoAPs session established.");
+        background_dfu_handle_event(&m_dfu_ctx, BACKGROUND_DFU_EVENT_TRANSFER_COMPLETE);
+    }
+    else
+    {
+        NRF_LOG_ERROR("Failed to establish CoAPs session.");
+    }
+}
+
+static void coaps_connect(const uint8_t addr[16], const uint16_t port)
+{
+    if (otCoapSecureIsConnected(thread_ot_instance_get()))
+    {
+        NRF_LOG_INFO("Terminating existing DTLS session.");
+
+	otCoapSecureDisconnect(thread_ot_instance_get());
+
+        // FIXME: This works, but it seems like overkill. The disconnect command doesn't appear to
+        // work without restarting the entire CoAPs backend.
+        otCoapSecureStop(thread_ot_instance_get());
+        otError error = otCoapSecureStart(thread_ot_instance_get(), OT_DEFAULT_COAP_SECURE_PORT);
+        ASSERT(error == OT_ERROR_NONE);
+
+        otCoapSecureSetDefaultHandler(thread_ot_instance_get(), coap_default_handler, NULL);
+    }
+
+    otSockAddr aSockAddr;
+    memset(&aSockAddr, 0, sizeof(aSockAddr));
+
+    aSockAddr.mPort = port;
+    memcpy(&aSockAddr.mAddress.mFields.m8, addr, 16);
+
+    otCoapSecureSetPsk(thread_ot_instance_get(),
+                       (const uint8_t *)suit_psk_secret, strlen(suit_psk_secret),
+                       (const uint8_t *)suit_psk_id, strlen(suit_psk_id));
+
+    otError error = otCoapSecureConnect(thread_ot_instance_get(),
+                                        &aSockAddr,
+                                        coaps_connect_handler,
+                                        &m_dfu_ctx);
+
+    ASSERT(error == OT_ERROR_NONE);
+}
+#endif
+
+static uint32_t thread_coap_init()
+{
+    otError error;
+
+#if COAP_DFU_DTLS_ENABLE
+    error = otCoapSecureStart(thread_ot_instance_get(), OT_DEFAULT_COAP_SECURE_PORT);
+    ASSERT(error == OT_ERROR_NONE);
+
+    otCoapSecureSetDefaultHandler(thread_ot_instance_get(), coap_default_handler, NULL);
+    coaps_connect(suit_remote_addr, suit_remote_port);
+#else
+    error = otCoapStart(thread_ot_instance_get(), OT_DEFAULT_COAP_PORT);
+    ASSERT(error == OT_ERROR_NONE);
+
+    otCoapSetDefaultHandler(thread_ot_instance_get(), coap_default_handler, NULL);
+#endif
+
+    return NRF_SUCCESS;
+}
+
+/***************************************************************************************************
  * @section Public API
  **************************************************************************************************/
 
@@ -743,7 +840,7 @@ void coap_dfu_diagnostic_get(struct background_dfu_diagnostic *p_diag)
     }
 }
 
-uint32_t coap_dfu_trigger()
+uint32_t coap_dfu_start()
 {
     NRF_LOG_INFO("Starting DFU.");
 
@@ -753,37 +850,36 @@ uint32_t coap_dfu_trigger()
         return NRF_ERROR_INVALID_STATE;
     }
 
-    // Transition from DFU_IDLE to DFU_DOWNLOAD_TRIG.
+    uint32_t err_code = thread_coap_init();
+    ASSERT(err_code == NRF_SUCCESS);
+
+    /* If DTLS is not enabled, we can transition from DFU_IDLE to DFU_GET_MANIFEST_METADATA
+     * immediately. Otherwise, this transition is triggered by the CoAPs connection callback upon
+     * completion of the handshake with the remote server.
+     */
+
+#if COAP_DFU_DTLS_ENABLE
+    return NRF_SUCCESS;
+#else
     return background_dfu_handle_event(&m_dfu_ctx, BACKGROUND_DFU_EVENT_TRANSFER_COMPLETE);
+#endif
 }
 
 uint32_t coap_dfu_init(const void * p_context)
 {
-    uint32_t err_code;
+    memset(&m_coap_dfu_ctx, 0, sizeof(m_coap_dfu_ctx));
+    
+    memcpy(&m_coap_dfu_ctx.remote_addr, suit_remote_addr, 16);
+    m_coap_dfu_ctx.remote_port = suit_remote_port;
+    
+    nrf_dfu_settings_init(false);
+    nrf_dfu_req_handler_init(dfu_observer);
+    
+    background_dfu_state_init(&m_dfu_ctx);
+    
+    APP_SCHED_INIT(SCHED_EVENT_DATA_SIZE, SCHED_QUEUE_SIZE);
 
-    do
-    {
-        memset(&m_coap_dfu_ctx, 0, sizeof(m_coap_dfu_ctx));
-
-        memcpy(&m_coap_dfu_ctx.remote_addr, suit_remote_addr, 16);
-        m_coap_dfu_ctx.remote_port = suit_remote_port;
-
-        err_code = thread_coap_init();
-        if (err_code != NRF_SUCCESS)
-        {
-            break;
-        }
-
-        nrf_dfu_settings_init(false);
-        nrf_dfu_req_handler_init(dfu_observer);
-
-        background_dfu_state_init(&m_dfu_ctx);
-
-        APP_SCHED_INIT(SCHED_EVENT_DATA_SIZE, SCHED_QUEUE_SIZE);
-
-    } while (0);
-
-    return err_code;
+    return NRF_SUCCESS;
 }
 
 void coap_dfu_reset_state(void)
