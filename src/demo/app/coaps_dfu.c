@@ -74,11 +74,11 @@ static const uint8_t suit_remote_addr[16] =
         { 0xfd, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
           0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01 };
 
-#ifndef coaps_dfu_DTLS_ENABLE
-#define coaps_dfu_DTLS_ENABLE 1
+#ifndef COAPS_DFU_DTLS_ENABLE
+#define COAPS_DFU_DTLS_ENABLE 1
 #endif
 
-#if coaps_dfu_DTLS_ENABLE
+#if COAPS_DFU_DTLS_ENABLE
 static void coaps_connect(const uint8_t addr[16], const uint16_t port);
 
 static const char * suit_psk_secret = "secret";
@@ -500,7 +500,7 @@ static otMessage * message_create(const char    * p_resource,
  */
 static void coaps_dfu_message_send(otMessage * aMessage)
 {
-#if coaps_dfu_DTLS_ENABLE
+#if COAPS_DFU_DTLS_ENABLE
     if (!otCoapSecureIsConnected(thread_ot_instance_get()) ||
         !otCoapSecureIsConnectionActive(thread_ot_instance_get()))
     {
@@ -654,7 +654,7 @@ void background_dfu_transport_state_update(background_dfu_context_t * p_dfu_ctx)
             // Get the remote URI and resource name from the stored manifest.
             parse_uri_string(p_dfu_ctx, image_resource_name);
 
-#if coaps_dfu_DTLS_ENABLE
+#if COAPS_DFU_DTLS_ENABLE
             coaps_connect(m_coaps_dfu_ctx.remote_addr, m_coaps_dfu_ctx.remote_port);
 #else
             // The firmware image download can begin immediately if DTLS is disabled.
@@ -726,7 +726,7 @@ static void coap_default_handler(void                * p_context,
     NRF_LOG_INFO("Received CoAP message that does not match any request or resource\r\n");
 }
 
-#if coaps_dfu_DTLS_ENABLE
+#if COAPS_DFU_DTLS_ENABLE
 static void coaps_connect_handler(bool connected, void *aContext)
 {
     if (connected)
@@ -780,7 +780,7 @@ static uint32_t thread_coap_init()
 {
     otError error;
 
-#if coaps_dfu_DTLS_ENABLE
+#if COAPS_DFU_DTLS_ENABLE
     error = otCoapSecureStart(thread_ot_instance_get(), OT_DEFAULT_COAP_SECURE_PORT);
     ASSERT(error == OT_ERROR_NONE);
 
@@ -832,7 +832,7 @@ uint32_t coaps_dfu_start()
      * completion of the handshake with the remote server.
      */
 
-#if coaps_dfu_DTLS_ENABLE
+#if COAPS_DFU_DTLS_ENABLE
     return NRF_SUCCESS;
 #else
     return background_dfu_handle_event(&m_dfu_ctx, BACKGROUND_DFU_EVENT_TRANSFER_COMPLETE);
