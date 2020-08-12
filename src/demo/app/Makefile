@@ -67,7 +67,7 @@ SRC_FILES += \
   $(SDK_ROOT)/external/infineon/examples/ecdsa_utils/ecdsa_utils.c \
   $(KEYS_DIR)/pub.c \
   $(PROJ_DIR)/main.c \
-  $(PROJ_DIR)/coap_dfu.c \
+  $(PROJ_DIR)/coaps_dfu.c \
   $(PROJ_DIR)/addr_parse.c \
   $(PROJ_DIR)/background_dfu_block.c \
   $(PROJ_DIR)/background_dfu_operation.c \

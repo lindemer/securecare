@@ -37,12 +37,7 @@
  * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  */
-/** @file
- *
- * @{
- * @brief SUIT DFU over Thread application main file.
- *
- */
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdbool.h>
@@ -61,7 +56,7 @@
 #include "nrf_log_default_backends.h"
 #include "sdk_config.h"
 #include "nrf_dfu_utils.h"
-#include "coap_dfu.h"
+#include "coaps_dfu.h"
 #include "background_dfu_state.h"
 #include "thread_utils.h"
 
@@ -117,7 +112,7 @@ void handle_dfu_command(uint8_t argc, char *argv[])
     if (strcmp(argv[0], "diag") == 0)
     {
         struct background_dfu_diagnostic diag;
-        coap_dfu_diagnostic_get(&diag);
+        coaps_dfu_diagnostic_get(&diag);
         otCliOutputFormat("build_id: 0x%08x, "
                               "state: %d, "
                               "prev_state: %d, ",
@@ -129,9 +124,9 @@ void handle_dfu_command(uint8_t argc, char *argv[])
     }
 }
 
-void coap_dfu_handle_error(void)
+void coaps_dfu_handle_error(void)
 {
-    coap_dfu_reset_state();
+    coaps_dfu_reset_state();
 }
 
 
@@ -159,8 +154,7 @@ static void addresses_print(otInstance * aInstance)
     }
 }
 
-/**@brief Function for initializing scheduler module.
- */
+// Function for initializing scheduler module.
 static void scheduler_init(void)
 {
     APP_SCHED_INIT(SCHED_EVENT_DATA_SIZE, SCHED_QUEUE_SIZE);
@@ -185,7 +179,7 @@ static void state_changed_callback(uint32_t aFlags, void *aContext)
             case OT_DEVICE_ROLE_DETACHED:
                 break;
             case OT_DEVICE_ROLE_CHILD:
-                coap_dfu_start();
+                coaps_dfu_start();
                 break;
             case OT_DEVICE_ROLE_ROUTER:
                 break;
@@ -209,8 +203,7 @@ static void thread_bsp_init(void)
 }
 
 
-/**@brief Function for initializing the Thread Stack.
- */
+// Function for initializing the Thread Stack.
 static void thread_instance_init(void)
 {
     thread_configuration_t thread_configuration =
@@ -267,8 +260,7 @@ static void thread_instance_init(void)
 }
 
 
-/**@brief Function for initializing the nrf log module.
- */
+// Function for initializing the nrf log module.
 static void log_init(void)
 {
     ret_code_t err_code = NRF_LOG_INIT(NULL);
@@ -297,7 +289,7 @@ int main(int argc, char *argv[])
 
     thread_instance_init();
 
-    err_code = coap_dfu_init(thread_ot_instance_get());
+    err_code = coaps_dfu_init(thread_ot_instance_get());
     APP_ERROR_CHECK(err_code);
 
     thread_bsp_init();
@@ -313,5 +305,3 @@ int main(int argc, char *argv[])
         }
     }
 }
-
-/** @} */
