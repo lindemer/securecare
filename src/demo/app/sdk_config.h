@@ -49,7 +49,8 @@
 // <h> Application 
 
 //==========================================================
-// Unique device identifiers for the SUIT DFU.
+
+// Unique device identifiers for the CoAP(s) SUIT DFU.
 
 #ifndef SUIT_CLASS_ID
 #define SUIT_CLASS_ID { 0x14, 0x92, 0xaf, 0x14, 0x25, 0x69, 0x5e, 0x48, \

@@ -144,9 +144,9 @@ uint32_t addr_parse_uri(uint8_t *  p_addr,
         }
     }
 
-    // The resource URI is all remaining characters.
-    *p_urn = &p_uri[index];
-    *p_urn_len = uri_len - index;
+    // The resource URI is all remaining characters except the initial '/'.
+    *p_urn = &p_uri[index + 1];
+    *p_urn_len = uri_len - index - 1;
 
     return NRF_SUCCESS;
 }

@@ -196,42 +196,6 @@ bool background_dfu_process_manifest_metadata(background_dfu_context_t * p_dfu_c
     return true;
 }
 
-/*
-// TODO: Check if this has security implications. This should probably be declared static so
-// application code cannot modify it directly.
-
-extern suit_context_t m_suit_ctx;
-
-bool background_dfu_validate_manifest(background_dfu_context_t * p_dfu_ctx,
-                                      const uint8_t            * p_payload,
-                                      uint32_t                   payload_len)
-{
-    if ((p_dfu_ctx->dfu_state != BACKGROUND_DFU_IDLE) &&
-        (p_dfu_ctx->dfu_state != BACKGROUND_DFU_GET_MANIFEST_METADATA))
-    {
-        NRF_LOG_ERROR("Validate manifest: DFU already in progress (s:%s).",
-                (uint32_t)background_dfu_state_to_string(p_dfu_ctx->dfu_state));
-        return false;
-    }
-
-    if (!nrf_dfu_manifest_decode(p_payload, payload_len))
-    {
-        NRF_LOG_ERROR("Failed to decode SUIT manifest.");
-        return false;
-    }
-    else
-    {
-        p_dfu_ctx->suit_manifest_size = payload_len;
-        p_dfu_ctx->suit_manifest_crc  = crc32_compute(p_payload, payload_len, NULL);
-        p_dfu_ctx->firmware_size = m_suit_ctx.components[0].size;
-        p_dfu_ctx->firmware_crc  = 0;
-        p_dfu_ctx->dfu_mode = BACKGROUND_DFU_MODE_UNICAST;
-    }
-
-    return true;
-}
-*/
-
 /***************************************************************************************************
  * @section DFU checks
  **************************************************************************************************/
@@ -518,6 +482,7 @@ const char * background_dfu_state_to_string(const background_dfu_state_t state)
         "DFU_GET_MANIFEST_BLOCKWISE",
         "DFU_GET_FIRMWARE_BLOCKWISE",
         "DFU_GET_MANIFEST_METADATA",
+        "DFU_WAIT_FOR_CONNECTION",
         "DFU_WAIT_FOR_RESET",
         "DFU_IDLE",
         "DFU_ERROR",
@@ -601,19 +566,11 @@ uint32_t background_dfu_handle_event(background_dfu_context_t * p_dfu_ctx,
             if (event == BACKGROUND_DFU_EVENT_TRANSFER_COMPLETE)
             {
                 p_dfu_ctx->dfu_diag.prev_state = BACKGROUND_DFU_GET_MANIFEST_BLOCKWISE;
+                p_dfu_ctx->dfu_state           = BACKGROUND_DFU_WAIT_FOR_CONNECTION;
 
                 if (p_dfu_ctx->dfu_mode == BACKGROUND_DFU_MODE_MULTICAST)
                 {
                     stop_block_timeout_timer(p_dfu_ctx);
-                }
-
-                if (background_dfu_op_select(NRF_DFU_OBJ_TYPE_DATA,
-                                             dfu_data_select_callback,
-                                             p_dfu_ctx) != NRF_SUCCESS)
-                {
-                    NRF_LOG_ERROR("Select failed");
-                    dfu_handle_error(p_dfu_ctx);
-                    err_code = NRF_ERROR_INTERNAL;
                 }
 
                 if (nrf_dfu_validation_manifest_decode())
@@ -621,10 +578,13 @@ uint32_t background_dfu_handle_event(background_dfu_context_t * p_dfu_ctx,
                     // Assumes single-component SUIT manifest.
                     nrf_dfu_validation_get_component_size(0, &p_dfu_ctx->firmware_size);
                     NRF_LOG_INFO("Firmware size: %d", p_dfu_ctx->firmware_size);
-                }
-                else
-                {
+                    background_dfu_transport_state_update(p_dfu_ctx);
                     return NRF_SUCCESS;
+                }
+		else
+                {
+                    err_code = NRF_ERROR_INTERNAL;
+                    break;
                 }
             }
             else if (event == BACKGROUND_DFU_EVENT_PROCESSING_ERROR)
@@ -639,7 +599,28 @@ uint32_t background_dfu_handle_event(background_dfu_context_t * p_dfu_ctx,
                 NRF_LOG_ERROR("Processing error while downloading init command.");
                 dfu_handle_error(p_dfu_ctx);
             }
-            break;
+        }
+
+        case BACKGROUND_DFU_WAIT_FOR_CONNECTION:
+        {
+            if (event == BACKGROUND_DFU_EVENT_TRANSFER_COMPLETE)
+            {
+                p_dfu_ctx->dfu_diag.prev_state = BACKGROUND_DFU_WAIT_FOR_CONNECTION;
+                if (background_dfu_op_select(NRF_DFU_OBJ_TYPE_DATA,
+                                             dfu_data_select_callback,
+                                             p_dfu_ctx) != NRF_SUCCESS)
+                {
+                    NRF_LOG_ERROR("Select failed");
+                    dfu_handle_error(p_dfu_ctx);
+                    err_code = NRF_ERROR_INTERNAL;
+		    break;
+                }
+                else
+                {
+                    return NRF_SUCCESS;
+                }
+            }
+
         }
 
         case BACKGROUND_DFU_GET_FIRMWARE_BLOCKWISE:
@@ -647,7 +628,6 @@ uint32_t background_dfu_handle_event(background_dfu_context_t * p_dfu_ctx,
             if (event == BACKGROUND_DFU_EVENT_TRANSFER_COMPLETE)
             {
                 p_dfu_ctx->dfu_diag.prev_state = BACKGROUND_DFU_GET_FIRMWARE_BLOCKWISE;
-
                 p_dfu_ctx->dfu_state           = BACKGROUND_DFU_WAIT_FOR_RESET;
 
                 if (p_dfu_ctx->dfu_mode == BACKGROUND_DFU_MODE_MULTICAST)
@@ -681,6 +661,7 @@ uint32_t background_dfu_handle_event(background_dfu_context_t * p_dfu_ctx,
             break;
     }
 
+    // Request the next block from DFU front-end.
     if ((p_dfu_ctx->dfu_state != BACKGROUND_DFU_IDLE) &&
         (p_dfu_ctx->dfu_state != BACKGROUND_DFU_ERROR) &&
         (p_dfu_ctx->dfu_state != BACKGROUND_DFU_WAIT_FOR_RESET))

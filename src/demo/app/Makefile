@@ -67,11 +67,11 @@ SRC_FILES += \
   $(SDK_ROOT)/external/infineon/examples/ecdsa_utils/ecdsa_utils.c \
   $(KEYS_DIR)/pub.c \
   $(PROJ_DIR)/main.c \
-  $(PROJ_DIR)/coap_dfu.c \
+  $(PROJ_DIR)/coaps_dfu.c \
   $(PROJ_DIR)/addr_parse.c \
-  $(PROJ_DIR)/background_dfu_block.c \
-  $(PROJ_DIR)/background_dfu_operation.c \
   $(PROJ_DIR)/background_dfu_state.c \
+  $(SDK_ROOT)/components/iot/background_dfu/background_dfu_block.c \
+  $(SDK_ROOT)/components/iot/background_dfu/background_dfu_operation.c \
   $(SDK_ROOT)/components/libraries/crypto/backend/nrf_sw/nrf_sw_backend_hash.c \
   $(PROJ_DIR)/../common/nrf_dfu.c \
   $(PROJ_DIR)/../common/nrf_dfu_flash.c \
@@ -109,6 +109,7 @@ INC_FOLDERS += \
   $(SDK_ROOT)/external/fprintf \
   $(SDK_ROOT)/components/boards \
   $(SDK_ROOT)/components/iot/background_dfu \
+  $(SDK_ROOT)/components/iot/background_dfu/transport \
   $(SDK_ROOT)/components/libraries/atomic \
   $(SDK_ROOT)/components/iot/ipv6_parse \
   $(SDK_ROOT)/components/iot/ble_6lowpan \

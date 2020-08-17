@@ -1,48 +1,34 @@
 /**
- * Copyright (c) 2017 - 2020, Nordic Semiconductor ASA
- *
+ * Copyright (c) 2020, RISE Research Institutes of Sweden AB
  * All rights reserved.
  *
- * Redistribution and use in source and binary forms, with or without modification,
- * are permitted provided that the following conditions are met:
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
  *
- * 1. Redistributions of source code must retain the above copyright notice, this
- *    list of conditions and the following disclaimer.
+ * 1. Redistributions of source code must retain the above copyright notice,
+ * this list of conditions and the following disclaimer.
  *
- * 2. Redistributions in binary form, except as embedded into a Nordic
- *    Semiconductor ASA integrated circuit in a product or a software update for
- *    such product, must reproduce the above copyright notice, this list of
- *    conditions and the following disclaimer in the documentation and/or other
- *    materials provided with the distribution.
+ * 2. Redistributions in binary form must reproduce the above copyright notice,
+ * this list of conditions and the following disclaimer in the documentation
+ * and/or other materials provided with the distribution.
  *
- * 3. Neither the name of Nordic Semiconductor ASA nor the names of its
- *    contributors may be used to endorse or promote products derived from this
- *    software without specific prior written permission.
+ * 3. Neither the name of the copyright holder nor the names of its contributors
+ * may be used to endorse or promote products derived from this software without
+ * specific prior written permission.
  *
- * 4. This software, with or without modification, must only be used with a
- *    Nordic Semiconductor ASA integrated circuit.
- *
- * 5. Any software provided in binary form under this license must not be reverse
- *    engineered, decompiled, modified and/or disassembled.
- *
- * THIS SOFTWARE IS PROVIDED BY NORDIC SEMICONDUCTOR ASA "AS IS" AND ANY EXPRESS
- * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
- * OF MERCHANTABILITY, NONINFRINGEMENT, AND FITNESS FOR A PARTICULAR PURPOSE ARE
- * DISCLAIMED. IN NO EVENT SHALL NORDIC SEMICONDUCTOR ASA OR CONTRIBUTORS BE
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
  * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
- * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
- * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
- * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
- * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- */
-/** @file
- *
- * @{
- * @brief SUIT DFU over Thread application main file.
- *
- */
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ **/
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdbool.h>
@@ -61,7 +47,7 @@
 #include "nrf_log_default_backends.h"
 #include "sdk_config.h"
 #include "nrf_dfu_utils.h"
-#include "coap_dfu.h"
+#include "coaps_dfu.h"
 #include "background_dfu_state.h"
 #include "thread_utils.h"
 
@@ -117,7 +103,7 @@ void handle_dfu_command(uint8_t argc, char *argv[])
     if (strcmp(argv[0], "diag") == 0)
     {
         struct background_dfu_diagnostic diag;
-        coap_dfu_diagnostic_get(&diag);
+        coaps_dfu_diagnostic_get(&diag);
         otCliOutputFormat("build_id: 0x%08x, "
                               "state: %d, "
                               "prev_state: %d, ",
@@ -129,9 +115,9 @@ void handle_dfu_command(uint8_t argc, char *argv[])
     }
 }
 
-void coap_dfu_handle_error(void)
+void coaps_dfu_handle_error(void)
 {
-    coap_dfu_reset_state();
+    coaps_dfu_reset_state();
 }
 
 
@@ -159,8 +145,7 @@ static void addresses_print(otInstance * aInstance)
     }
 }
 
-/**@brief Function for initializing scheduler module.
- */
+// Function for initializing scheduler module.
 static void scheduler_init(void)
 {
     APP_SCHED_INIT(SCHED_EVENT_DATA_SIZE, SCHED_QUEUE_SIZE);
@@ -185,7 +170,7 @@ static void state_changed_callback(uint32_t aFlags, void *aContext)
             case OT_DEVICE_ROLE_DETACHED:
                 break;
             case OT_DEVICE_ROLE_CHILD:
-                coap_dfu_trigger();
+                coaps_dfu_start();
                 break;
             case OT_DEVICE_ROLE_ROUTER:
                 break;
@@ -209,8 +194,7 @@ static void thread_bsp_init(void)
 }
 
 
-/**@brief Function for initializing the Thread Stack.
- */
+// Function for initializing the Thread Stack.
 static void thread_instance_init(void)
 {
     thread_configuration_t thread_configuration =
@@ -267,8 +251,7 @@ static void thread_instance_init(void)
 }
 
 
-/**@brief Function for initializing the nrf log module.
- */
+// Function for initializing the nrf log module.
 static void log_init(void)
 {
     ret_code_t err_code = NRF_LOG_INIT(NULL);
@@ -297,7 +280,7 @@ int main(int argc, char *argv[])
 
     thread_instance_init();
 
-    err_code = coap_dfu_init(thread_ot_instance_get());
+    err_code = coaps_dfu_init(thread_ot_instance_get());
     APP_ERROR_CHECK(err_code);
 
     thread_bsp_init();
@@ -313,5 +296,3 @@ int main(int argc, char *argv[])
         }
     }
 }
-
-/** @} */
