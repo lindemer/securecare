@@ -318,13 +318,13 @@ cbor_decompress_cert(uint8_t *buffer, uint16_t buf_len, uint8_t *decompressed_bu
   uint32_t serial = uint32_to_int(serial_bytes);
   printf("ret: %d, serial: ", ret);
   hdumps(serial_bytes, value_len);
-  printf("\n%lu\n", (long unsigned int)serial);
+  printf("\n%u\n", ( unsigned int)serial);
   decoded_cbor_cert.serial_number = serial;
 
   //const uint8_t *issuer;
   ret = nanocbor_get_tstr(&arr, (const unsigned char**)&decoded_cbor_cert.issuer,  &value_len);
 
-  printf("ret: %d, issuer of len %lu\n", ret, value_len);
+  printf("ret: %d, issuer of len %u\n", ret, (unsigned int)value_len);
   hdumps((const unsigned char*)decoded_cbor_cert.issuer, value_len);
   printf("\n");
   decoded_cbor_cert.issuer_length = value_len;
@@ -340,7 +340,7 @@ cbor_decompress_cert(uint8_t *buffer, uint16_t buf_len, uint8_t *decompressed_bu
 //  tm_year int years since 1900
 
 
-  printf("ret: %d, not before %lu\n", ret, (long unsigned int)nba);
+  printf("ret: %d, not before %u\n", ret, (unsigned int)nba);
   decoded_cbor_cert.not_before.tm_sec = nba % 60;
   int pSS = (nba - decoded_cbor_cert.not_before.tm_sec) / 60;
   decoded_cbor_cert.not_before.tm_min =  pSS % 60;
@@ -374,7 +374,7 @@ cbor_decompress_cert(uint8_t *buffer, uint16_t buf_len, uint8_t *decompressed_bu
 //  printf("%d %d %d %d %d %d\n", yy,mm,dd,HH,MM,SS);
 
   ret = nanocbor_get_uint32(&arr, &nba);
-  printf("ret: %d, not after %lu\n", ret, (long unsigned int)nba);
+  printf("ret: %d, not after %u\n", ret, (unsigned int)nba);
 
   decoded_cbor_cert.not_after.tm_sec = nba % 60;
   pSS = (nba - decoded_cbor_cert.not_after.tm_sec) / 60;
@@ -411,13 +411,13 @@ cbor_decompress_cert(uint8_t *buffer, uint16_t buf_len, uint8_t *decompressed_bu
   ret = nanocbor_get_bstr(&arr, (const unsigned char **)&decoded_cbor_cert.subject,  &value_len);
   decoded_cbor_cert.subject_length = value_len;
 
-  printf("ret: %d, subject of len %lu\n", ret, value_len);
+  printf("ret: %d, subject of len %u\n", ret, (unsigned int)value_len);
   hdumps((const unsigned char*)decoded_cbor_cert.subject, value_len);
   printf("\n");
 
   const uint8_t *pk;
   ret = nanocbor_get_bstr(&arr, &pk,  &value_len);
-  printf("ret: %d, pk of len %lu\n", ret, value_len);
+  printf("ret: %d, pk of len %u\n", ret, (unsigned int)value_len);
   hdumps(pk, value_len);
   printf("\n");
 
@@ -434,7 +434,7 @@ cbor_decompress_cert(uint8_t *buffer, uint16_t buf_len, uint8_t *decompressed_bu
 
   int32_t extension;
   ret = nanocbor_get_int32(&arr, &extension);
-  printf("ret: %d, ext with val %lu\n", ret, (long unsigned int)extension);
+  printf("ret: %d, ext with val %u\n", ret, (unsigned int)extension);
   //https://www.alvestrand.no/objectid/2.5.29.html
 //  2.5.29.15 - Key Usage
 //  2.5.29.17 - Subject Alternative Name
@@ -475,7 +475,7 @@ cbor_decompress_cert(uint8_t *buffer, uint16_t buf_len, uint8_t *decompressed_bu
 
   //const uint8_t *signature;
   ret = nanocbor_get_bstr(&arr, (const unsigned char **)&decoded_cbor_cert.signature,  &value_len);
-  printf("ret: %d, sign of len %lu\n", ret, value_len);
+  printf("ret: %d, sign of len %u\n", ret, (unsigned int)value_len);
   hdumps(decoded_cbor_cert.signature, value_len);
   printf("\n");
 
@@ -677,7 +677,7 @@ est_create_enroll_request_cbor(uint8_t *buffer, const uint16_t buf_len)
 //  nanocbor_put_bstr(&nc, uncompressed_xy, 1+2*ECC_DEFAULT_KEY_LEN);
 
 
-  printf("4: nc.len %lu\n", nc.len);
+  printf("4: nc.len %u\n", (unsigned int)nc.len);
   /* Sign the resulting cbor data */
   /* Generate the signature */
   unsigned char rs_buf[2*ECC_DEFAULT_SIGN_LEN];
@@ -693,7 +693,7 @@ est_create_enroll_request_cbor(uint8_t *buffer, const uint16_t buf_len)
   /* Encode the signature components r and s as a bstr */
   nanocbor_put_bstr(&nc, rs_buf, 2*ECC_DEFAULT_SIGN_LEN);
   //nanocbor_put_bstr(&nc, r_buf, ECC_DEFAULT_SIGN_LEN);
-  printf("6: nc.len %lu\n", nc.len);
+  printf("6: nc.len %u\n", (unsigned int)nc.len);
   return nc.len;
 }
 /*----------------------------------------------------------------------------*/

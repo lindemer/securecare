@@ -479,7 +479,7 @@ int create_ecc_signature(const unsigned char *buffer, size_t data_len, unsigned 
 	st = mbedtls_ecdsa_sign_det(&ecp->grp, &r, &s, &ecp->d, md, mdinfo->size, MBEDTLS_MD_SHA256);
 	printf("5\n");
 #if 1 //DEBUG_MBED_WRAPPER
-  printf("Input data: %lu \n", data_len);
+  printf("Input data: %u \n", (unsigned int)data_len);
   hdumps(buffer, data_len);
   printf("\n");
   printf("HASH for signing:\n");
@@ -533,7 +533,7 @@ int verify_ecc_signature(x509_key_context *pk_ctx, const unsigned char *buffer, 
 	mbedtls_md(mdinfo, buffer, data_len, md);
 
 #if 1 //DEBUG_MBED_WRAPPER
-  printf("Data to check: %lu \n", data_len);
+  printf("Data to check: %u \n", (unsigned int)data_len);
   hdumps(buffer, data_len);
   printf("\n");
   printf("HASH of signing:\n");
@@ -545,7 +545,7 @@ int verify_ecc_signature(x509_key_context *pk_ctx, const unsigned char *buffer, 
   //mbedtls_mpi_write_file( "d, from key:   ", &ecp->d, 16, NULL );
   mbedtls_mpi_write_file( "r, to check:   ", &r, 16, NULL );
   mbedtls_mpi_write_file( "s, to check:   ", &s, 16, NULL );
-  printf("r-len & s-len: %lu %lu\n", r_len, s_len);
+  printf("r-len & s-len: %u %u\n", (unsigned int)r_len, (unsigned int)s_len);
 #endif
 
 	//Verify the signature

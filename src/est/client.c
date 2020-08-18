@@ -707,7 +707,7 @@ setup_pki(coap_context_t *ctx) {
     dtls_pki.pki_key.key.pem.ca_file = ca_file;
 
 	} else {
-	  coap_log(LOG_DEBUG, "Setting certificate data %lu %lu %lu\n", strlen(cert_file), strlen(cert_priv_buf), strlen(ca_file));
+	  coap_log(LOG_DEBUG, "Setting certificate data %u %u %u\n", (unsigned int)strlen(cert_file), (unsigned int)strlen(cert_priv_buf), (unsigned int)strlen(ca_file));
 	  dtls_pki.pki_key.key_type = COAP_PKI_KEY_PEM_BUF;
 	  dtls_pki.pki_key.key.pem_buf.public_cert = (const uint8_t *)cert_file;
 	  dtls_pki.pki_key.key.pem_buf.private_key = (const uint8_t *)cert_priv_buf;
