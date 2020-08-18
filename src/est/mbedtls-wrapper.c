@@ -69,7 +69,7 @@ static struct libcoap_info_t libcoap_info;
  */
 int generate_ecc_key(mbedtls_pk_context *);
 int get_enrollment_key(unsigned char *buf_x, unsigned char *buf_y, unsigned char *buf_d);
-//int test_set_key(mbedtls_ecp_keypair *ecp, const char *X, const char *Y, const char *d);
+int test_set_key(mbedtls_ecp_keypair *ecp, const char *X, const char *Y, const char *d);
 int x509_crt_parse_file( mbedtls_x509_crt *chain, unsigned char *chain_buffer, size_t *ts_len, const char *path);
 
 /*
@@ -101,9 +101,26 @@ int est_dtls_wrapper_init(const char* ca_certs_path) {
 	pki_info.verify_key_ctx = malloc(sizeof(mbedtls_pk_context));
 
 	ret = generate_ecc_key(pki_info.enrollment_key_ctx);
-	if(ret < 0) {
-		return ret;
-	}
+//  LOG_INFO("Initialize hardcoded test key that fails\n");
+//  mbedtls_ecp_keypair *ecp = mbedtls_pk_ec(*pki_info.enrollment_key_ctx);
+//  const char *X = "BC86738CF3B6A56A027DD30EB63DFDDB9C16593D1648D873F94C19461919C965";
+//  const char *Y = "856123050F418C3891D4D3D4E41B87AB542EB73488D52595E3AA17483BB651C3";
+//  const char *d = "E1424BDC2019F1B31791D9D26E0A94DAC78655AD30942C0FF8E4A9FAECC6421C";
+//  ret = test_set_key(ecp, X, Y, d);
+//	if(ret < 0) {
+//		return ret;
+//	}
+
+//	  LOG_INFO("Initialize hardcoded test key that succeeds\n");
+//	  mbedtls_ecp_keypair *ecp = mbedtls_pk_ec(*pki_info.enrollment_key_ctx);
+//	  const char *X = "1B491D3ECDA37EB03E58F2EA4BFE83925017F920A05F8A8420F9CB9FFB8C482B";
+//	  const char *Y = "DFC37AC510FB4E10E588CA4166AF424771906B1A78B7F22E2B8AE2AE38533105";
+//	  const char *d = "7FCD8DBA6160814A471FCE6273880F709BE635DE847576105B7B99C8AF6F2449";
+//	  ret = test_set_key(ecp, X, Y, d);
+//	  if(ret < 0) {
+//	    return ret;
+//	  }
+
 	ret = generate_ecc_key(pki_info.verify_key_ctx);
 	if(ret < 0) {
 		return ret;
@@ -439,25 +456,35 @@ int get_enrollment_key(unsigned char *buf_x, unsigned char *buf_y, unsigned char
 int create_ecc_signature(const unsigned char *buffer, size_t data_len, unsigned char *r_buf, const size_t r_len,
 		unsigned char *s_buf, const size_t s_len) {
 
+  printf("1\n");
 	const mbedtls_md_info_t *mdinfo = mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
 	unsigned char *md = malloc(mdinfo->size);
 	//Calculate the message digest/hash256 for the data
-	mbedtls_md(mdinfo, buffer, data_len, md);
+	int  st = mbedtls_md(mdinfo, buffer, data_len, md);
+	if(st < 0) {
+	  LOG_ERR("Hashing error, abort\n");
+	  return st;
+	}
+	printf("2: st = %d, mdinfo->size = %d\n", st, mdinfo->size);
 
-	//Create a signature for the hash of the data
+	//retrieve the previously stored enrollment keys
   mbedtls_ecp_keypair *ecp = mbedtls_pk_ec(*pki_info.enrollment_key_ctx);
-
+  printf("3\n");
+  //Create a signature for the hash of the data
   mbedtls_mpi r;
   mbedtls_mpi s;
   mbedtls_mpi_init(&r);
   mbedtls_mpi_init(&s);
-
-	int st = mbedtls_ecdsa_sign_det(&ecp->grp, &r, &s, &ecp->d, md, 32, MBEDTLS_MD_SHA256);
-
-#if DEBUG_MBED_WRAPPER
-	printf("HASH for signing:\n");
-	hdumps(md, 32);
-	printf("\n");
+  printf("4\n");
+	st = mbedtls_ecdsa_sign_det(&ecp->grp, &r, &s, &ecp->d, md, mdinfo->size, MBEDTLS_MD_SHA256);
+	printf("5\n");
+#if 1 //DEBUG_MBED_WRAPPER
+  printf("Input data: %lu \n", data_len);
+  hdumps(buffer, data_len);
+  printf("\n");
+  printf("HASH for signing:\n");
+  hdumps(md, 32);
+  printf("\n");
 
 	mbedtls_mpi_write_file( "X, from key:   ", &ecp->Q.X, 16, NULL );
 	mbedtls_mpi_write_file( "Y, from key:   ", &ecp->Q.Y, 16, NULL );
@@ -505,6 +532,22 @@ int verify_ecc_signature(x509_key_context *pk_ctx, const unsigned char *buffer, 
 	//Hash
 	mbedtls_md(mdinfo, buffer, data_len, md);
 
+#if 1 //DEBUG_MBED_WRAPPER
+  printf("Data to check: %lu \n", data_len);
+  hdumps(buffer, data_len);
+  printf("\n");
+  printf("HASH of signing:\n");
+  hdumps(md, 32);
+  printf("\n");
+
+  mbedtls_mpi_write_file( "X, from key:   ", &ecp->Q.X, 16, NULL );
+  mbedtls_mpi_write_file( "Y, from key:   ", &ecp->Q.Y, 16, NULL );
+  //mbedtls_mpi_write_file( "d, from key:   ", &ecp->d, 16, NULL );
+  mbedtls_mpi_write_file( "r, to check:   ", &r, 16, NULL );
+  mbedtls_mpi_write_file( "s, to check:   ", &s, 16, NULL );
+  printf("r-len & s-len: %lu %lu\n", r_len, s_len);
+#endif
+
 	//Verify the signature
 	int st = mbedtls_ecdsa_verify(&ecp->grp, md, mdinfo->size, &ecp->Q, &r, &s);
 
@@ -531,22 +574,22 @@ int verify_ecc_signature(x509_key_context *pk_ctx, const unsigned char *buffer, 
 //	const char *d = "E1424BDC2019F1B31791D9D26E0A94DAC78655AD30942C0FF8E4A9FAECC6421C";
 //	test_set_key(ecp, X, Y, d);
 
-///*
-// * Internal util
-// */
-//int test_set_key(mbedtls_ecp_keypair *ecp, const char *X, const char *Y, const char *d) {
-//
-//	int ret = 0;
-//
-//	ret = mbedtls_mpi_read_string(&ecp->Q.X, 16, X);
-//	if(ret < 0) return ret;
-//	ret = mbedtls_mpi_read_string(&ecp->Q.Y, 16, Y);
-//	if(ret < 0) return ret;
-//	ret = mbedtls_mpi_read_string(&ecp->d, 16, d);
-//	if(ret < 0) return ret;
-//	//ecp->d = NULL;
-//	mbedtls_mpi_write_file( "X_Q, loaded:   ", &ecp->Q.X, 16, NULL );
-//	mbedtls_mpi_write_file( "Y_Q, loaded:   ", &ecp->Q.Y, 16, NULL );
-//
-//	return 0;
-//}
+/*
+ * Internal util
+ */
+int test_set_key(mbedtls_ecp_keypair *ecp, const char *X, const char *Y, const char *d) {
+
+	int ret = 0;
+
+	ret = mbedtls_mpi_read_string(&ecp->Q.X, 16, X);
+	if(ret < 0) return ret;
+	ret = mbedtls_mpi_read_string(&ecp->Q.Y, 16, Y);
+	if(ret < 0) return ret;
+	ret = mbedtls_mpi_read_string(&ecp->d, 16, d);
+	if(ret < 0) return ret;
+	//ecp->d = NULL;
+	mbedtls_mpi_write_file( "X_Q, loaded:   ", &ecp->Q.X, 16, NULL );
+	mbedtls_mpi_write_file( "Y_Q, loaded:   ", &ecp->Q.Y, 16, NULL );
+
+	return 0;
+}

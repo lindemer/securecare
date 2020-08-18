@@ -65,6 +65,7 @@ static coap_string_t payload = { 0, NULL }; /* optional payload to send */
 unsigned char msgtype = COAP_MESSAGE_CON; /* usually, requests are sent confirmable */
 
 static char *cert_file = NULL; /* Combined certificate and private key in PEM */
+static char *cert_priv_buf = NULL; /* private key in PEM */
 static char *ca_file = NULL; /* CA for cert_file - for cert checking in PEM */
 static char *root_ca_file = NULL; /* List of trusted Root CAs in PEM */
 
@@ -697,10 +698,28 @@ setup_pki(coap_context_t *ctx) {
 	//  } //else {    memcpy(client_sni, "localhost", 9);  }
 
 	//dtls_pki.client_sni = client_sni;
-	dtls_pki.pki_key.key_type = COAP_PKI_KEY_PEM;
-	dtls_pki.pki_key.key.pem.public_cert = cert_file;
-	dtls_pki.pki_key.key.pem.private_key = cert_file;
-	dtls_pki.pki_key.key.pem.ca_file = ca_file;
+
+	if(NULL == cert_priv_buf) {
+	  coap_log(LOG_DEBUG, "Setting certificate paths\n");
+    dtls_pki.pki_key.key_type = COAP_PKI_KEY_PEM;
+    dtls_pki.pki_key.key.pem.public_cert = cert_file;
+    dtls_pki.pki_key.key.pem.private_key = cert_file;
+    dtls_pki.pki_key.key.pem.ca_file = ca_file;
+
+	} else {
+	  coap_log(LOG_DEBUG, "Setting certificate data %lu %lu %lu\n", strlen(cert_file), strlen(cert_priv_buf), strlen(ca_file));
+	  dtls_pki.pki_key.key_type = COAP_PKI_KEY_PEM_BUF;
+	  dtls_pki.pki_key.key.pem_buf.public_cert = (const uint8_t *)cert_file;
+	  dtls_pki.pki_key.key.pem_buf.private_key = (const uint8_t *)cert_priv_buf;
+	  dtls_pki.pki_key.key.pem_buf.ca_cert = (const uint8_t *)ca_file;
+
+    dtls_pki.pki_key.key.pem_buf.public_cert_len = strlen(cert_file);
+    dtls_pki.pki_key.key.pem_buf.private_key_len = strlen(cert_priv_buf);
+    dtls_pki.pki_key.key.pem_buf.ca_cert_len = strlen(ca_file);
+//    dtls_pki.pki_key.key.pem_buf.public_cert_len = cert_buf_len;
+//    dtls_pki.pki_key.key.pem_buf.private_key_len = cert_priv_buf_len;
+//    dtls_pki.pki_key.key.pem_buf.ca_cert_len = ca_buf_len;
+	}
 	return &dtls_pki;
 }
 
@@ -778,10 +797,12 @@ get_session(coap_context_t *ctx, const char *local_addr, const char *local_port,
 	return session;
 }
 
-int set_pki_data(char *factory_cert_file, char *r_ca_file, char *i_ca_file) {
+int set_pki_data(char *factory_cert_file, char *factory_key_file, char *r_ca_file, char *i_ca_file) {
 	cert_file = factory_cert_file;
-	root_ca_file = r_ca_file;
+	cert_priv_buf = factory_key_file;
+	//root_ca_file = r_ca_file;
 	ca_file = i_ca_file;
+
 	return 1;
 }
 

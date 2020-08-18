@@ -54,7 +54,7 @@ void set_coap_callbacks(int(*append_callback)(uint8_t *data, size_t len));
 void set_content_type(int hard, uint16_t value, uint16_t key);
 int set_coap_payload(unsigned char *data, int len);
 int set_coap_target(char *path, int method);
-int set_pki_data(char *factory_cert_file, char *r_ca_file, char *i_ca_file);
+int set_pki_data(char *factory_cert_file,char *factory_key, char *r_ca_file, char *i_ca_file);
 int perform_request(coap_context_t *ctx, coap_session_t *session); //, int argc, char **argv);
 void client_coap_cleanup(int all, coap_context_t *ctx, coap_session_t *session);
 

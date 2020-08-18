@@ -48,11 +48,15 @@
 #include "est-cms.h"
 #include "est-pkcs10.h"
 #include "est-x509.h"
+#include "est-client.h" //settings
 
 //#include "os/net/security/other-ecc/other-ecc.h"
 
 
-#include "../util/log.h"
+#include "nanocbor/nanocbor.h"
+#include "log.h"
+#include "xiot.h"
+
 #include "mbedtls-wrapper.h"
 #define LOG_MODULE "est"
 #ifdef LOG_CONF_LEVEL_EST
@@ -198,7 +202,11 @@ est_generate_session_keys(x509_key_context *key_ctx)
 
     LOG_DBG("est_generate_session_keys - SESSION HAS NO KEYS, GEN NEW\n");
     //TODO - test
-    generate_enrollment_keys(key_ctx);
+    has_keys = generate_enrollment_keys(key_ctx);
+    if(0 < has_keys) {
+      LOG_ERR("est_generate_session_keys - key generation failed!\n");
+      return -1;
+    }
 
   } else {
 
@@ -273,9 +281,231 @@ est_process_cacerts_response(uint8_t *buffer, uint16_t buf_len, unsigned char *p
 }
 /*----------------------------------------------------------------------------*/
 int
-est_process_enroll_response(uint8_t *buffer, uint16_t buf_len, unsigned char *path, uint8_t *raw_certificate_buffer, int *cert_len)
+cbor_decompress_cert(uint8_t *buffer, uint16_t buf_len, uint8_t *decompressed_buffer)
 {
+  /*
+   * Definition: https://tools.ietf.org/html/draft-mattsson-cose-cbor-cert-compress-01
+   */
+//    certificate = (
+//       type : int,
+//       serialNumber : bytes,
+//       issuer : { + int => bytes } / text,
+//       validity_notBefore: uint,
+//       validity_notAfter: uint,
+//       subject : text / bytes
+//       subjectPublicKey : bytes
+//       extensions : [ *4 int, ? text / bytes ] / int,
+//       signatureValue : bytes,
+//       ? ( signatureAlgorithm : int,
+//           subjectPublicKeyInfo_algorithm : int )
+//       )
+  xiot_cert_t decoded_cbor_cert;
+
+  int ret;
+  nanocbor_value_t decoder;
+  nanocbor_decoder_init(&decoder, buffer, buf_len);
+
+  nanocbor_value_t arr; /* Array value instance */
+
+  if (nanocbor_enter_array(&decoder, &arr) < 0) {
+    LOG_ERR("Decode error, not a valid cbor array\n");
+  }
+  const uint8_t *serial_bytes;
+  size_t value_len;
+  ret = nanocbor_get_bstr(&arr, &serial_bytes,  &value_len);
+
+  //decoded_cbor_cert
+  uint32_t serial = uint32_to_int(serial_bytes);
+  printf("ret: %d, serial: ", ret);
+  hdumps(serial_bytes, value_len);
+  printf("\n%lu\n", (long unsigned int)serial);
+  decoded_cbor_cert.serial_number = serial;
+
+  //const uint8_t *issuer;
+  ret = nanocbor_get_tstr(&arr, (const unsigned char**)&decoded_cbor_cert.issuer,  &value_len);
+
+  printf("ret: %d, issuer of len %lu\n", ret, value_len);
+  hdumps((const unsigned char*)decoded_cbor_cert.issuer, value_len);
+  printf("\n");
+  decoded_cbor_cert.issuer_length = value_len;
+
+  uint32_t nba;
+  ret = nanocbor_get_uint32(&arr, &nba);
+
+//  tm_sec  int seconds after the minute  0-61*
+//  tm_min  int minutes after the hour  0-59
+//  tm_hour int hours since midnight  0-23
+//  tm_mday int day of the month  1-31
+//  tm_mon  int months since January  0-11
+//  tm_year int years since 1900
+
+
+  printf("ret: %d, not before %lu\n", ret, (long unsigned int)nba);
+  decoded_cbor_cert.not_before.tm_sec = nba % 60;
+  int pSS = (nba - decoded_cbor_cert.not_before.tm_sec) / 60;
+  decoded_cbor_cert.not_before.tm_min =  pSS % 60;
+  int pMM = (pSS - decoded_cbor_cert.not_before.tm_min) / 60;
+  decoded_cbor_cert.not_before.tm_hour = pMM % 24;
+  int pHH = (pMM - decoded_cbor_cert.not_before.tm_hour) / 24;
+  decoded_cbor_cert.not_before.tm_mday = pHH % 32;
+  int pdd = (pHH - decoded_cbor_cert.not_before.tm_mday) / 32;
+  decoded_cbor_cert.not_before.tm_mon = pdd % 13;
+  decoded_cbor_cert.not_before.tm_year = pdd / 13 + 100;
+
+  printf("%d %d %d %d %d %d\n", decoded_cbor_cert.not_before.tm_year+1900,
+      decoded_cbor_cert.not_before.tm_mon,
+      decoded_cbor_cert.not_before.tm_mday,
+      decoded_cbor_cert.not_before.tm_hour,
+      decoded_cbor_cert.not_before.tm_min,
+      decoded_cbor_cert.not_before.tm_sec);
+
+  //  printf("%d %d %d %d %d %d\n", yy,mm,dd,HH,MM,SS);
+
+//  int SS = nba % 60;
+//  int pSS = (nba - SS) / 60;
+//  int MM =  pSS % 60;
+//  int pMM = (pSS - MM) / 60;
+//  int HH = pMM % 24;
+//  int pHH = (pMM - HH) / 24;
+//  int dd = pHH % 32;
+//  int pdd = (pHH - dd) / 32;
+//  int mm = pdd % 13;
+//  int yy = pdd / 13;
+//  printf("%d %d %d %d %d %d\n", yy,mm,dd,HH,MM,SS);
+
+  ret = nanocbor_get_uint32(&arr, &nba);
+  printf("ret: %d, not after %lu\n", ret, (long unsigned int)nba);
+
+  decoded_cbor_cert.not_after.tm_sec = nba % 60;
+  pSS = (nba - decoded_cbor_cert.not_after.tm_sec) / 60;
+  decoded_cbor_cert.not_after.tm_min =  pSS % 60;
+  pMM = (pSS - decoded_cbor_cert.not_after.tm_min) / 60;
+  decoded_cbor_cert.not_after.tm_hour = pMM % 24;
+  pHH = (pMM - decoded_cbor_cert.not_after.tm_hour) / 24;
+  decoded_cbor_cert.not_after.tm_mday = pHH % 32;
+  pdd = (pHH - decoded_cbor_cert.not_after.tm_mday) / 32;
+  decoded_cbor_cert.not_after.tm_mon = pdd % 13;
+  decoded_cbor_cert.not_after.tm_year = pdd / 13 + 100;
+
+  printf("%d %d %d %d %d %d\n", decoded_cbor_cert.not_after.tm_year+1900,
+      decoded_cbor_cert.not_after.tm_mon,
+      decoded_cbor_cert.not_after.tm_mday,
+      decoded_cbor_cert.not_after.tm_hour,
+      decoded_cbor_cert.not_after.tm_min,
+      decoded_cbor_cert.not_after.tm_sec);
+
+//
+//  int aSS = nba % 60;
+//  int apSS = (nba - aSS) / 60;
+//  int aMM =  apSS % 60;
+//  int apMM = (apSS - aMM) / 60;
+//  int aHH = apMM % 24;
+//  int apHH = (apMM - aHH) / 24;
+//  int add = apHH % 32;
+//  int apdd = (apHH - add) / 32;
+//  int amm = apdd % 13;
+//  int ayy = apdd / 13;
+//  printf("%d %d %d %d %d %d\n", ayy,amm,add,aHH,aMM,aSS);
+
+  //const uint8_t *subject;
+  ret = nanocbor_get_bstr(&arr, (const unsigned char **)&decoded_cbor_cert.subject,  &value_len);
+  decoded_cbor_cert.subject_length = value_len;
+
+  printf("ret: %d, subject of len %lu\n", ret, value_len);
+  hdumps((const unsigned char*)decoded_cbor_cert.subject, value_len);
+  printf("\n");
+
+  const uint8_t *pk;
+  ret = nanocbor_get_bstr(&arr, &pk,  &value_len);
+  printf("ret: %d, pk of len %lu\n", ret, value_len);
+  hdumps(pk, value_len);
+  printf("\n");
+
+  x509_key_context *session_key_ctx;
+  x509_key_context key_ctx;
+  session_key_ctx = &key_ctx; //&session_data->key_ctx;
+  ret = tls_credential_get(TLS_CREDENTIAL_ENROLLMENT_KEY, session_key_ctx, (unsigned short int*)&value_len); //getsockopt(SOL_TLS_CREDENTIALS, TLS_CREDENTIAL_CA_CERTIFICATE, ptr_cert, &optlen);
+  if(memcmp(key_ctx.pub_x, pk+1, ECC_DEFAULT_KEY_LEN)) {
+    LOG_ERR("Public key mismatch!\n");
+    return -1;
+  } //else we reuse the uncompressed keys that we already have:
+  memcpy(decoded_cbor_cert.public_key, key_ctx.pub_x, ECC_DEFAULT_KEY_LEN);
+  memcpy(decoded_cbor_cert.public_key+ECC_DEFAULT_KEY_LEN, key_ctx.pub_y, ECC_DEFAULT_KEY_LEN);
+
+  int32_t extension;
+  ret = nanocbor_get_int32(&arr, &extension);
+  printf("ret: %d, ext with val %lu\n", ret, (long unsigned int)extension);
+  //https://www.alvestrand.no/objectid/2.5.29.html
+//  2.5.29.15 - Key Usage
+//  2.5.29.17 - Subject Alternative Name
+//  2.5.29.19 - Basic Constraints
+//  2.5.29.37 - Extended key usage
+//  subjectAltName = 1
+//  basicConstraints = 2 + cA
+//  keyUsage = 3 + digitalSignature
+//                + 2 * keyAgreement + 4 * keyCertSign
+//  extKeyUsage = 10 + id-kp-serverAuth + 2 * id-kp-clientAuth
+//                + 4 * id-kp-codeSigning + 8 * id-kp-OCSPSigning
+
+  struct xiot_ext my_ext;
+
+  if(1 == extension) {
+    //subjectAltName not implemented
+    return -1;
+  }
+  if(-3 == extension || 3 == extension) {
+    //Basic Constraints not implemented
+    return -1;
+  }
+  if(extension < -10 || 10 < extension) {
+    //Basic Constraints not implemented
+    return -1;
+  }
+  if(extension < -3 || 3 < extension) {
+    //Key usage
+    my_ext.oid = 15;
+    if(extension < 0) {
+      my_ext.critical = 1;
+      extension = -extension;
+    }
+    if(4 == extension) {
+      my_ext.value = NULL; //TODO
+    }
+  }
+
+  //const uint8_t *signature;
+  ret = nanocbor_get_bstr(&arr, (const unsigned char **)&decoded_cbor_cert.signature,  &value_len);
+  printf("ret: %d, sign of len %lu\n", ret, value_len);
+  hdumps(decoded_cbor_cert.signature, value_len);
+  printf("\n");
+
+  decoded_cbor_cert.extensions = &my_ext;
+
+  printf("Made it to here! ret = %d\n", ret);
+  //xiot_construct(uint8_t* decompressed, xiot_cert_t* cert, uint8_t* ca_private)
+  //value_len = xiot_construct(decompressed_buffer, &decoded_cbor_cert, NULL);
+  return -1;
+}
+
+/*----------------------------------------------------------------------------*/
+
+/*----------------------------------------------------------------------------*/
+int
+est_process_enroll_response(uint8_t *incoming_buffer, const uint16_t buf_len, unsigned char *path, uint8_t *raw_certificate_buffer, int *cert_len)
+{
+  uint8_t *buffer = NULL;
   int res;
+  if(incoming_buffer[0] != 0x30) {
+    //Try to decompress!
+    res = cbor_decompress_cert(incoming_buffer, buf_len, buffer);
+    if(res < 0) {
+      LOG_ERR("EST ERROR - est_process_enroll_response: Could not decompress certificate\n");
+      return res;
+    }
+  } else {
+    buffer = incoming_buffer;
+  }
+
   cms_signed_data sdata;
 
   /* CMS decode the response */
@@ -361,14 +591,11 @@ est_create_enroll_request(uint8_t *buffer, uint16_t buf_len)
     LOG_ERR("est_create_enroll_request: default attribute set failed\n");
     return 0;
   }
+
   x509_key_context *session_key_ctx;
-#if EST_WITH_COFFEE
-  x509_key_context key_ctx;
-  session_key_ctx = &key_ctx;
-#else
   x509_key_context key_ctx;
   session_key_ctx = &key_ctx; //&session_data->key_ctx;
-#endif
+
 
   /* Generate new private and public keys to use in enrollment if needed */
   res = est_generate_session_keys(session_key_ctx);
@@ -400,6 +627,77 @@ est_create_enroll_request(uint8_t *buffer, uint16_t buf_len)
   return res;
 }
 /*----------------------------------------------------------------------------*/
+/*----------------------------------------------------------------------------*/
+uint16_t
+est_create_enroll_request_cbor(uint8_t *buffer, const uint16_t buf_len)
+{
+  int res = 0;
+  memset(buffer, 1, buf_len);
+
+//  pkcs10_request cbor_enroll_request;
+//  pkcs10_init(&cbor_enroll_request);
+
+  printf("1\n");
+  x509_key_context *session_key_ctx;
+  x509_key_context key_ctx;
+  session_key_ctx = &key_ctx; //&session_data->key_ctx;
+
+    /* Generate new private and public keys to use in enrollment if needed */
+    res = est_generate_session_keys(session_key_ctx);
+    if(res < 0) {
+      LOG_ERR("est_create_enroll_request: generate session keys failed\n");
+      return 0;
+    }
+
+  /* Set EUI64 subject and attribute set for the request */
+  //Here possibly call needed function to get mac id:
+  uint8_t *value = client_mac_id;
+
+//  const int CBOR_ENROLL_MAX_LEN = 200;
+//  uint8_t enroll_bstr[CBOR_ENROLL_MAX_LEN];
+  memset(buffer, 0, buf_len);
+  nanocbor_encoder_t nc;
+  nanocbor_encoder_init(&nc, buffer, buf_len);
+  nanocbor_put_bstr(&nc, value, X509_CBOR_EUI64_SUBJECT_SIZE);
+  //size_t len_man_bstr = nanocbor_encoded_len(&nc);
+  printf("2\n");
+
+  printf("3\n");
+  /* Set the compressed public key */
+  uint8_t compressed_xy[ECC_DEFAULT_KEY_LEN+1];
+  compressed_xy[0] = 2 + ( session_key_ctx->pub_y[ECC_DEFAULT_KEY_LEN-1] & 1 );// = sign of pub_y
+  memcpy(compressed_xy+1,session_key_ctx->pub_x,ECC_DEFAULT_KEY_LEN);
+  compressed_xy[0] = 2 + ( session_key_ctx->pub_y[ECC_DEFAULT_KEY_LEN-1] & 1 );// = sign of pub_y
+  nanocbor_put_bstr(&nc, compressed_xy, ECC_DEFAULT_KEY_LEN+1);
+
+//  uint8_t uncompressed_xy[1+2*ECC_DEFAULT_KEY_LEN];
+//  uncompressed_xy[0] = 4;
+//  memcpy(uncompressed_xy+1, session_key_ctx->pub_x, ECC_DEFAULT_KEY_LEN);
+//  memcpy(uncompressed_xy+1+ECC_DEFAULT_KEY_LEN, session_key_ctx->pub_y, ECC_DEFAULT_KEY_LEN);
+//  nanocbor_put_bstr(&nc, uncompressed_xy, 1+2*ECC_DEFAULT_KEY_LEN);
+
+
+  printf("4: nc.len %lu\n", nc.len);
+  /* Sign the resulting cbor data */
+  /* Generate the signature */
+  unsigned char rs_buf[2*ECC_DEFAULT_SIGN_LEN];
+
+  res = create_ecc_signature(buffer, nc.len, rs_buf, ECC_DEFAULT_SIGN_LEN, rs_buf+ECC_DEFAULT_SIGN_LEN, ECC_DEFAULT_SIGN_LEN);
+  //res = create_ecc_signature(buffer, nc.len, r_buf, ECC_DEFAULT_SIGN_LEN, s_buf, ECC_DEFAULT_SIGN_LEN);
+  //res = create_ecc_signature(buffer, 32, r_buf, ECC_DEFAULT_SIGN_LEN, s_buf, ECC_DEFAULT_SIGN_LEN);
+
+  if(res < 0) {
+    LOG_ERR("est_create_enroll_request: generate signature failed\n");
+  }
+  printf("5\n");
+  /* Encode the signature components r and s as a bstr */
+  nanocbor_put_bstr(&nc, rs_buf, 2*ECC_DEFAULT_SIGN_LEN);
+  //nanocbor_put_bstr(&nc, r_buf, ECC_DEFAULT_SIGN_LEN);
+  printf("6: nc.len %lu\n", nc.len);
+  return nc.len;
+}
+/*----------------------------------------------------------------------------*/
+
 /*---------------------------------------------------------------------------*/
 void
 hdumps(const unsigned char *buf, int len)

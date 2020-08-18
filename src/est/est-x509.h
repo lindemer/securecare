@@ -50,6 +50,7 @@
 
 #define SECP256R1_KEY_LEN_WORDS 8 /** Number of 32-bit words in a SECP256R1 key */
 #define ECC_DEFAULT_KEY_LEN 32 // = (SECP256R1_KEY_LEN_WORDS * 4)
+#define ECC_DEFAULT_SIGN_LEN 32 //
 
 /* Compression types - RFC 5480 */
 #define ECC_POINT_UNCOMPRESSED  0x04 /* MUST be supported */
@@ -70,6 +71,7 @@
 #define X509_MAX_YEAR 3000
 
 #define X509_EUI64_SUBJECT_SIZE 34 /**<- The size of the buffer to store the EUI-64 subject */
+#define X509_CBOR_EUI64_SUBJECT_SIZE 8 /** 6 or 8 */
 
 #define X509_EUI64_DELIM "-"
 

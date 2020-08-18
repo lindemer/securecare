@@ -49,7 +49,7 @@
 #include "est-asn1.h"
 #include "est-oid.h"
 
-#include "../util/memb.h"
+#include "memb.h"
 //#include "../other-ecc/bigint.h"
 //#include "../other-ecc/other-ecc.h"
 
@@ -60,12 +60,7 @@
 #include "est-client.h" //settings
 #include "mbedtls-wrapper.h" //crypto
 
-#if EST_WITH_COFFEE
-#include "cert-store.h"
-#include "cert-store-client.h"
-#endif
-
-#include "../util/log.h"
+#include "log.h"
 #define LOG_MODULE "x509"
 #ifdef LOG_CONF_LEVEL_EST_X509
 #define LOG_LEVEL LOG_CONF_LEVEL_EST_X509
@@ -788,15 +783,15 @@ x509_encode_ecdsa_signature(uint8_t **sign_pos, uint8_t *sign_start,
 
   /* Generate the signature */
 
-  unsigned char r_buf[ECC_DEFAULT_KEY_LEN];
-  unsigned char s_buf[ECC_DEFAULT_KEY_LEN];
-  res = create_ecc_signature(buffer, data_length, r_buf, ECC_DEFAULT_KEY_LEN, s_buf, ECC_DEFAULT_KEY_LEN);
+  unsigned char r_buf[ECC_DEFAULT_SIGN_LEN];
+  unsigned char s_buf[ECC_DEFAULT_SIGN_LEN];
+  res = create_ecc_signature(buffer, data_length, r_buf, ECC_DEFAULT_SIGN_LEN, s_buf, ECC_DEFAULT_SIGN_LEN);
 
   if(0 < res) {
     /* Encode the signature components r and s as integers */
 
     /* Encode the s signature component */
-	res = x509_encode_signature_component(sign_pos, sign_start, s_buf, ECC_DEFAULT_KEY_LEN);
+	res = x509_encode_signature_component(sign_pos, sign_start, s_buf, ECC_DEFAULT_SIGN_LEN);
     if(res < 0) {
       LOG_ERR("X.509 ERROR - x509_encode_ecdsa_signature: Could not encode the s integer tag\n");
       return res;
@@ -805,7 +800,7 @@ x509_encode_ecdsa_signature(uint8_t **sign_pos, uint8_t *sign_start,
     }
 
     /* Encode the r signature component */
-    res = x509_encode_signature_component(sign_pos, sign_start, r_buf, ECC_DEFAULT_KEY_LEN);
+    res = x509_encode_signature_component(sign_pos, sign_start, r_buf, ECC_DEFAULT_SIGN_LEN);
     if(res < 0) {
       LOG_ERR("X.509 ERROR - x509_encode_ecdsa_signature: Could not encode the r integer tag\n");
       return res;

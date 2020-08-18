@@ -45,7 +45,10 @@
 /**
  * MBED flags
  */
-#define DFL_USE_DEV_RANDOM      0
+#define DFL_USE_DEV_RANDOM          0
+#define DTLS_ALLOW_SELF_SIGNED_CERT 0
+#define DTLS_ALLOW_EXPIRED_CERT     0
+
 
 /**
  * File flags

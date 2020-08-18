@@ -82,6 +82,7 @@ int append_callback(uint8_t *data, size_t len) {
 	case EST_HAS_SENT_SEN:
 		LOG_DBG("Process enroll response\n");
 		res = est_process_enroll_response(data, len, NULL, enrolled_cert_buffer, &result_len);
+		//https://github.com/bergzand/NanoCBOR
 		if(-1 < res) {
 			client_state = EST_SEN_DONE;
 			LOG_DBG("Enroll DONE\n");
@@ -117,10 +118,18 @@ void init_all(const char* ca_path) {
 int
 main(int argc, char **argv) {
 
-	LOG_DBG("Starting EST client.\nWill enroll using:\nFactory cert at %s,\nCA cert at %s and\nHardcoded client id: %x:%x:%x:%x...\n", FACTORY_CERT_PATH, CA_CERT_PATH, client_mac_id[0],client_mac_id[1],client_mac_id[2],client_mac_id[3]);
-
+	LOG_INFO("Starting EST client.\n");
 	init_all(CA_CERT_PATH);
-	set_pki_data(FACTORY_CERT_PATH, CA_CERT_PATH, NULL);
+
+#ifdef FACTORY_CERT_PATH
+	LOG_INFO("Will enroll using:\nFactory cert at %s and\nCA cert at %s\n", FACTORY_CERT_PATH, CA_CERT_PATH);
+	set_pki_data(FACTORY_CERT_PATH, NULL, CA_CERT_PATH, NULL);
+#else
+	LOG_INFO("Will enroll using:\nFactory cert: %s and\nCA cert %s\n", FACTORY_CERT, CA_CERT);
+	set_pki_data(FACTORY_CERT, FACTORY_KEY, NULL, CA_CERT);
+#endif
+
+	LOG_INFO("and hardcoded client id: %x:%x:%x:%x...\n", client_mac_id[0],client_mac_id[1],client_mac_id[2],client_mac_id[3]);
 	set_coap_callbacks(append_callback);
 
 	/*
@@ -139,8 +148,10 @@ main(int argc, char **argv) {
 	/*
 	 * Prepare simple enroll request
 	 */
-	set_content_type(1, COAP_CONTENT_FORMAT_PKCS10, COAP_OPTION_CONTENT_TYPE);
+	set_content_type(1, COAP_TEST_CONTENT_FORMAT_FOR_SEN, COAP_OPTION_CONTENT_TYPE);
+
 	uint8_t client_buffer[512];
+	//int total_length_to_send = est_create_enroll_request_cbor(client_buffer, 512);
 	int total_length_to_send = est_create_enroll_request(client_buffer, 512);
 
 	set_coap_payload(client_buffer, total_length_to_send);

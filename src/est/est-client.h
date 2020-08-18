@@ -46,12 +46,46 @@
 
 static uint8_t client_mac_id[] = { 0xe,0x9,0xa,0xc,0x8,0x7,0xb,0x1 }; //TODO read from HW
 
-#define FACTORY_CERT_PATH		"../../certs/factory_cert.pem"
-#define CA_CERT_PATH		"../../certs/ca_cert.pem"
+//Check lib/mbedtls/library/certs.c for formatting
+#define FACTORY_CERT      \
+ "-----BEGIN CERTIFICATE-----\r\n"                                        \
+ "MIIBNzCB3qADAgECAgMB9Q0wCgYIKoZIzj0EAwIwFjEUMBIGA1UEAwwLUkZDIHRl\r\n"   \
+ "c3QgQ0EwHhcNMjAwMTAxMDAwMDAwWhcNMjEwMjAyMDAwMDAwWjAiMSAwHgYDVQQD\r\n"   \
+ "DBcwMS0yMy00NS1GRi1GRS02Ny04OS1BQjBZMBMGByqGSM49AgEGCCqGSM49AwEH\r\n"   \
+ "A0IABK5M2wH2FN78cSEoX9x/XG0dQslWR/BhugCA32eIZ4Re6aaf1IkxSdrj07FU\r\n"   \
+ "FtdTLDhxUrgLDfPhr0CKldMHHlijDzANMAsGA1UdDwQEAwIHgDAKBggqhkjOPQQD\r\n"   \
+ "AgNIADBFAiBpCx7E3Axdp7fnPNISqUa1vbsm7XG2rnbCEKCdX3VVhQIhALYVEniy\r\n"   \
+ "+GuSR1wIDWiDD6wbdMIBqt1i+1lqt6ZLypCz\r\n"   \
+ "-----END CERTIFICATE-----\r\n"
+
+#define FACTORY_KEY   \
+ "-----BEGIN EC PRIVATE KEY-----\r\n"   \
+ "MHcCAQEEINxms0FUVtZJQptTIj33UyuULWsOCELDC8pMCs+RVHuyoAoGCCqGSM49\r\n"   \
+ "AwEHoUQDQgAErkzbAfYU3vxxIShf3H9cbR1CyVZH8GG6AIDfZ4hnhF7ppp/UiTFJ\r\n"   \
+ "2uPTsVQW11MsOHFSuAsN8+GvQIqV0wceWA==\r\n"   \
+ "-----END EC PRIVATE KEY-----\r\n"
+
+#define CA_CERT    \
+ "-----BEGIN CERTIFICATE-----\r\n"   \
+ "MIIBczCCARmgAwIBAgIJAM2dR7gJjlllMAoGCCqGSM49BAMCMBYxFDASBgNVBAMM\r\n"   \
+ "C1JGQyB0ZXN0IENBMB4XDTIwMDIxOTEwMzcxNVoXDTIyMDIxODEwMzcxNVowFjEU\r\n"   \
+ "MBIGA1UEAwwLUkZDIHRlc3QgQ0EwWTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAASu\r\n"   \
+ "TNsB9hTe/HEhKF/cf1xtHULJVkfwYboAgN9niGeEXummn9SJMUna49OxVBbXUyw4\r\n"   \
+ "cVK4Cw3z4a9AipXTBx5Yo1AwTjAdBgNVHQ4EFgQUvAQzwQ3fzU8+ltBGwNdu6qGB\r\n"   \
+ "zZ4wHwYDVR0jBBgwFoAUvAQzwQ3fzU8+ltBGwNdu6qGBzZ4wDAYDVR0TBAUwAwEB\r\n"   \
+ "/zAKBggqhkjOPQQDAgNIADBFAiEAqYQGzIRdffBrhU666iuI5jQnUVBJwCmGCaIQ\r\n"   \
+ "kGquoFMCIBeqMznbEtLEDUHJIUiJFFrJM96pbE3xFn3jbfQ1OUte\r\n"   \
+ "-----END CERTIFICATE-----\r\n"
+
+
+//#define FACTORY_CERT_PATH   "../../certs/factory_cert.pem"
+#define CA_CERT_PATH    "../../certs/ca_cert.pem"
 
 #define COAP_CONTENT_FORMAT_CRTS 280
 #define COAP_CONTENT_FORMAT_PKCS10 286
+#define COAP_CONTENT_FORMAT_CBOREN 12001
 
+#define COAP_TEST_CONTENT_FORMAT_FOR_SEN COAP_CONTENT_FORMAT_PKCS10
 /*
  * Settings we might need to trim to smallest possible
  */

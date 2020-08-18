@@ -1,5 +1,7 @@
 /*
- * Copyright (c) 2015, Swedish Institute of Computer Science.
+ * Copyright (c) 2015-2020, Swedish Institute of Computer Science +
+ * RISE AB
+ *
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -37,7 +39,8 @@
 
  * \author
  *         Rúnar Már Magnússon <rmma@kth.se>
- *         Tómas Þór Helgason   <helgas@kth.se>
+ *         Tómas Þór Helgason  <helgas@kth.se>
+ *         Joel Höglund        <joel.hoglund@ri.se>
  */
 
 #ifndef EST_H_
@@ -136,6 +139,7 @@ int est_process_enroll_response(uint8_t *buffer, uint16_t buf_len, unsigned char
  * @return length of the request if successful, 0 otherwise
  */
 uint16_t est_create_enroll_request(uint8_t *buffer, uint16_t buf_len); //, int is_skg_request);
+uint16_t est_create_enroll_request_cbor(uint8_t *buffer, uint16_t buf_len); //, int is_skg_request);
 
 void est_set_socket_callbacks(int (*setsockopt)(int level, int optname,
         void *optval, uint16_t optlen),
