@@ -1063,9 +1063,9 @@ x509_decode_certificate(uint8_t **pos, uint8_t *end)
 
 #if EST_DEBUG_X509
   LOG_DBG("x509_decode_certificate -Certificate start: %p, end: %p, length: %d, X.509 Cert %p \n", pos, end, (int)(end - (*pos)), cert);
-#if 0 < WITH_COMPRESSION
-  hdump(*pos, (int)(end - (*pos)));
-#endif
+  hdumps(*pos, (int)(end - (*pos)));
+  LOG_DBG("\n");
+//#endif
 #endif
 
   /* Set the tag of the Certificate sequence */
@@ -2004,6 +2004,7 @@ x509_verify_certificate_path(x509_certificate *path,
     }
   } else {
 
+    LOG_DBG("Check cert-chain\n");
     while((max_path_length > 0) && (current_cert != NULL)) {
       /* Verify the current certificate in the path */
       res = x509_verify_certificate(current_cert, &working_issuer_name, &working_public_key_info, current_time);

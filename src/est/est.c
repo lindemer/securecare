@@ -490,6 +490,9 @@ cbor_decompress_cert(uint8_t *buffer, uint16_t buf_len, uint8_t *decompressed_bu
 /*----------------------------------------------------------------------------*/
 
 /*----------------------------------------------------------------------------*/
+/**
+ * raw_certificate_buffer: To keep the decoded cert in binary format. Handed back to the client
+ */
 int
 est_process_enroll_response(uint8_t *incoming_buffer, const uint16_t buf_len, unsigned char *path, uint8_t *raw_certificate_buffer, int *cert_len)
 {

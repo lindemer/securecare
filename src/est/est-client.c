@@ -49,6 +49,10 @@
 #include "est-client.h"
 #include "est.h"
 #include "est-x509.h"
+/*
+ * settings
+ */
+#include "project-conf.h"
 
 #include "log.h"
 #include "mbedtls-wrapper.h"
@@ -119,13 +123,15 @@ int
 main(int argc, char **argv) {
 
 	LOG_INFO("Starting EST client.\n");
-	init_all(CA_CERT_PATH);
+
 
 #ifdef FACTORY_CERT_PATH
 	LOG_INFO("Will enroll using:\nFactory cert at %s and\nCA cert at %s\n", FACTORY_CERT_PATH, CA_CERT_PATH);
+	init_all(CA_CERT_PATH);
 	set_pki_data(FACTORY_CERT_PATH, NULL, CA_CERT_PATH, NULL);
 #else
 	LOG_INFO("Will enroll using:\nFactory cert: %s and\nCA cert %s\n", FACTORY_CERT, CA_CERT);
+	init_all(NULL);
 	set_pki_data(FACTORY_CERT, FACTORY_KEY, NULL, CA_CERT);
 #endif
 
