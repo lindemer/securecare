@@ -11,6 +11,7 @@ $(OUTPUT_DIRECTORY)/app.out: \
 
 # Source files common to all targets
 SRC_FILES += \
+  $(SDK_ROOT)/integration/nrfx/legacy/nrf_drv_clock.c \
   $(SDK_ROOT)/modules/nrfx/mdk/gcc_startup_nrf52840.S \
   $(SDK_ROOT)/components/libraries/bsp/bsp.c \
   $(SDK_ROOT)/components/libraries/bsp/bsp_thread.c \
@@ -27,12 +28,12 @@ SRC_FILES += \
   $(SDK_ROOT)/components/libraries/util/app_error.c \
   $(SDK_ROOT)/components/libraries/util/app_error_handler_gcc.c \
   $(SDK_ROOT)/components/libraries/util/app_error_weak.c \
-  $(SDK_ROOT)/components/libraries/scheduler/app_scheduler.c \
+  $(SDK_ROOT)/components/libraries/timer/drv_rtc.c \
   $(SDK_ROOT)/components/libraries/timer/app_timer2.c \
+  $(SDK_ROOT)/components/libraries/scheduler/app_scheduler.c \
   $(SDK_ROOT)/components/libraries/util/app_util_platform.c \
   $(SDK_ROOT)/components/libraries/assert/assert.c \
   $(SDK_ROOT)/components/libraries/crc32/crc32.c \
-  $(SDK_ROOT)/components/libraries/timer/drv_rtc.c \
   $(SDK_ROOT)/components/libraries/mem_manager/mem_manager.c \
   $(SDK_ROOT)/components/libraries/util/nrf_assert.c \
   $(SDK_ROOT)/components/libraries/atomic_fifo/nrf_atfifo.c \
@@ -51,7 +52,6 @@ SRC_FILES += \
   $(SDK_ROOT)/components/libraries/strerror/nrf_strerror.c \
   $(SDK_ROOT)/components/libraries/sha256/sha256.c \
   $(SDK_ROOT)/modules/nrfx/mdk/system_nrf52840.c \
-  $(SDK_ROOT)/integration/nrfx/legacy/nrf_drv_clock.c \
   $(SDK_ROOT)/components/drivers_nrf/nrf_soc_nosd/nrf_nvic.c \
   $(SDK_ROOT)/modules/nrfx/hal/nrf_nvmc.c \
   $(SDK_ROOT)/components/drivers_nrf/nrf_soc_nosd/nrf_soc.c \
@@ -67,12 +67,18 @@ SRC_FILES += \
   $(SDK_ROOT)/external/infineon/examples/ecdsa_utils/ecdsa_utils.c \
   $(KEYS_DIR)/pub.c \
   $(PROJ_DIR)/main.c \
-  $(PROJ_DIR)/coaps_dfu.c \
   $(PROJ_DIR)/addr_parse.c \
-  $(PROJ_DIR)/background_dfu_state.c \
-  $(SDK_ROOT)/components/iot/background_dfu/background_dfu_block.c \
-  $(SDK_ROOT)/components/iot/background_dfu/background_dfu_operation.c \
   $(SDK_ROOT)/components/libraries/crypto/backend/nrf_sw/nrf_sw_backend_hash.c \
+  $(SDK_ROOT)/components/iot/coap/coap_block.c \
+  $(SDK_ROOT)/components/iot/ipv6_parse/ipv6_parse.c \
+  $(SDK_ROOT)/components/iot/ipv6_parse/ipv6_parse.c \
+  $(SDK_ROOT)/external/segger_rtt/SEGGER_RTT.c \
+  $(SDK_ROOT)/external/segger_rtt/SEGGER_RTT_Syscalls_GCC.c \
+  $(SDK_ROOT)/external/segger_rtt/SEGGER_RTT_printf.c \
+  $(PROJ_DIR)/../../../lib/LIDARLite_ANT_Library/common/soc_error_handler/soc_error_handler.c \
+  $(PROJ_DIR)/../../../lib/LIDARLite_ANT_Library/common/soc_log_handler/soc_logger.c \
+  $(PROJ_DIR)/../../../lib/NanoCBOR/src/encoder.c \
+  $(PROJ_DIR)/../../../lib/NanoCBOR/src/decoder.c \
   $(PROJ_DIR)/../common/nrf_dfu.c \
   $(PROJ_DIR)/../common/nrf_dfu_flash.c \
   $(PROJ_DIR)/../common/nrf_dfu_handling_error.c \
@@ -83,23 +89,21 @@ SRC_FILES += \
   $(PROJ_DIR)/../common/nrf_dfu_utils.c \
   $(PROJ_DIR)/../common/nrf_dfu_validation.c \
   $(PROJ_DIR)/../common/nrf_dfu_ver_validation.c \
-  $(SDK_ROOT)/components/iot/coap/coap_block.c \
-  $(SDK_ROOT)/components/iot/ipv6_parse/ipv6_parse.c \
-  $(SDK_ROOT)/components/iot/ipv6_parse/ipv6_parse.c \
-  $(SDK_ROOT)/external/segger_rtt/SEGGER_RTT.c \
-  $(SDK_ROOT)/external/segger_rtt/SEGGER_RTT_Syscalls_GCC.c \
-  $(SDK_ROOT)/external/segger_rtt/SEGGER_RTT_printf.c \
+  $(PROJ_DIR)/coaps_dfu.c \
+  $(PROJ_DIR)/background_dfu_state.c \
+  $(SDK_ROOT)/components/iot/background_dfu/background_dfu_block.c \
+  $(SDK_ROOT)/components/iot/background_dfu/background_dfu_operation.c \
   $(SDK_ROOT)/components/thread/utils/thread_utils.c \
-  $(PROJ_DIR)/../../../lib/NanoCBOR/src/encoder.c \
-  $(PROJ_DIR)/../../../lib/NanoCBOR/src/decoder.c \
   $(PROJ_DIR)/../../cose/cose.c \
-  $(PROJ_DIR)/../../cose/suit.c \
+  $(PROJ_DIR)/../../cose/suit.c
 
 # Include folders common to all targets
 INC_FOLDERS += \
   $(PROJ_DIR) \
-  $(PROJ_DIR)/../common \
   $(PROJ_DIR)/../../cose \
+  $(PROJ_DIR)/../../../lib/LIDARLite_ANT_Library/common/soc_log_handler \
+  $(PROJ_DIR)/../../../lib/LIDARLite_ANT_Library/common/soc_error_handler \
+  $(PROJ_DIR)/../../../lib/LIDARLite_ANT_Library/inc \
   $(PROJ_DIR)/../../../lib/NanoCBOR/include \
   $(SDK_ROOT)/components/libraries/crypto/backend/cc310 \
   $(SDK_ROOT)/external/nrf_cc310/include \
@@ -151,6 +155,7 @@ INC_FOLDERS += \
   $(SDK_ROOT)/integration/nrfx \
   $(SDK_ROOT)/modules/nrfx/mdk \
   $(SDK_ROOT)/external/micro-ecc/micro-ecc \
+  $(SDK_ROOT)/components/libraries/hardfault \
   $(SDK_ROOT)/components/libraries/mutex \
   $(SDK_ROOT)/components/libraries/crypto/backend/micro_ecc \
   $(SDK_ROOT)/components/libraries/crypto/backend/mbedtls \
@@ -169,12 +174,13 @@ INC_FOLDERS += \
   $(SDK_ROOT)/components/libraries/sha256 \
   $(SDK_ROOT)/components/softdevice/mbr/headers \
   $(SDK_ROOT)/components/libraries/crypto/backend/oberon \
+  $(PROJ_DIR)/../common
 
 # Libraries common to all targets
 LIB_FILES += \
-  $(SDK_ROOT)/external/openthread/lib/nrf52840/gcc/libopenthread-cli-ftd.a \
+  $(PROJ_DIR)/../../../lib/LIDARLite_ANT_Library/bin/liblidarlite.a \
   $(SDK_ROOT)/external/openthread/lib/nrf52840/gcc/libopenthread-ftd.a \
-  $(SDK_ROOT)/external/openthread/lib/nrf52840/gcc/libopenthread-nrf52840-transport.a \
+  $(SDK_ROOT)/external/openthread/lib/nrf52840/gcc/libopenthread-nrf52840-transport-none.a \
   $(SDK_ROOT)/external/openthread/lib/nrf52840/gcc/libopenthread-platform-utils.a \
   $(SDK_ROOT)/external/nrf_security/lib/libmbedcrypto_glue.a \
   $(SDK_ROOT)/external/nrf_security/lib/libmbedcrypto_glue_cc310.a \
@@ -194,13 +200,12 @@ LIB_FILES += \
   $(SDK_ROOT)/external/nrf_oberon/lib/cortex-m4/hard-float/liboberon_3.0.3.a \
   $(SDK_ROOT)/external/nrf_security/lib/libmbedcrypto_cc310_backend.a \
   $(SDK_ROOT)/external/nrf_security/lib/libmbedcrypto_vanilla_backend.a \
-  $(SDK_ROOT)/external/openthread/lib/nrf52840/gcc/libopenthread-nrf52840-transport.a \
+  $(SDK_ROOT)/external/openthread/lib/nrf52840/gcc/libopenthread-nrf52840-transport-none.a \
   $(SDK_ROOT)/external/openthread/lib/nrf52840/gcc/libopenthread-platform-utils.a \
   $(SDK_ROOT)/external/nrf_security/lib/libmbedtls_base_vanilla.a \
   $(SDK_ROOT)/external/nrf_security/lib/libmbedtls_tls_vanilla.a \
   $(SDK_ROOT)/external/nrf_security/lib/libmbedtls_x509_vanilla.a \
   $(SDK_ROOT)/external/nrf_security/lib/libnrf_cc310_platform_0.9.2.a \
-  $(SDK_ROOT)/external/openthread/lib/nrf52840/gcc/libopenthread-ftd.a \
 
 # Optimization flags
 OPT = -O3 -g3
@@ -212,7 +217,7 @@ CFLAGS += $(OPT)
 CFLAGS += -DAPP_TIMER_V2
 CFLAGS += -DAPP_TIMER_V2_RTC1_ENABLED
 CFLAGS += -DBOARD_PCA10056
-CFLAGS += -DCONFIG_GPIO_AS_PINRESET
+#CFLAGS += -DCONFIG_GPIO_AS_PINRESET
 CFLAGS += -DENABLE_FEM
 CFLAGS += -DFLOAT_ABI_HARD
 CFLAGS += -DMBEDTLS_CONFIG_FILE=\"nrf-config.h\"
@@ -257,7 +262,7 @@ ASMFLAGS += -mfloat-abi=hard -mfpu=fpv4-sp-d16
 ASMFLAGS += -DAPP_TIMER_V2
 ASMFLAGS += -DAPP_TIMER_V2_RTC1_ENABLED
 ASMFLAGS += -DBOARD_PCA10056
-ASMFLAGS += -DCONFIG_GPIO_AS_PINRESET
+#ASMFLAGS += -DCONFIG_GPIO_AS_PINRESET
 ASMFLAGS += -DENABLE_FEM
 ASMFLAGS += -DFLOAT_ABI_HARD
 ASMFLAGS += -DMBR_PRESENT

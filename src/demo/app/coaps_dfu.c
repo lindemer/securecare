@@ -55,6 +55,7 @@
 #include "coap_block.h"
 
 #include "thread_utils.h"
+#include "nrfx_rtc.h"
 
 #include <openthread/coap.h>
 #include <openthread/coap_secure.h>
@@ -68,6 +69,10 @@
 #define NRF_LOG_MODULE_NAME coaps_dfu
 #include "nrf_log.h"
 NRF_LOG_MODULE_REGISTER();
+
+const nrfx_rtc_t RTC0 = NRFX_RTC_INSTANCE(0);
+const nrfx_rtc_t RTC1 = NRFX_RTC_INSTANCE(1);
+const nrfx_rtc_t RTC2 = NRFX_RTC_INSTANCE(2);
 
 // Remote firmware manifest server paramters.
 static const uint8_t suit_remote_addr[16] =
@@ -679,6 +684,11 @@ void background_dfu_transport_state_update(background_dfu_context_t * p_dfu_ctx)
 
 void background_dfu_transport_send_request(background_dfu_context_t * p_dfu_ctx)
 {
+    NRF_LOG_INFO("RTC0: %d, RTC1: %d, RTC2: %d", 
+                    nrfx_rtc_counter_get(&RTC0),
+                    nrfx_rtc_counter_get(&RTC1),
+                    nrfx_rtc_counter_get(&RTC2));
+
     uint16_t block_size;
     char * query;
 
