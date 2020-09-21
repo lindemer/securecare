@@ -7,9 +7,7 @@ This is an experimental implementation of the [SUIT protocol](https://datatracke
 ![SecureCare logo](https://github.com/lindemer/securecare/blob/master/securecare.png "SecureCare logo")
 
 ## Usage
-The nRF52840 node is flashed with the default Thread credentials included with the [OpenThread border router](https://github.com/openthread/ot-br-posix) and should connect automatically to the network. `LED1` indicates the Thread connection status: off for detached, blink for connecting and on for connected. The node has a CoAP PUT endpoint at `/s` for receiving SUIT manifests. 
-
-The [mesh-local EID](https://openthread.io/guides/thread-primer/ipv6-addressing) IPv6 address of the board can be discovered by connecting a serial port communication program (e.g., `sudo minicom -D /dev/ttyACM0 -b 115200`) and running `ipaddr` from the OpenThread CLI. Alternatively, the link-local IPv6 address can discovered by pinging `ff02::1%wpan0` from the border router. The OpenThread border router is pre-configured with a NAT64 interface. Run `dns resolve ipv4.google.com fdaa:bb:1::2` from the OpenThread CLI on the node to check Internet connectivity.
+The nRF52840 node is flashed with the default Thread credentials included with the [OpenThread border router](https://github.com/openthread/ot-br-posix) and should connect automatically to the network. `LED1` indicates the Thread connection status: off for detached, blink for connecting and on for connected. The link-local IPv6 addresses of all Thread devices connected to the border router can discovered by pinging `ff02::1%wpan0`. The OpenThread border router is pre-configured with a NAT64 interface. Run `dns resolve ipv4.google.com fdaa:bb:1::2` from the OpenThread CLI on the node to check Internet connectivity.
 
 ## Project Structure
 - `key` keys and certificates
@@ -25,6 +23,4 @@ The [mesh-local EID](https://openthread.io/guides/thread-primer/ipv6-addressing)
 3. Run `make` from `src/util` to compile CLI utilities.
 
 ## Toolchain Installation
-This code has been built and tested on an nRF52840 DK using the [nRF5 SDK for Thread v4.1.0](https://www.nordicsemi.com/Software-and-tools/Software/nRF5-SDK-for-Thread-and-Zigbee/Download). Create an environment variable called `$NRF5_SDK` pointing to the SDK directory before running `make`. The SDK expects to find a copy of the [Arm GCC Embedded Toolchain v7-2018-q2-update](https://developer.arm.com/open-source/gnu-toolchain/gnu-rm/downloads) in the `/usr/local` directory.
-
-The Linux-native components of this project depend on a local installation of [libcoap](https://github.com/obgm/libcoap) and [mbedTLS](https://github.com/ARMmbed/mbedtls), both of which can be found in `lib`. 
+This code has been built and tested on an nRF52840 DK using the [nRF5 SDK for Thread v4.1.0](https://www.nordicsemi.com/Software-and-tools/Software/nRF5-SDK-for-Thread-and-Zigbee/Download). Create an environment variable called `$NRF5_SDK` pointing to the SDK directory before running `make`. The SDK expects to find a copy of the [Arm GCC Embedded Toolchain v7-2018-q2-update](https://developer.arm.com/open-source/gnu-toolchain/gnu-rm/downloads) in the `/usr/local` directory. The Linux-native components of this project depend on a local installation of [libcoap](https://github.com/obgm/libcoap) and [mbedTLS](https://github.com/ARMmbed/mbedtls). 
