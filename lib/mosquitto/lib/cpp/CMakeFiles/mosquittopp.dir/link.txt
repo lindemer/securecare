@@ -1,1 +1,0 @@
-/usr/bin/c++ -fPIC   -shared -Wl,-soname,libmosquittopp.so.1 -o libmosquittopp.so.1.6.12 CMakeFiles/mosquittopp.dir/mosquittopp.cpp.o   -L/home/samuel/securecare/lib/mosquitto/lib  -Wl,-rpath,/home/samuel/securecare/lib/mosquitto/lib: ../libmosquitto.so.1.6.12 -lssl -lcrypto -lpthread -lrt 

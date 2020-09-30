@@ -4,6 +4,3 @@
 [submodule "src/libcoap"]
 	path = lib/libcoap
 	url = https://github.com/obgm/libcoap
-[submodule "lib/LIDARLite_ANT_Library"]
-	path = lib/LIDARLite_ANT_Library
-	url = https://github.com/garmin/LIDARLite_ANT_Library
