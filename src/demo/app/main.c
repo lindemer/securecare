@@ -35,10 +35,10 @@
 #include <string.h>
 
 #include "app_scheduler.h"
+#include "app_uart.h"
 #include "app_util.h"
 #include "app_timer.h"
 #include "boards.h"
-#include "bsp_thread.h"
 #include "nrf_delay.h"
 #include "mem_manager.h"
 #include "nrf_assert.h"
@@ -50,13 +50,26 @@
 #include "coaps_dfu.h"
 #include "background_dfu_state.h"
 #include "thread_utils.h"
+#include "rplidar.h"
+#if defined (UART_PRESENT)
+#include "nrf_uart.h"
+#endif
+#if defined (UARTE_PRESENT)
+#include "nrf_uarte.h"
+#endif
 
-#include <openthread/cli.h>
+
 #include <openthread/thread.h>
 #include <openthread/thread_ftd.h>
 #include <openthread/dataset_ftd.h>
 #include <openthread/platform/alarm-micro.h>
 #include <openthread/platform/alarm-milli.h>
+
+// Thingy:91 GPIO pins
+#define SPARE1 5
+#define SPARE2 6
+#define SPARE3 26
+#define SPARE4 27
 
 // Maximum number of events in the scheduler queue.
 #define SCHED_QUEUE_SIZE                32
@@ -64,7 +77,77 @@
 // Maximum app_scheduler event size.
 #define SCHED_EVENT_DATA_SIZE           APP_TIMER_SCHED_EVENT_DATA_SIZE
 
-void handle_dfu_command(uint8_t argc, char *argv[]);
+/***************************************************************************************************
+ * @section RPLIDAR driver
+ **************************************************************************************************/
+
+#define UART_TX_BUF_SIZE 256
+#define UART_RX_BUF_SIZE 256
+
+void uart_error_handle(app_uart_evt_t * p_event)
+{
+    if (p_event->evt_type == APP_UART_COMMUNICATION_ERROR)
+    {
+        APP_ERROR_HANDLER(p_event->data.error_communication);
+    }
+    else if (p_event->evt_type == APP_UART_FIFO_ERROR)
+    {
+        APP_ERROR_HANDLER(p_event->data.error_code);
+    }
+}
+
+uint32_t rplidar_send_command(uint8_t command)
+{
+    rplidar_cmd_packet_t pkt;
+    pkt.sync_byte = RPLIDAR_CMD_SYNC_BYTE;
+    pkt.cmd_flag = command;
+    uint8_t * buffer = (uint8_t *)&pkt;
+
+    for (uint32_t i = 0; i < sizeof(pkt); i++)
+    {
+	while (app_uart_put(buffer[i]) != NRF_SUCCESS);
+    }
+    
+    return RPLIDAR_SUCCESS;
+}
+
+uint32_t rplidar_wait_response_header(rplidar_ans_header_t * header)
+{
+    uint32_t recv_pos = 0;
+    uint8_t * buffer = (uint8_t *) header;
+
+    uint32_t max_gets = 256;
+    for (int i = 0; i < max_gets; i++)
+    {
+        uint8_t byte;
+        ret_code_t ret = app_uart_get(&byte);
+        if (ret != NRF_SUCCESS) break;
+	
+	switch (recv_pos)
+	{
+        case 0:
+	    if (byte != RPLIDAR_ANS_SYNC_BYTE0) continue;
+	    break;
+
+	case 1:
+	    if (byte != RPLIDAR_ANS_SYNC_BYTE1)
+	    {
+		recv_pos = 0;
+		continue;
+	    }
+	    break;
+	}
+	
+	buffer[recv_pos++] = byte;
+	if (recv_pos == sizeof(rplidar_ans_header_t)) return RPLIDAR_SUCCESS;
+    } 
+
+    return RPLIDAR_OPERATION_TIMEOUT;
+}
+
+/***************************************************************************************************
+ * @section OpenThread DFU configuration
+ **************************************************************************************************/
 
 /* Override default network settings with the OpenThread border router defaults. This is for
  * development purposes only. Commissioning should be used to add devices to the network in
@@ -84,80 +167,13 @@ static uint8_t otbr_master_key[OT_MASTER_KEY_SIZE] =
 static uint8_t otbr_mesh_local_prefix[OT_MESH_LOCAL_PREFIX_SIZE] =
     { 0xfd, 0x11, 0x11, 0x11, 0x11, 0x22, 0x00, 0x00 };
 
-static otCliCommand m_user_commands[] =
-{
-    {
-        .mName = "dfu",
-        .mCommand = handle_dfu_command
-    }
-};
-
-void handle_dfu_command(uint8_t argc, char *argv[])
-{
-    if (argc == 0)
-    {
-        otCliAppendResult(OT_ERROR_PARSE);
-        return;
-    }
-
-    if (strcmp(argv[0], "diag") == 0)
-    {
-        struct background_dfu_diagnostic diag;
-        coaps_dfu_diagnostic_get(&diag);
-        otCliOutputFormat("build_id: 0x%08x, "
-                              "state: %d, "
-                              "prev_state: %d, ",
-                              diag.build_id,
-                              diag.state,
-                              diag.prev_state);
-        otCliOutputFormat("\r\n");
-        otCliAppendResult(OT_ERROR_NONE);
-    }
-}
-
 void coaps_dfu_handle_error(void)
 {
     coaps_dfu_reset_state();
 }
 
-
-static void address_print(const otIp6Address *addr)
-{
-    char ipstr[40];
-    snprintf(ipstr, sizeof(ipstr), "%x:%x:%x:%x:%x:%x:%x:%x",
-             uint16_big_decode((uint8_t *)(addr->mFields.m16 + 0)),
-             uint16_big_decode((uint8_t *)(addr->mFields.m16 + 1)),
-             uint16_big_decode((uint8_t *)(addr->mFields.m16 + 2)),
-             uint16_big_decode((uint8_t *)(addr->mFields.m16 + 3)),
-             uint16_big_decode((uint8_t *)(addr->mFields.m16 + 4)),
-             uint16_big_decode((uint8_t *)(addr->mFields.m16 + 5)),
-             uint16_big_decode((uint8_t *)(addr->mFields.m16 + 6)),
-             uint16_big_decode((uint8_t *)(addr->mFields.m16 + 7)));
-
-    NRF_LOG_INFO("%s\r\n", (uint32_t)ipstr);
-}
-
-static void addresses_print(otInstance * aInstance)
-{
-    for (const otNetifAddress *addr = otIp6GetUnicastAddresses(aInstance); addr; addr = addr->mNext)
-    {
-        address_print(&addr->mAddress);
-    }
-}
-
-// Function for initializing scheduler module.
-static void scheduler_init(void)
-{
-    APP_SCHED_INIT(SCHED_EVENT_DATA_SIZE, SCHED_QUEUE_SIZE);
-}
-
 static void state_changed_callback(uint32_t aFlags, void *aContext)
 {
-    if (aFlags & OT_CHANGED_THREAD_NETDATA)
-    {
-        addresses_print(thread_ot_instance_get());
-    }
-
     otDeviceRole role = otThreadGetDeviceRole(thread_ot_instance_get());
     NRF_LOG_INFO("New role: %d\r\n", role);
 
@@ -181,18 +197,6 @@ static void state_changed_callback(uint32_t aFlags, void *aContext)
         }
     }
 }
-
-/**@brief Function for initializing the Thread Board Support Package.
- */
-static void thread_bsp_init(void)
-{
-    uint32_t err_code = bsp_init(BSP_INIT_LEDS, NULL);
-    APP_ERROR_CHECK(err_code);
-
-    err_code = bsp_thread_init(thread_ot_instance_get());
-    APP_ERROR_CHECK(err_code);
-}
-
 
 // Function for initializing the Thread Stack.
 static void thread_instance_init(void)
@@ -244,12 +248,8 @@ static void thread_instance_init(void)
     NRF_LOG_INFO("Radio mode       : %s", otThreadGetLinkMode(aInstance).mRxOnWhenIdle ?
                                     "rx-on-when-idle" : "rx-off-when-idle");
 
-    thread_cli_init();
     thread_state_changed_callback_set(state_changed_callback);
-
-    otCliSetUserCommands(m_user_commands, sizeof(m_user_commands) / sizeof(otCliCommand));
 }
-
 
 // Function for initializing the nrf log module.
 static void log_init(void)
@@ -273,7 +273,7 @@ int main(int argc, char *argv[])
     uint32_t err_code = nrf_mem_init();
     APP_ERROR_CHECK(err_code);
 
-    scheduler_init();
+    APP_SCHED_INIT(SCHED_EVENT_DATA_SIZE, SCHED_QUEUE_SIZE);
 
     err_code = app_timer_init();
     APP_ERROR_CHECK(err_code);
@@ -283,10 +283,43 @@ int main(int argc, char *argv[])
     err_code = coaps_dfu_init(thread_ot_instance_get());
     APP_ERROR_CHECK(err_code);
 
-    thread_bsp_init();
+    const app_uart_comm_params_t comm_params =
+    {
+        SPARE4, SPARE3, 0, 0, APP_UART_FLOW_CONTROL_DISABLED, false,
+#if defined (UART_PRESENT)
+        NRF_UART_BAUDRATE_115200
+#else
+        NRF_UARTE_BAUDRATE_115200
+#endif
+    };
+
+    NRF_LOG_INFO("Testing UART");
+    APP_UART_FIFO_INIT(&comm_params,
+                       UART_RX_BUF_SIZE,
+                       UART_TX_BUF_SIZE,
+                       uart_error_handle,
+                       APP_IRQ_PRIORITY_LOWEST,
+                       err_code);
+
+    APP_ERROR_CHECK(err_code);
+
+    //////
+    rplidar_send_command(RPLIDAR_CMD_GET_DEVICE_INFO);
+    rplidar_ans_header_t header;
+    err_code = rplidar_wait_response_header(&header);
+    if (err_code)
+    {
+	NRF_LOG_INFO("UART read failed");
+    }
+    else
+    {
+	NRF_LOG_INFO("UART read success");
+    }
+    /////
 
     while (true)
     {
+        
         thread_process();
         app_sched_execute();
 
