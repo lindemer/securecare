@@ -58,7 +58,6 @@
 #ifdef UARTE_PRESENT
 #include "nrf_uarte.h"
 #endif
-//#include "nrf_serial.h"
 
 #include <openthread/thread.h>
 #include <openthread/thread_ftd.h>
@@ -81,14 +80,9 @@
 // Maximum app_scheduler event size.
 #define SCHED_EVENT_DATA_SIZE APP_TIMER_SCHED_EVENT_DATA_SIZE
 
-/***************************************************************************************************
- * @section RPLIDAR driver
- **************************************************************************************************/
-
 #define UART_TX_BUF_SIZE 256
 #define UART_RX_BUF_SIZE 256
 
-#ifdef ENABLE_RPLIDAR
 void uart_error_handle(app_uart_evt_t * p_event)
 {
     if (p_event->evt_type == APP_UART_COMMUNICATION_ERROR)
@@ -100,74 +94,6 @@ void uart_error_handle(app_uart_evt_t * p_event)
         APP_ERROR_HANDLER(p_event->data.error_code);
     }
 }
-
-uint32_t rplidar_send_command(uint8_t command)
-{
-    rplidar_cmd_packet_t pkt;
-    pkt.sync_byte = RPLIDAR_CMD_SYNC_BYTE;
-    pkt.cmd_flag = command;
-    uint8_t * buffer = (uint8_t *)&pkt;
-
-    for (uint32_t i = 0; i < sizeof(pkt); i++)
-    {
-	while (app_uart_put(buffer[i]) != NRF_SUCCESS);
-    }
-    
-    return RPLIDAR_SUCCESS;
-}
-
-uint8_t rplidar_debug_response()
-{
-    uint8_t buffer[4096];
-    for (uint32_t i = 0; i < 4096; i++)
-    {
-        if (app_uart_get(&buffer[i]))
-        {
-            buffer[i] = 0xff;
-        }
-    }
-    return buffer[128];
-}
-
-uint32_t rplidar_wait_response_header(rplidar_ans_header_t * header)
-{
-    uint32_t recv_pos = 0;
-    uint8_t * buffer = (uint8_t *)header;
-
-    uint32_t max_gets = 4096;
-    for (uint32_t i = 0; i < max_gets; i++)
-    {
-        uint8_t byte;
-        uint32_t err_code = app_uart_get(&byte);
-        if (!err_code)
-        {
-            switch (recv_pos)
-            {
-            case 0:
-                if (byte == RPLIDAR_ANS_SYNC_BYTE0)
-                {
-                    buffer[recv_pos++] = byte;
-                }
-                break;
-            
-            case 1:
-                if (byte == RPLIDAR_ANS_SYNC_BYTE1)
-                {
-                    buffer[recv_pos++] = byte;
-                }
-                break;
-
-            default:
-                buffer[recv_pos++] = byte;
-            }
-        }
-
-	    if (recv_pos == sizeof(rplidar_ans_header_t)) return RPLIDAR_SUCCESS;
-    } 
-
-    return RPLIDAR_OPERATION_TIMEOUT;
-}
-#endif
 
 /***************************************************************************************************
  * @section OpenThread DFU configuration
@@ -319,7 +245,7 @@ int main(int argc, char *argv[])
 #ifdef ENABLE_COAPS_DFU
     err_code = coaps_dfu_init(thread_ot_instance_get());
     APP_ERROR_CHECK(err_code);
-#endif
+#endif // ENABLE_COAPS_DFU
 
     thread_bsp_init();
 
@@ -327,10 +253,6 @@ int main(int argc, char *argv[])
     const app_uart_comm_params_t comm_params =
     {
         SPARE4, SPARE3,  
-        //NRF_GPIO_PIN_MAP(1,13),
-        //NRF_GPIO_PIN_MAP(1,14),
-	    //RX_PIN_NUMBER,
-        //TX_PIN_NUMBER
         RTS_PIN_NUMBER,
         CTS_PIN_NUMBER,
         APP_UART_FLOW_CONTROL_DISABLED,
@@ -339,27 +261,35 @@ int main(int argc, char *argv[])
         NRF_UART_BAUDRATE_115200
 #else
         NRF_UARTE_BAUDRATE_115200
-#endif
+#endif // UART_PRESENT
     };
 
-    NRF_LOG_INFO("Testing UART");
     APP_UART_FIFO_INIT(&comm_params,
                        UART_RX_BUF_SIZE,
                        UART_TX_BUF_SIZE,
                        uart_error_handle,
                        APP_IRQ_PRIORITY_LOWEST,
                        err_code);
-
     APP_ERROR_CHECK(err_code);
 
-    //rplidar_send_command(RPLIDAR_CMD_GET_DEVICE_HEALTH);
-    rplidar_send_command(RPLIDAR_CMD_GET_DEVICE_INFO);
-    rplidar_ans_header_t header;
-    err_code = rplidar_wait_response_header(&header);
-    rplidar_debug_response();
-
+    rplidar_response_device_info_t info;
+    err_code = rplidar_get_device_info(&info);
     APP_ERROR_CHECK(err_code);
-#endif
+
+    rplidar_response_device_health_t health;
+    err_code = rplidar_get_device_health(&health);
+    APP_ERROR_CHECK(err_code);
+
+    err_code = rplidar_start_scan(false);
+    APP_ERROR_CHECK(err_code);
+
+    /*
+    rplidar_point_t point;
+    err_code = rplidar_get_point(&point);
+    APP_ERROR_CHECK(err_code);
+    */
+
+#endif // ENABLE_RPLIDAR
 
     while (true)
     {

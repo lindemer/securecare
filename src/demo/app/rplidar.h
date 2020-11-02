@@ -29,10 +29,7 @@
  * POSSIBILITY OF SUCH DAMAGE.
  **/
 
-/**
- * Adapted from the C++ code by RoboPeak.
- * https://github.com/robopeak/rplidar_arduino
- **/
+#include <stdbool.h>
 
 #define RPLIDAR_SERIAL_BAUDRATE         115200
 #define RPLIDAR_SERIAL_TIMEOUT          500
@@ -94,11 +91,11 @@ typedef struct rplidar_ans_header_t {
     uint8_t  type;
 } __attribute__((packed)) rplidar_ans_header_t;
 
-typedef struct rplidar_response_measurement_node_t {
+typedef struct rplidar_response_measurement_t {
     uint8_t    sync_quality;      // syncbit:1;syncbit_inverse:1;quality:6;
     uint16_t   angle_q6_checkbit; // check_bit:1;angle_q6:15;
     uint16_t   distance_q2;
-} __attribute__((packed)) rplidar_response_measurement_node_t;
+} __attribute__((packed)) rplidar_response_measurement_t;
 
 typedef struct rplidar_response_device_info_t {
     uint8_t   model;
@@ -111,3 +108,11 @@ typedef struct rplidar_response_device_health_t {
     uint8_t   status;
     uint16_t  error_code;
 } __attribute__((packed)) rplidar_response_device_health_t;
+
+uint32_t rplidar_get_device_info(rplidar_response_device_info_t * info);
+
+uint32_t rplidar_get_device_health(rplidar_response_device_health_t * health);
+
+uint32_t rplidar_start_scan(bool force);
+
+uint32_t rplidar_get_point();
