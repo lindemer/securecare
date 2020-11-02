@@ -135,7 +135,6 @@ INC_FOLDERS += \
   $(SDK_ROOT)/external/nrf_oberon/include \
   $(SDK_ROOT)/external/nrf_tls \
   $(SDK_ROOT)/components/libraries/crypto \
-  $(SDK_ROOT)/components/libraries/serial \
   $(SDK_ROOT)/components/toolchain/cmsis/include \
   $(SDK_ROOT)/components/libraries/balloc \
   $(SDK_ROOT)/components/libraries/mem_manager \

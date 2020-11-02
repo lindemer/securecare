@@ -39,6 +39,7 @@
 #include "app_util.h"
 #include "app_timer.h"
 #include "boards.h"
+#include "bsp_thread.h"
 #include "nrf_delay.h"
 #include "mem_manager.h"
 #include "nrf_assert.h"
@@ -51,13 +52,13 @@
 #include "background_dfu_state.h"
 #include "thread_utils.h"
 #include "rplidar.h"
-#if defined (UART_PRESENT)
+#ifdef UART_PRESENT
 #include "nrf_uart.h"
 #endif
-#if defined (UARTE_PRESENT)
+#ifdef UARTE_PRESENT
 #include "nrf_uarte.h"
 #endif
-
+//#include "nrf_serial.h"
 
 #include <openthread/thread.h>
 #include <openthread/thread_ftd.h>
@@ -65,17 +66,20 @@
 #include <openthread/platform/alarm-micro.h>
 #include <openthread/platform/alarm-milli.h>
 
+#define ENABLE_COAPS_DFU 
+#define ENABLE_RPLIDAR
+
 // Thingy:91 GPIO pins
-#define SPARE1 5
-#define SPARE2 6
-#define SPARE3 26
-#define SPARE4 27
+#define SPARE1 NRF_GPIO_PIN_MAP(0, 6)
+#define SPARE2 NRF_GPIO_PIN_MAP(0, 5)
+#define SPARE3 NRF_GPIO_PIN_MAP(0, 26)
+#define SPARE4 NRF_GPIO_PIN_MAP(0, 27)
 
 // Maximum number of events in the scheduler queue.
-#define SCHED_QUEUE_SIZE                32
+#define SCHED_QUEUE_SIZE 32
 
 // Maximum app_scheduler event size.
-#define SCHED_EVENT_DATA_SIZE           APP_TIMER_SCHED_EVENT_DATA_SIZE
+#define SCHED_EVENT_DATA_SIZE APP_TIMER_SCHED_EVENT_DATA_SIZE
 
 /***************************************************************************************************
  * @section RPLIDAR driver
@@ -84,6 +88,7 @@
 #define UART_TX_BUF_SIZE 256
 #define UART_RX_BUF_SIZE 256
 
+#ifdef ENABLE_RPLIDAR
 void uart_error_handle(app_uart_evt_t * p_event)
 {
     if (p_event->evt_type == APP_UART_COMMUNICATION_ERROR)
@@ -111,39 +116,44 @@ uint32_t rplidar_send_command(uint8_t command)
     return RPLIDAR_SUCCESS;
 }
 
+uint8_t rplidar_debug_response()
+{
+    uint8_t buffer[4096];
+    for (uint32_t i = 0; i < 4096; i++)
+    {
+        if (app_uart_get(&buffer[i]))
+        {
+            buffer[i] = 0xff;
+        }
+    }
+    return buffer[128];
+}
+
 uint32_t rplidar_wait_response_header(rplidar_ans_header_t * header)
 {
     uint32_t recv_pos = 0;
-    uint8_t * buffer = (uint8_t *) header;
+    uint8_t * buffer = (uint8_t *)header;
 
-    uint32_t max_gets = 256;
-    for (int i = 0; i < max_gets; i++)
+    uint32_t max_gets = 4096;
+    for (uint32_t i = 0; i < max_gets; i++)
     {
         uint8_t byte;
-        ret_code_t ret = app_uart_get(&byte);
-        if (ret != NRF_SUCCESS) break;
-	
-	switch (recv_pos)
-	{
-        case 0:
-	    if (byte != RPLIDAR_ANS_SYNC_BYTE0) continue;
-	    break;
+        uint32_t err = app_uart_get(&byte);
 
-	case 1:
-	    if (byte != RPLIDAR_ANS_SYNC_BYTE1)
-	    {
-		recv_pos = 0;
-		continue;
-	    }
-	    break;
-	}
+        if (((recv_pos == 0 && byte == RPLIDAR_ANS_SYNC_BYTE0) ||
+             (recv_pos == 1 && byte == RPLIDAR_ANS_SYNC_BYTE1) ||
+             (recv_pos > 1)) && (err == 0))
+        {
+            buffer[recv_pos++] = byte;
+        }
 	
-	buffer[recv_pos++] = byte;
-	if (recv_pos == sizeof(rplidar_ans_header_t)) return RPLIDAR_SUCCESS;
+	    if (recv_pos == sizeof(rplidar_ans_header_t)) return RPLIDAR_SUCCESS;
+        //if (recv_pos == 1) return RPLIDAR_SUCCESS;
     } 
 
     return RPLIDAR_OPERATION_TIMEOUT;
 }
+#endif
 
 /***************************************************************************************************
  * @section OpenThread DFU configuration
@@ -186,7 +196,9 @@ static void state_changed_callback(uint32_t aFlags, void *aContext)
             case OT_DEVICE_ROLE_DETACHED:
                 break;
             case OT_DEVICE_ROLE_CHILD:
+#ifdef ENABLE_COAPS_DFU
                 coaps_dfu_start();
+#endif
                 break;
             case OT_DEVICE_ROLE_ROUTER:
                 break;
@@ -196,6 +208,16 @@ static void state_changed_callback(uint32_t aFlags, void *aContext)
                 break;
         }
     }
+}
+
+// Function for initializing the Thread Board Support Package.
+static void thread_bsp_init(void)
+{
+    uint32_t err_code = bsp_init(BSP_INIT_LEDS, NULL);
+    APP_ERROR_CHECK(err_code);
+
+    err_code = bsp_thread_init(thread_ot_instance_get());
+    APP_ERROR_CHECK(err_code);
 }
 
 // Function for initializing the Thread Stack.
@@ -280,13 +302,26 @@ int main(int argc, char *argv[])
 
     thread_instance_init();
 
+#ifdef ENABLE_COAPS_DFU
     err_code = coaps_dfu_init(thread_ot_instance_get());
     APP_ERROR_CHECK(err_code);
+#endif
 
+    thread_bsp_init();
+
+#ifdef ENABLE_RPLIDAR
     const app_uart_comm_params_t comm_params =
     {
-        SPARE4, SPARE3, 0, 0, APP_UART_FLOW_CONTROL_DISABLED, false,
-#if defined (UART_PRESENT)
+        SPARE4, SPARE3,  
+        //NRF_GPIO_PIN_MAP(1,13),
+        //NRF_GPIO_PIN_MAP(1,14),
+	    //RX_PIN_NUMBER,
+        //TX_PIN_NUMBER
+        RTS_PIN_NUMBER,
+        CTS_PIN_NUMBER,
+        APP_UART_FLOW_CONTROL_DISABLED,
+        false,
+#ifdef UART_PRESENT
         NRF_UART_BAUDRATE_115200
 #else
         NRF_UARTE_BAUDRATE_115200
@@ -303,23 +338,16 @@ int main(int argc, char *argv[])
 
     APP_ERROR_CHECK(err_code);
 
-    //////
     rplidar_send_command(RPLIDAR_CMD_GET_DEVICE_INFO);
+    //rplidar_debug_response();
     rplidar_ans_header_t header;
     err_code = rplidar_wait_response_header(&header);
-    if (err_code)
-    {
-	NRF_LOG_INFO("UART read failed");
-    }
-    else
-    {
-	NRF_LOG_INFO("UART read success");
-    }
-    /////
+
+    APP_ERROR_CHECK(err_code);
+#endif
 
     while (true)
     {
-        
         thread_process();
         app_sched_execute();
 
