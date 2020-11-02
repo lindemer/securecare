@@ -90,8 +90,7 @@ typedef struct rplidar_cmd_packet_t {
 typedef struct rplidar_ans_header_t {
     uint8_t  sync_byte_0; // must be RPLIDAR_ANS_SYNC_BYTE0
     uint8_t  sync_byte_1; // must be RPLIDAR_ANS_SYNC_BYTE1
-    uint32_t size;      // 30
-    uint32_t subType;   // 2
+    uint32_t size_and_subtype; // size[29:0] | (subtype << 30) 
     uint8_t  type;
 } __attribute__((packed)) rplidar_ans_header_t;
 

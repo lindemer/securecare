@@ -138,17 +138,31 @@ uint32_t rplidar_wait_response_header(rplidar_ans_header_t * header)
     for (uint32_t i = 0; i < max_gets; i++)
     {
         uint8_t byte;
-        uint32_t err = app_uart_get(&byte);
-
-        if (((recv_pos == 0 && byte == RPLIDAR_ANS_SYNC_BYTE0) ||
-             (recv_pos == 1 && byte == RPLIDAR_ANS_SYNC_BYTE1) ||
-             (recv_pos > 1)) && (err == 0))
+        uint32_t err_code = app_uart_get(&byte);
+        if (!err_code)
         {
-            buffer[recv_pos++] = byte;
+            switch (recv_pos)
+            {
+            case 0:
+                if (byte == RPLIDAR_ANS_SYNC_BYTE0)
+                {
+                    buffer[recv_pos++] = byte;
+                }
+                break;
+            
+            case 1:
+                if (byte == RPLIDAR_ANS_SYNC_BYTE1)
+                {
+                    buffer[recv_pos++] = byte;
+                }
+                break;
+
+            default:
+                buffer[recv_pos++] = byte;
+            }
         }
-	
+
 	    if (recv_pos == sizeof(rplidar_ans_header_t)) return RPLIDAR_SUCCESS;
-        //if (recv_pos == 1) return RPLIDAR_SUCCESS;
     } 
 
     return RPLIDAR_OPERATION_TIMEOUT;
@@ -338,10 +352,11 @@ int main(int argc, char *argv[])
 
     APP_ERROR_CHECK(err_code);
 
+    //rplidar_send_command(RPLIDAR_CMD_GET_DEVICE_HEALTH);
     rplidar_send_command(RPLIDAR_CMD_GET_DEVICE_INFO);
-    //rplidar_debug_response();
     rplidar_ans_header_t header;
     err_code = rplidar_wait_response_header(&header);
+    rplidar_debug_response();
 
     APP_ERROR_CHECK(err_code);
 #endif
