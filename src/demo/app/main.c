@@ -58,6 +58,7 @@
 #ifdef UARTE_PRESENT
 #include "nrf_uarte.h"
 #endif
+#include "nrf_gpio.h"
 
 #include <openthread/thread.h>
 #include <openthread/thread_ftd.h>
@@ -80,8 +81,8 @@
 // Maximum app_scheduler event size.
 #define SCHED_EVENT_DATA_SIZE APP_TIMER_SCHED_EVENT_DATA_SIZE
 
-#define UART_TX_BUF_SIZE 256
-#define UART_RX_BUF_SIZE 256
+#define UART_TX_BUF_SIZE 64
+#define UART_RX_BUF_SIZE 512
 
 void uart_error_handle(app_uart_evt_t * p_event)
 {
@@ -241,13 +242,12 @@ int main(int argc, char *argv[])
     APP_ERROR_CHECK(err_code);
 
     thread_instance_init();
+    thread_bsp_init();
 
 #ifdef ENABLE_COAPS_DFU
     err_code = coaps_dfu_init(thread_ot_instance_get());
     APP_ERROR_CHECK(err_code);
 #endif // ENABLE_COAPS_DFU
-
-    thread_bsp_init();
 
 #ifdef ENABLE_RPLIDAR
     const app_uart_comm_params_t comm_params =
@@ -283,18 +283,22 @@ int main(int argc, char *argv[])
     err_code = rplidar_start_scan(false);
     APP_ERROR_CHECK(err_code);
 
+    nrf_gpio_cfg_output(SPARE2);
+    nrf_gpio_pin_set(SPARE2);
+    nrf_delay_ms(1000);
+
     /*
     rplidar_point_t point;
-    err_code = rplidar_get_point(&point);
+    rplidar_get_point(&point);
     APP_ERROR_CHECK(err_code);
     */
-
 #endif // ENABLE_RPLIDAR
 
     while (true)
     {
         thread_process();
         app_sched_execute();
+        rplidar_debug_response();
 
         if (NRF_LOG_PROCESS() == false)
         {

@@ -31,6 +31,7 @@
 
 #include "app_uart.h"
 #include "rplidar.h"
+#include "nrf_delay.h"
 
 #ifdef UART_PRESENT
 #include "nrf_uart.h"
@@ -39,17 +40,18 @@
 #include "nrf_uarte.h"
 #endif
 
-uint8_t rplidar_debug_response()
+uint32_t rplidar_debug_response()
 {
-    uint8_t buffer[4096];
-    for (uint32_t i = 0; i < 4096; i++)
+    uint8_t buffer[8192];
+    for (uint32_t i = 0; i < 8192; i++)
     {
         if (app_uart_get(&buffer[i]))
         {
             buffer[i] = 0xff;
         }
     }
-    return buffer[128];
+    buffer[8191] += buffer[8191];
+    return buffer[8191];
 }
 
 uint32_t rplidar_send_command(uint8_t command)
@@ -61,7 +63,7 @@ uint32_t rplidar_send_command(uint8_t command)
 
     for (uint32_t i = 0; i < sizeof(pkt); i++)
     {
-	while (app_uart_put(buffer[i]) != NRF_SUCCESS);
+	    while (app_uart_put(buffer[i]) != NRF_SUCCESS);
     }
     
     return RPLIDAR_SUCCESS;
@@ -148,10 +150,17 @@ uint32_t rplidar_get_device_health(rplidar_response_device_health_t * health)
 
     return rplidar_get_bytes((uint8_t *)health, sizeof(rplidar_response_device_health_t));
 }
+void rplidar_stop_scan()
+{
+   rplidar_send_command(RPLIDAR_CMD_STOP);
+}
 
 uint32_t rplidar_start_scan(bool force)
 {
+    rplidar_stop_scan();
     rplidar_send_command(force ? RPLIDAR_CMD_FORCE_SCAN : RPLIDAR_CMD_SCAN);
+
+    nrf_delay_ms(100);
     rplidar_ans_header_t header;
     uint32_t err_code = rplidar_wait_response_header(&header);
 

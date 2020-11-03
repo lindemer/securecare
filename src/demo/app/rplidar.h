@@ -80,7 +80,7 @@ typedef struct rplidar_point_t
 } rplidar_point_t;
 
 typedef struct rplidar_cmd_packet_t {
-    uint8_t sync_byte; //must be RPLIDAR_CMD_SYNC_BYTE
+    uint8_t sync_byte; // must be RPLIDAR_CMD_SYNC_BYTE
     uint8_t cmd_flag; 
 } __attribute__((packed)) rplidar_cmd_packet_t;
 
@@ -113,6 +113,10 @@ uint32_t rplidar_get_device_info(rplidar_response_device_info_t * info);
 
 uint32_t rplidar_get_device_health(rplidar_response_device_health_t * health);
 
+void rplidar_stop_scan();
+
 uint32_t rplidar_start_scan(bool force);
 
 uint32_t rplidar_get_point();
+
+uint32_t rplidar_debug_response();
