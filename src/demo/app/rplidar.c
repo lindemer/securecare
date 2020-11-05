@@ -150,6 +150,7 @@ uint32_t rplidar_get_device_health(rplidar_response_device_health_t * health)
 
     return rplidar_get_bytes((uint8_t *)health, sizeof(rplidar_response_device_health_t));
 }
+
 void rplidar_stop_scan()
 {
    rplidar_send_command(RPLIDAR_CMD_STOP);
@@ -178,40 +179,27 @@ uint32_t rplidar_get_point(rplidar_point_t * point)
     uint32_t max_gets = 128 * sizeof(rplidar_response_measurement_t);
     for (uint32_t i = 0; i < max_gets; i++)
     {
-        uint8_t byte, tmp;
+        uint8_t byte;
         uint32_t err_code = app_uart_get(&byte);
         if (!err_code)
         {
             switch (recv_pos)
             {
             case 0:
-                // First checkbit.
-                tmp = byte >> 1;
-                if (!((tmp ^ byte) & 1))
+                if (byte != 0x3e)
                 {
                     continue;
                 }
-                break;
-            
-            case 1:
-                // Second checkbit.
-                if (!(byte & 1))
-                {
-                    recv_pos = 0;
-                    continue;
-                }
-                break;
-
+            default:
+                buffer[recv_pos++] = byte;
             }
-            buffer[recv_pos++] = byte;
         }
 
 	    if (recv_pos == sizeof(rplidar_response_measurement_t)) 
         {
-            point->distance = measurement.distance_q2 / 4.0f;
-            point->angle = (measurement.angle_q6_checkbit >> RPLIDAR_RESP_MEASUREMENT_ANGLE_SHIFT) / 64.0f;
-            point->quality = measurement.sync_quality >> RPLIDAR_RESP_MEASUREMENT_QUALITY_SHIFT;
-            point->start_bit = measurement.sync_quality & RPLIDAR_RESP_MEASUREMENT_SYNCBIT;
+            point->s = measurement.sync_quality;
+            point->a = (measurement.angle_q6_checkbit >> 1) / 64;
+            point->d = measurement.distance_q2 / 4;
             return RPLIDAR_SUCCESS;       
         }
     } 

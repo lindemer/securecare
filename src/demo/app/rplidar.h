@@ -73,10 +73,15 @@
 
 typedef struct rplidar_point_t
 {
+        /*
     float distance;
     float angle;
     uint8_t quality;
     bool start_bit;
+    */
+    uint8_t s;
+    uint16_t a;
+    uint16_t d;
 } rplidar_point_t;
 
 typedef struct rplidar_cmd_packet_t {
@@ -117,6 +122,6 @@ void rplidar_stop_scan();
 
 uint32_t rplidar_start_scan(bool force);
 
-uint32_t rplidar_get_point();
+uint32_t rplidar_get_point(rplidar_point_t * point);
 
 uint32_t rplidar_debug_response();

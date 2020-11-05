@@ -291,7 +291,6 @@ int main(int argc, char *argv[])
     rplidar_point_t point;
 #endif // ENABLE_RPLIDAR
 
-
     while (true)
     {
         thread_process();
