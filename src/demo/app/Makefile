@@ -76,7 +76,7 @@ SRC_FILES += \
   $(PROJ_DIR)/main.c \
   $(PROJ_DIR)/coaps_dfu.c \
   $(PROJ_DIR)/addr_parse.c \
-  $(PROJ_DIR)/rplidar.c \
+  $(PROJ_DIR)/../rplidar/rplidar.c \
   $(PROJ_DIR)/background_dfu_state.c \
   $(SDK_ROOT)/components/iot/background_dfu/background_dfu_block.c \
   $(SDK_ROOT)/components/iot/background_dfu/background_dfu_operation.c \
@@ -109,6 +109,7 @@ SRC_FILES += \
 INC_FOLDERS += \
   $(PROJ_DIR) \
   $(PROJ_DIR)/../common \
+  $(PROJ_DIR)/../rplidar \
   $(PROJ_DIR)/../../cose \
   $(PROJ_DIR)/../../../lib/NanoCBOR/include \
   $(SDK_ROOT)/components/libraries/crypto/backend/cc310 \
