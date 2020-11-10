@@ -29,6 +29,7 @@
  * POSSIBILITY OF SUCH DAMAGE.
  **/
 
+#include <stdlib.h>
 #include "app_uart.h"
 #include "rplidar.h"
 #include "nrf_delay.h"
@@ -40,20 +41,6 @@
 #include "nrf_uarte.h"
 #endif
 
-uint32_t rplidar_debug_response()
-{
-    uint8_t buffer[512];
-    for (uint32_t i = 0; i < 512; i++)
-    {
-        if (app_uart_get(&buffer[i]))
-        {
-            buffer[i] = 0xff;
-        }
-    }
-    buffer[511] += buffer[511];
-    return buffer[511];
-}
-
 uint32_t rplidar_send_command(uint8_t command)
 {
     rplidar_cmd_packet_t pkt;
@@ -63,7 +50,7 @@ uint32_t rplidar_send_command(uint8_t command)
 
     for (uint32_t i = 0; i < sizeof(pkt); i++)
     {
-	    while (app_uart_put(buffer[i]) != NRF_SUCCESS);
+	while (app_uart_put(buffer[i]) != NRF_SUCCESS);
     }
     
     return RPLIDAR_SUCCESS;
@@ -102,7 +89,7 @@ uint32_t rplidar_wait_response_header(rplidar_ans_header_t * header)
             }
         }
 
-	    if (recv_pos == sizeof(rplidar_ans_header_t)) return RPLIDAR_SUCCESS;
+	if (recv_pos == sizeof(rplidar_ans_header_t)) return RPLIDAR_SUCCESS;
     } 
 
     return RPLIDAR_OPERATION_TIMEOUT;
@@ -186,7 +173,7 @@ uint32_t rplidar_get_point(rplidar_point_t * point)
             switch (recv_pos)
             {
             case 0:
-                if (byte != 0x3e)
+                if (byte != RPLIDAR_ANS_SYNC_MEASUREMENT)
                 {
                     continue;
                 }
@@ -197,13 +184,95 @@ uint32_t rplidar_get_point(rplidar_point_t * point)
 
 	    if (recv_pos == sizeof(rplidar_response_measurement_t)) 
         {
-            point->s = measurement.sync_quality;
-            point->a = (measurement.angle_q6_checkbit >> 1) / 64;
-            point->d = measurement.distance_q2 / 4;
+            point->sync = measurement.sync;
+            point->deg = (measurement.angle >> 1) / 64;
+            point->mm = measurement.dist / 4;
             return RPLIDAR_SUCCESS;       
         }
     } 
 
     return RPLIDAR_OPERATION_TIMEOUT;
-     
 }
+
+void rplidar_init_sweep(rplidar_sweep_t * sweep)
+{
+    sweep->swap = false;
+    sweep->hits = 0;
+    for (int i = 0; i < 360; i++)
+    {
+        sweep->swap0[i] = 0;
+        sweep->swap1[i] = 0;
+        sweep->delta[i] = 0;
+    }
+}
+
+void rplidar_clear_sweep(rplidar_sweep_t * sweep)
+{
+    for (int i = 0; i < 360; i++)
+    {
+        sweep->delta[i] = 0;
+        if (sweep->swap)
+        {
+            sweep->swap0[i] = sweep->swap1[i]; 
+        }
+        else
+        {
+            sweep->swap1[i] = sweep->swap0[i]; 
+        }
+    }
+    sweep->swap = !sweep->swap;
+    sweep->hits = 0;
+}
+
+uint16_t rplidar_push_sweep(rplidar_sweep_t * sweep,
+         rplidar_point_t * point, bool accumulate)
+{
+    int delta = 0;
+    if (point->deg < 360 && point->deg >= 0)
+    {
+        if (sweep->swap)
+        {
+            delta = abs(sweep->swap0[point->deg] - (int)(point->mm));
+            if (delta > sweep->delta[point->deg])
+            {
+                sweep->swap1[point->deg] = (int)point->mm;
+                if (!accumulate) sweep->delta[point->deg] = delta;
+            }
+            if (accumulate) sweep->delta[point->deg] += delta;
+        }
+        else
+        {
+            delta = abs(sweep->swap1[point->deg] - (int)(point->mm));
+            if (delta > sweep->delta[point->deg])
+            {
+                sweep->swap0[point->deg] = (int)point->mm;
+                if (!accumulate) sweep->delta[point->deg] = delta;
+            }
+            if (accumulate) sweep->delta[point->deg] += delta;
+        }
+        if (delta > RPLIDAR_HIT_THRESHOLD &&
+            (point->deg >= (360 - RPLIDAR_APERTURE) || 
+            (point->deg <= RPLIDAR_APERTURE)))
+        {
+            sweep->hits++;
+        }
+    }
+    return delta;
+}
+
+float rplidar_get_mean(rplidar_sweep_t * sweep)
+{
+    float mean = 0;
+
+    for (int i = 0; i <= RPLIDAR_APERTURE; i++)
+    {
+        mean += (float)(sweep->delta[i]); 
+    }
+    for (int j = 360 - RPLIDAR_APERTURE; j < 360; j++) 
+    {
+        mean += (float)(sweep->delta[j]); 
+    }
+    mean /= RPLIDAR_APERTURE * 2 + 1;
+    return mean;
+}
+

@@ -117,18 +117,31 @@ int main(void)
     nrf_gpio_pin_set(SPARE2);
     nrf_delay_ms(100);
 
+    int loops = 0;
+
     rplidar_point_t point;
+    rplidar_sweep_t sweep;
+    rplidar_init_sweep(&sweep);
 
     while (true)
     {
 
         err_code = rplidar_get_point(&point);
-	if (!err_code && point.a == 0)
+        rplidar_push_sweep(&sweep, &point, false);
+
+	if (loops == 1000)
 	{
-            NRF_LOG_INFO("%d", point.d);
+            float mean = rplidar_get_mean(&sweep);
+	    NRF_LOG_INFO("%d hits, %d mean", sweep.hits, mean);
+            rplidar_clear_sweep(&sweep);
+            loops = 0;
 	}
+        else
+        {
+            loops++;
+        }
+
 	NRF_LOG_PROCESS();
 
     }
 }
-
