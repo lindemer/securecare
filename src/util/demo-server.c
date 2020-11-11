@@ -219,6 +219,34 @@ static void hnd_get_index(coap_context_t *ctx UNUSED_PARAM,
 }
 
 /*******************************************************************************
+ * @section PUT handler(s)
+ ******************************************************************************/
+
+static void
+hnd_put_sensor(coap_context_t *ctx UNUSED_PARAM,
+             struct coap_resource_t *resource,
+             coap_session_t *session UNUSED_PARAM,
+             coap_pdu_t *request,
+             coap_binary_t *token UNUSED_PARAM,
+             coap_string_t *query UNUSED_PARAM,
+             coap_pdu_t *response) {
+  coap_tick_t t;
+  size_t size;
+  unsigned char *data;
+
+  response->code = COAP_RESPONSE_CODE(204);
+
+  /* coap_get_data() sets size to 0 on error */
+  (void)coap_get_data(request, &size, &data);
+
+  if (!size)        /* No data*/
+    printf("No data!");
+  else {
+    printf("Data is: %c\n", data[0]);
+  }
+}
+
+/*******************************************************************************
  * @section GET handler(s)
  ******************************************************************************/
 
@@ -347,7 +375,12 @@ static void load_directory(char * path, coap_context_t * ctx)
 
 static void init_resources(coap_context_t * ctx)
 {
+  //TODO: sensor endpoint!
     coap_resource_t * r;
+
+    r = coap_resource_init(coap_make_str_const("sensor"), resource_flags);
+    coap_register_handler(r, COAP_REQUEST_PUT, hnd_put_sensor);
+    coap_add_resource(ctx, r);
 
     r = coap_resource_init(NULL, 0);
     coap_register_handler(r, COAP_REQUEST_GET, hnd_get_index);
