@@ -230,20 +230,55 @@ hnd_put_sensor(coap_context_t *ctx UNUSED_PARAM,
              coap_binary_t *token UNUSED_PARAM,
              coap_string_t *query UNUSED_PARAM,
              coap_pdu_t *response) {
+
   coap_tick_t t;
   size_t size;
   unsigned char *data;
-
-  response->code = COAP_RESPONSE_CODE(204);
+  int decoder_error = 0;
+  int ret = 0;
+  int mean, max;
 
   /* coap_get_data() sets size to 0 on error */
   (void)coap_get_data(request, &size, &data);
 
-  if (!size)        /* No data*/
-    printf("No data!");
-  else {
-    printf("Data is: %c\n", data[0]);
+  if (!size)        /* No data*/ {
+    printf("WARNING, no data!");
+    decoder_error = 1;
   }
+  else {
+    nanocbor_value_t decoder;
+    nanocbor_decoder_init(&decoder, buffer, size);
+    nanocbor_value_t arr; /* Array value instance */
+    if (nanocbor_enter_array(&decoder, &arr) < 0) {
+      printf("Decode error, not a valid cbor array\n");
+      decoder_error = 1;
+    } else {
+      ret = nanocbor_get_int32(&arr, &mean);
+      ret = nanocbor_get_int32(&arr, &max);
+      if(ret < 0) {
+        decoder_error = 1;
+      } else {
+        printf("%d %d", mean, max);
+      }
+    }
+
+  }
+  if(decoder_error) {
+    printf("decoder_error");
+    response->code = COAP_RESPONSE_CODE(415); //Unsupported content format
+  } else {
+    response->code = COAP_RESPONSE_CODE(203);
+  }
+
+  /*
+   * Check for manifest updates here, to allow this more urgent reply to overwrite
+   * parsing errors
+   */
+  int manifest_changed = 0;
+  if(manifest_changed) {
+    response->code = COAP_RESPONSE_CODE(204);
+  }
+
 }
 
 /*******************************************************************************
