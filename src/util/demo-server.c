@@ -247,7 +247,7 @@ hnd_put_sensor(coap_context_t *ctx UNUSED_PARAM,
   }
   else {
     nanocbor_value_t decoder;
-    nanocbor_decoder_init(&decoder, buffer, size);
+    nanocbor_decoder_init(&decoder, data, size);
     nanocbor_value_t arr; /* Array value instance */
     if (nanocbor_enter_array(&decoder, &arr) < 0) {
       printf("Decode error, not a valid cbor array\n");
