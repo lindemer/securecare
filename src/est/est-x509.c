@@ -48,8 +48,28 @@
 
 #include "est-asn1.h"
 #include "est-oid.h"
+//#include "est-standalone-conf.h"
 
 #include "memb.h"
+
+
+#if TEST_ENROLL_SUBJECT
+extern const char client_mac_id[];
+#else
+extern const uint8_t client_mac_id[];
+#endif
+
+
+#ifdef COSE_BACKEND_NRF
+#define RETURN_ERROR(x) err = x; if (err) return err;
+#include "nrf_crypto.h"
+#include "nrf_crypto_ecc.h"
+#include "nrf_crypto_error.h"
+#include "nrf_crypto_ecdsa.h"
+#include "nrf_crypto_hash.h"
+#include "nrf_crypto_init.h"
+#include "nrf_crypto_shared.h"
+#endif
 //#include "../other-ecc/bigint.h"
 //#include "../other-ecc/other-ecc.h"
 
@@ -60,18 +80,30 @@
 #include "est-client.h" //settings
 #include "mbedtls-wrapper.h" //crypto
 
-#include "log.h"
+#if STANDALONE_VERSION
+#include "util/nrf_log_wrapper.h"
 #define LOG_MODULE "x509"
 #ifdef LOG_CONF_LEVEL_EST_X509
 #define LOG_LEVEL LOG_CONF_LEVEL_EST_X509
 #else
 #define LOG_LEVEL LOG_LEVEL_DBG
 #endif
+#include "util/standalone_log.h"
+#else
+#define NRF_LOG_MODULE_NAME x509
+#include "nrf_log.h"
+NRF_LOG_MODULE_REGISTER();
+//#include "util/nrf_log_wrapper.h"
+#endif
 
 
 /* Declare the memory section for x509 certificates */
+#if USE_X509_MEMB
 MEMB(x509_sequnce_memb, x509_certificate, X509_MAX_STORED_CERTIFICATES);
 static int current_certs = 0;
+#endif
+
+
 
 /* TODO: (Processing of X.509 Extensions) Process and validate X.509 extensions */
 
@@ -90,6 +122,7 @@ struct tm * x509_get_UTC(void) {
 	gettimeofday(&current_l_time, NULL);
 	return gmtime(&current_l_time.tv_sec);
 }
+/*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
 x509_time *
 x509_get_ctime(void)
@@ -124,7 +157,7 @@ x509_get_ctime(void)
     current_time.day++;
   }
   // TODO: handle day, month and years
-  /* x509_print_ctime(); */
+  x509_print_ctime();
   ctime_last_clocksec = now;
 
   return &current_time;
@@ -155,6 +188,7 @@ void x509_set_ctime(char *str)
     current_time.minute = atoi(mm);
     current_time.second = atoi(ss);
   }  else {
+#if 1 //STANDALONE_VERSION
       struct tm * cur_time = x509_get_UTC();
       current_time.year = 1900 + cur_time->tm_year; //UTC = years since 1900
       current_time.month = 1 + cur_time->tm_mon;	//UTC = month since January
@@ -162,7 +196,30 @@ void x509_set_ctime(char *str)
       current_time.hour = cur_time->tm_hour;
       current_time.minute = cur_time->tm_min;
       current_time.second = cur_time->tm_sec;
+#else
+          /* HACK Set current time to be a month after compile time for passing cert validity checking */
+          static const char mons[] = {"JanFebMarAprMayJunJulAugSepOctNovDec"};
 
+          // DATE and TIME strings from GCC preprocesser: e.g. Mar 23 2017 15:17:18
+          NRF_LOG_DEBUG("Setting current time based on compile date and time ");
+          NRF_LOG_DEBUG(__DATE__);
+          NRF_LOG_DEBUG(__TIME__);
+
+          current_time.year = (uint16_t)atoi(&__DATE__[7]);    /* 0000-9999 */
+          char mon[4];
+          (void)strncpy(mon, &__DATE__[0], sizeof(mon));
+          mon[3] = '\0';
+          current_time.month = (uint8_t)((strstr(mons, mon) - (char *)mons) / 3); /* 0-11 */
+          current_time.month = (current_time.month + 1) % 12 + 1; /* 1-12 */
+          if(1 == current_time.month) {
+            current_time.year++;
+          }
+          current_time.day = (uint8_t)atoi(&__DATE__[4]);      /* 1-31 */
+
+          current_time.hour = (uint8_t)atoi(&__TIME__[0]);     /* 0-23 */
+          current_time.minute = (uint8_t)atoi(&__TIME__[3]);   /* 0-59 */
+          current_time.second = (uint8_t)atoi(&__TIME__[6]);   /* 0-59 */
+#endif
   }
 //  else {
 //    /* HACK Set current time to be a month after compile time for passing cert validity checking */
@@ -202,11 +259,11 @@ x509_print_certificate(x509_certificate *cert)
   if(cert != NULL) {
 
     /* Print Certificate information */
-    /* LOG_DBG("---- Certificate ----\n"); */
-    /* LOG_DBG("Address: %p \n", cert); */
+    /* NRF_LOG_DEBUG("---- Certificate ----\n"); */
+    /* NRF_LOG_DEBUG("Address: %p \n", cert); */
     // XXX disable debug print
     /* asn1_print(&cert->cert_tlv); */
-    /* LOG_DBG("Version: %u\n", cert->version); */
+    /* NRF_LOG_DEBUG("Version: %u\n", cert->version); */
     printf("Serial: ");
     asn1_print(&cert->serial_number);
 //    int j = 0;
@@ -214,12 +271,12 @@ x509_print_certificate(x509_certificate *cert)
 //	    printf("%02X ", (&cert->serial_number)->value[j]);
 //    }
     printf("\n");
-    /* LOG_DBG("Signature: \n"); */
-    /* LOG_DBG(" - algorithm: "); */
+    /* NRF_LOG_DEBUG("Signature: \n"); */
+    /* NRF_LOG_DEBUG(" - algorithm: "); */
     /* asn1_print(&cert->signature_algorithm_ID.algorithm_oid); */
-    /* LOG_DBG(" - params:    "); */
+    /* NRF_LOG_DEBUG(" - params:    "); */
     /* asn1_print(&cert->signature_algorithm_ID.parameters); */
-    /* LOG_DBG("Issuer: \n"); */
+    /* NRF_LOG_DEBUG("Issuer: \n"); */
     /* asn1_print(&cert->issuer_name); */
     printf("Validity: \n");
     printf(" - Not Before: ");
@@ -227,8 +284,8 @@ x509_print_certificate(x509_certificate *cert)
     printf(" - Not After:  ");
     x509_print_time(&cert->validity.not_after);
     printf("\n");
-    /* LOG_DBG("Subject: "); */
-    /* asn1_print(&cert->subject_name); */
+    printf("Subject: ");
+    asn1_print(&cert->subject_name);
     printf("Subject Public Key Info: \n");
     printf(" - Algorithm Identifier\n");
     printf(" - - algorithm: ");
@@ -238,24 +295,24 @@ x509_print_certificate(x509_certificate *cert)
     printf(" - subjectPublicKey: ");
     asn1_print_bit_string(&cert->pk_info.subject_public_key);
 
-    /* LOG_DBG("issuer_unique_ID:  "); */
+    /* NRF_LOG_DEBUG("issuer_unique_ID:  "); */
     /* asn1_print_bit_string(&cert->issuer_unique_ID); */
-    /* LOG_DBG("subject_unique_ID: "); */
+    /* NRF_LOG_DEBUG("subject_unique_ID: "); */
     /* asn1_print_bit_string(&cert->subject_unique_ID); */
-    /* LOG_DBG("extensions: "); */
+    /* NRF_LOG_DEBUG("extensions: "); */
     /* asn1_print(&cert->extensions); */
 
     /* Print Signature Algorithm Identifier */
-    /* LOG_DBG("---- Signature Algorithm ----\n"); */
-    /* LOG_DBG("TBScertificate - Data start: %p, Data length: %d, Signature start: %p, Signature length: %d\n", */
+    /* NRF_LOG_DEBUG("---- Signature Algorithm ----\n"); */
+    /* NRF_LOG_DEBUG("TBScertificate - Data start: %p, Data length: %d, Signature start: %p, Signature length: %d\n", */
     /*          &cert->tbs_cert_start, cert->tbs_cert_len, &cert->sign_start, cert->sign_len); */
-    /* LOG_DBG(" - algorithm: "); */
+    /* NRF_LOG_DEBUG(" - algorithm: "); */
     /* asn1_print(&cert->certificate_signature_algorithm.algorithm_oid); */
-    /* LOG_DBG(" - params:    "); */
+    /* NRF_LOG_DEBUG(" - params:    "); */
     /* asn1_print(&cert->certificate_signature_algorithm.parameters); */
 
    /* Print signature */
-    /* LOG_DBG("---- Signature ----\n"); */
+    /* NRF_LOG_DEBUG("---- Signature ----\n"); */
     /* asn1_print_bit_string(&cert->certificate_signature); */
   } else {
     printf(" Certificates is NULL\n");
@@ -269,10 +326,10 @@ x509_print_certificate_chain(x509_certificate *cert)
   tmp = cert;
   int i = 1;
   if(tmp == NULL) {
-    LOG_DBG("The certificate does not have a valid reference\n");
+    NRF_LOG_DEBUG("The certificate does not have a valid reference\n");
   }
   while(tmp != NULL) {
-    LOG_DBG("<---- Certificate %d ---->\n", i);
+    NRF_LOG_DEBUG("<---- Certificate %d ---->\n", i);
     i = i + 1;
     x509_print_certificate(tmp);
     tmp = tmp->next;
@@ -286,28 +343,22 @@ x509_print_time(x509_time *time)
            time->format, time->year, time->month, time->day, time->hour, time->minute, time->second);
 
   if(time->sign == 1) {
-    LOG_DBG(" Diff: +, Hour: %d, Minute: %d",
+    NRF_LOG_DEBUG(" Diff: +, Hour: %d, Minute: %d",
              time->diff_hour, time->diff_minute);
   } else if(time->sign == -1) {
-    LOG_DBG(" Diff: -, Hour: %d, Minute: %d",
+    NRF_LOG_DEBUG(" Diff: -, Hour: %d, Minute: %d",
              time->diff_hour, time->diff_minute);
   }
   printf("\n");
 }
 /*----------------------------------------------------------------------------*/
+#if USE_X509_MEMB
 void
 x509_memb_init()
 {
   memb_init(&x509_sequnce_memb);
 }
-/*----------------------------------------------------------------------------*/
-void
-x509_init_certificate(x509_certificate *cert)
-{
-  LOG_DBG("initializing certificate\n");
-  memset(cert, 0, sizeof(x509_certificate));
-  cert->next = NULL;
-}
+
 /*----------------------------------------------------------------------------*/
 x509_certificate *
 x509_memb_create_certificate()
@@ -316,16 +367,27 @@ x509_memb_create_certificate()
 
   cert = memb_alloc(&x509_sequnce_memb);
   if(cert == NULL) {
-    LOG_DBG("Could not allocate memory for certificate, current_certs = %d\n", current_certs);
+    NRF_LOG_DEBUG("No mem for cert, cc = %d\n", current_certs);
   } else {
     current_certs++;
-    LOG_DBG("value of current_certs = %d\n", current_certs);
+    NRF_LOG_DEBUG("cc = %d\n", current_certs);
     x509_init_certificate(cert);
   }
 
   return cert;
 }
 /*----------------------------------------------------------------------------*/
+
+#endif
+
+/*----------------------------------------------------------------------------*/
+void
+x509_init_certificate(x509_certificate *cert)
+{
+  NRF_LOG_DEBUG("init cert\n");
+  memset(cert, 0, sizeof(x509_certificate));
+  cert->next = NULL;
+}
 /*----------------------------------------------------------------------------*/
 int
 x509_memb_remove_certificates(x509_certificate *cert)
@@ -335,16 +397,20 @@ x509_memb_remove_certificates(x509_certificate *cert)
 
   while(cert != NULL) {
     tmp = cert->next;
+#if USE_X509_MEMB
     if(memb_free(&x509_sequnce_memb, cert) < 0) {
-      LOG_ERR("X.509 ERROR - x509_memb_remove_certificates: Could not remove certificate\n");
+      NRF_LOG_ERROR("X.509 ERROR - x509_mrc: Could not remove certificate\n");
       res = -1;
     }
+#else
+    free(cert);
+#endif
     cert = tmp;
   }
 #if EST_DEBUG_X509
-  //LOG_DBG("x509_memb_remove_certificates - Certificate removed\n");
+  //NRF_LOG_DEBUG("x509_memb_remove_certificates - Certificate removed\n");
   current_certs--;
-  LOG_DBG("x509_memb_remove_certificates - Certificate removed, current_certs = %d\n", current_certs);
+  NRF_LOG_DEBUG("x509_memb_remove_certificates - Certificate removed, current_certs = %d\n", current_certs);
 #endif
   return res;
 }
@@ -359,16 +425,16 @@ x509_set_eui64_subject(asn1_tlv *subject, uint8_t *value, uint16_t value_length)
   memset(value, 0, value_length);
 
 #if EST_DEBUG_X509
-  LOG_DBG("x509_set_eui64_subject - MY client_mac_id: ");
+  NRF_LOG_DEBUG("x509_set_eui64_subject - MY client_mac_id: ");
   //PRINTLLADDR(&uip_lladdr);
-  LOG_DBG("\n");
+  NRF_LOG_DEBUG("\n");
 #endif
 
   int i = 0;
   if(value_length < X509_EUI64_SUBJECT_SIZE) {
-    LOG_ERR("X.509 ERROR - x509_set_eui64_subject: buffer length %u smaller than %u\n",
+    NRF_LOG_ERROR("X.509 ERROR - x509_set_eui64_subject: buffer length %u smaller than %u\n",
              value_length, X509_EUI64_SUBJECT_SIZE);
-    return -1;
+    return -5001;
   }
 
   /* Encode the EUI-64 as a string and set it as a common name */
@@ -427,6 +493,78 @@ x509_set_eui64_subject(asn1_tlv *subject, uint8_t *value, uint16_t value_length)
   return 0;
 }
 /*----------------------------------------------------------------------------*/
+#if TEST_ENROLL_SUBJECT
+/*----------------------------------------------------------------------------*/
+int
+x509_set_subject(asn1_tlv *subject, uint8_t *value, uint16_t value_length)
+{
+  uint8_t *pos;
+  uint16_t length = 0;
+  int res = 0, i;
+
+  if(value_length < TEST_ENROLL_SUBJECT_SIZE) {
+    NRF_LOG_ERROR("X.509 ERROR - x509_set_subject: buffer length %u smaller than %u\n",
+             value_length, TEST_ENROLL_SUBJECT_SIZE);
+    return -5001;
+  }
+
+  pos = value + value_length;
+  memset(value, 0, value_length);
+
+  pos -= TEST_SUBJECT_LEN; //?
+
+  char *s;
+  s = (char *)pos;
+  for(i = 0; i < TEST_SUBJECT_LEN; i++) {
+    //sprintf(s, "%02X", uip_lladdr.addr[i]);
+    //sprintf(s, "%c", client_mac_id[i]);
+    //s += 2;
+    memcpy(s, client_mac_id+i, 1);
+    s++;
+  }
+  length += TEST_SUBJECT_LEN;
+
+  /* Encode the UTF-8 length and tag */
+  res = asn1_encode_length_and_tag(&pos, value, ASN1_TAG_PRINTABLE_STRING, length);
+  if(res < 0) {
+    return res;
+  }
+  length += res;
+
+  /* Encode the Common Name OID */
+  uint8_t cn_oid[] = OID_ID_AT_COMMON_NAME;
+  res = asn1_encode_oid(&pos, value, cn_oid, OID_LENGTH(OID_ID_AT_COMMON_NAME));
+  if(res < 0) {
+    return res;
+  }
+  length += res;
+
+  /* Encode the sequence the common name OID and the common name */
+  res = asn1_encode_length_and_tag(&pos, value,
+                                   (ASN1_TAG_SEQUENCE | ASN1_P_C_BIT), length);
+  if(res < 0) {
+    return res;
+  }
+  length += res;
+
+  /* Encode the set containing the common name */
+  res = asn1_encode_length_and_tag(&pos, value,
+                                   (ASN1_TAG_SET | ASN1_P_C_BIT), length);
+  if(res < 0) {
+    return res;
+  }
+  length += res;
+
+  /* Set the value, tag and length of the subject */
+  subject->value = value;
+  subject->length = length;
+  subject->tag = (ASN1_TAG_SEQUENCE | ASN1_P_C_BIT);
+
+  return 0;
+}
+/*----------------------------------------------------------------------------*/
+#endif
+
 int
 x509_decode_algorithm_identifier(uint8_t **pos, uint8_t *end, asn1_tlv *alg_oid, asn1_tlv *params)
 {
@@ -442,7 +580,7 @@ x509_decode_algorithm_identifier(uint8_t **pos, uint8_t *end, asn1_tlv *alg_oid,
   /* Set the end pointer */
   alg_end = (*pos) + length;
   if(alg_end > end) {
-    LOG_ERR("X.509 ERROR - x509_decode_algorithm_identifier: Length malformed \n");
+    NRF_LOG_ERROR("X.509 ERROR - x509_decode_algorithm_identifier: Length malformed \n");
     return -1;
   }
 
@@ -462,7 +600,7 @@ x509_decode_algorithm_identifier(uint8_t **pos, uint8_t *end, asn1_tlv *alg_oid,
 
     res = asn1_decode_tag(pos, end, &params->length, params->tag);
     if(res < 0) {
-      LOG_ERR("X.509 ERROR - x509_decode_algorithm_identifier: Could not decode optional parameters\n");
+      NRF_LOG_ERROR("X.509 ERROR - x509_decode_algorithm_identifier: Could not decode optional parameters\n");
       return res;
     }
     /* Update pointers */
@@ -471,11 +609,11 @@ x509_decode_algorithm_identifier(uint8_t **pos, uint8_t *end, asn1_tlv *alg_oid,
   }
 
   if(*pos != alg_end) {
-    LOG_ERR("X.509 ERROR - x509_decode_algorithm_identifier: algorithm identifier end not aligned\n");
+    NRF_LOG_ERROR("X.509 ERROR - x509_decode_algorithm_identifier: algorithm identifier end not aligned\n");
     return -1;
   }
 #if EST_DEBUG_X509
-  LOG_DBG("x509_decode_algorithm_identifier - Algorithm Identifier Decoded \n");
+  NRF_LOG_DEBUG("x509_decode_algorithm_identifier - Algorithm Identifier Decoded \n");
 #endif
 
   return 0;
@@ -492,7 +630,7 @@ x509_encode_algorithm_identifier(uint8_t **pos, uint8_t *start, asn1_tlv *alg_oi
     /* Assume that the parameters are all in the value buffer */
     res = asn1_encode_buffer(pos, start, params->value, params->length);
     if(res < 0) {
-      LOG_ERR("X.509 ERROR - x509_encode_algorithm_identifier: Could not encode parameters value\n");
+      NRF_LOG_ERROR("X.509 ERROR - x509_encode_algorithm_identifier: Could not encode parameters value\n");
       return res;
     } else {
       length += res;
@@ -500,7 +638,7 @@ x509_encode_algorithm_identifier(uint8_t **pos, uint8_t *start, asn1_tlv *alg_oi
     /* Encode the tag and value of the params*/
     res = asn1_encode_length_and_tag(pos, start, params->tag, params->length);
     if(res < 0) {
-      LOG_ERR("X.509 ERROR - x509_encode_algorithm_identifier: Could not encode parameters\n");
+      NRF_LOG_ERROR("X.509 ERROR - x509_encode_algorithm_identifier: Could not encode parameters\n");
       return res;
     } else {
       length += res;
@@ -510,7 +648,7 @@ x509_encode_algorithm_identifier(uint8_t **pos, uint8_t *start, asn1_tlv *alg_oi
   /* Encode the algorithm OID */
   res = asn1_encode_oid(pos, start, alg_oid->value, alg_oid->length);
   if(res < 0) {
-    LOG_ERR("X.509 ERROR - x509_encode_algorithm_identifier: Could not encode algorithm OID\n");
+    NRF_LOG_ERROR("X.509 ERROR - x509_encode_algorithm_identifier: Could not encode algorithm OID\n");
     return res;
   } else {
     length += res;
@@ -521,7 +659,7 @@ x509_encode_algorithm_identifier(uint8_t **pos, uint8_t *start, asn1_tlv *alg_oi
                                    (ASN1_TAG_SEQUENCE | ASN1_P_C_BIT),
                                    length);
   if(res < 0) {
-    LOG_ERR("X.509 ERROR - x509_encode_algorithm_identifier: Could not encode AlgorithmIdentifier Sequence tag\n");
+    NRF_LOG_ERROR("X.509 ERROR - x509_encode_algorithm_identifier: Could not encode AlgorithmIdentifier Sequence tag\n");
     return res;
   } else {
     length += res;
@@ -539,7 +677,7 @@ x509_encode_EC_public_key_as_bit_string(uint8_t **pos, uint8_t *start, uint8_t *
 
   res = asn1_encode_buffer(pos, start, pub_y, key_len);
   if(res < 0) {
-    LOG_ERR("x509_encode_EC_public_key_as_bit_string: Could not encode Pub.y\n");
+    NRF_LOG_ERROR("x509_encode_EC_public_key_as_bit_string: Could not encode Pub.y\n");
     return res;
   } else {
     length += res;
@@ -547,7 +685,7 @@ x509_encode_EC_public_key_as_bit_string(uint8_t **pos, uint8_t *start, uint8_t *
 
   res = asn1_encode_buffer(pos, start, pub_x, key_len);
   if(res < 0) {
-    LOG_ERR("x509_encode_EC_public_key_as_bit_string: Could not encode Pub.x\n");
+    NRF_LOG_ERROR("x509_encode_EC_public_key_as_bit_string: Could not encode Pub.x\n");
     return res;
   } else {
     length += res;
@@ -563,7 +701,7 @@ x509_encode_EC_public_key_as_bit_string(uint8_t **pos, uint8_t *start, uint8_t *
 
   res = asn1_encode_length_and_tag(pos, start, ASN1_TAG_BIT_STRING, length);
   if(res < 0) {
-    LOG_ERR("x509_encode_EC_public_key_as_bit_string: Could not bitstring tag\n");
+    NRF_LOG_ERROR("x509_encode_EC_public_key_as_bit_string: Could not bitstring tag\n");
     return res;
   } else {
     length += res;
@@ -590,7 +728,7 @@ x509_encode_pk_info(uint8_t **pos, uint8_t *start, x509_key_context *pk_ctx)
     alg_oid.length = OID_LENGTH(OID_ID_EC_PUBLIC_KEY);
     break;
   default:
-    LOG_ERR("X.509 ERROR: x509_encode_pk_info - Unknown Algorithm\n");
+    NRF_LOG_ERROR("X.509 ERROR: x509_encode_pk_info - Unknown Algorithm\n");
     return -1;
   }
 
@@ -603,7 +741,7 @@ x509_encode_pk_info(uint8_t **pos, uint8_t *start, x509_key_context *pk_ctx)
     key_len = ECC_DEFAULT_KEY_LEN;         /* TODO: Use a predefined variable */
     break;
   default:
-    LOG_ERR("X.509 ERROR: x509_encode_pk_info - Unknown Curve\n");
+    NRF_LOG_ERROR("X.509 ERROR: x509_encode_pk_info - Unknown Curve\n");
     return -1;
   }
 
@@ -611,7 +749,7 @@ x509_encode_pk_info(uint8_t **pos, uint8_t *start, x509_key_context *pk_ctx)
   res = x509_encode_EC_public_key_as_bit_string(pos, start,
                                                 pk_ctx->pub_x, pk_ctx->pub_y, key_len);
   if(res < 0) {
-    LOG_ERR("X.509 ERROR: x509_encode_pk_info - Could not encode public key\n");
+    NRF_LOG_ERROR("X.509 ERROR: x509_encode_pk_info - Could not encode public key\n");
     return res;
   } else {
     length += res;
@@ -620,7 +758,7 @@ x509_encode_pk_info(uint8_t **pos, uint8_t *start, x509_key_context *pk_ctx)
   /* Encode the algorithm */
   res = x509_encode_algorithm_identifier(pos, start, &alg_oid, &alg_params);
   if(res < 0) {
-    LOG_ERR("X.509 ERROR: x509_encode_pk_info - Could not encode algorithm identifier\n");
+    NRF_LOG_ERROR("X.509 ERROR: x509_encode_pk_info - Could not encode algorithm identifier\n");
     return res;
   } else {
     length += res;
@@ -631,7 +769,7 @@ x509_encode_pk_info(uint8_t **pos, uint8_t *start, x509_key_context *pk_ctx)
                                    (ASN1_TAG_SEQUENCE | ASN1_P_C_BIT),
                                    length);
   if(res < 0) {
-    LOG_ERR("X.509 ERROR: x509_encode_pk_info - Could not encode the SubjectPublicKeyInfo sequence\n");
+    NRF_LOG_ERROR("X.509 ERROR: x509_encode_pk_info - Could not encode the SubjectPublicKeyInfo sequence\n");
     return res;
   } else {
     length += res;
@@ -657,18 +795,18 @@ x509_encode_signature(uint8_t **sign_pos, uint8_t *sign_start, uint8_t *buffer,
                                         buf_len, pk_ctx->priv, SECP256R1_KEY_LEN_WORDS);
       break;
     default:
-      LOG_ERR("X.509 ERROR - x509_encode_signature: Unknown curve\n");
+      NRF_LOG_ERROR("X.509 ERROR - x509_encode_signature: Unknown curve\n");
       return -1;
     }
     break;
 
   default:
-    LOG_ERR("X.509 ERROR - x509_encode_signature: Unknown signature algorithm\n");
+    NRF_LOG_ERROR("X.509 ERROR - x509_encode_signature: Unknown signature algorithm\n");
     return -1;
   }
 
   if(res < 0) {
-    LOG_ERR("X.509 ERROR - x509_encode_signature: Could not encode signature\n");
+    NRF_LOG_ERROR("X.509 ERROR - x509_encode_signature: Could not encode signature\n");
     return res;
   }
   length += res;
@@ -678,7 +816,7 @@ x509_encode_signature(uint8_t **sign_pos, uint8_t *sign_start, uint8_t *buffer,
 /*----------------------------------------------------------------------------*/
 int
 x509_verify_signature(uint8_t *buffer, uint16_t buf_len, uint8_t *sign_start,
-                      uint16_t sign_len, x509_key_context *pk_ctx)
+                      uint16_t sign_len, x509_key_context *pk_ctx, int flag)
 {
   int res = 0;
 
@@ -688,22 +826,22 @@ x509_verify_signature(uint8_t *buffer, uint16_t buf_len, uint8_t *sign_start,
     switch(pk_ctx->curve) {
     case SECP256R1_CURVE:
       res = x509_verify_ecdsa_signature(buffer, buf_len, sign_start,
-                                        sign_len, SECP256R1_KEY_LEN_WORDS, pk_ctx);
+                                        sign_len, SECP256R1_KEY_LEN_WORDS, pk_ctx, flag);
       break;
     default:
-      LOG_ERR("X.509 ERROR - x509_verify_signature: Unknown curve\n");
-      return -1;
+      NRF_LOG_ERROR("X.509 ERROR - x509_verify_signature: Unknown curve\n");
+      return -1031;
     }
     break;
 
   default:
-    LOG_ERR("X.509 ERROR - x509_verify_signature: Unknown signature algorithm\n");
-    return -1;
+    NRF_LOG_ERROR("X.509 ERROR - x509_verify_signature: Unknown signature algorithm\n");
+    return -1032;
   }
 
   if(res < 0) {
-    LOG_ERR("X.509 ERROR - x509_verify_signature: Could not verify signature\n");
-    return res;
+    NRF_LOG_ERROR("X.509 ERROR - x509_verify_signature: Could not verify signature\n");
+    return -1033;
   }
 
   return res;
@@ -733,7 +871,7 @@ x509_encode_signature_component(uint8_t **sign_pos, uint8_t *sign_start,
                                      ((num_words * WORD_LEN_BYTES)));
   }
   if(res < 0) {
-    LOG_ERR("X.509 ERROR - x509_encode_signature_component: Could not encode signature component\n");
+    NRF_LOG_ERROR("X.509 ERROR - x509_encode_signature_component: Could not encode signature component\n");
     return res;
   }
   /* Set the final length */
@@ -754,8 +892,9 @@ x509_encode_ecdsa_signature(uint8_t **sign_pos, uint8_t *sign_start,
 
   /* Initialize buffers for the signature and private key */
 
-#ifdef COSE_BACKEND_NRF
+#ifdef NOT_COSE_BACKEND_NRF
 
+  int err;
     RETURN_ERROR(nrf_crypto_ecdsa_sign(NULL, &ctx->ctx.priv, ctx->hash.hash,
                 ctx->hash.len, ctx->sig, &ctx->len_sig));
 
@@ -787,13 +926,14 @@ x509_encode_ecdsa_signature(uint8_t **sign_pos, uint8_t *sign_start,
   unsigned char s_buf[ECC_DEFAULT_SIGN_LEN];
   res = create_ecc_signature(buffer, data_length, r_buf, ECC_DEFAULT_SIGN_LEN, s_buf, ECC_DEFAULT_SIGN_LEN);
 
-  if(0 < res) {
+  if(0 <= res) {
     /* Encode the signature components r and s as integers */
 
     /* Encode the s signature component */
 	res = x509_encode_signature_component(sign_pos, sign_start, s_buf, ECC_DEFAULT_SIGN_LEN);
+
     if(res < 0) {
-      LOG_ERR("X.509 ERROR - x509_encode_ecdsa_signature: Could not encode the s integer tag\n");
+      NRF_LOG_ERROR("X.509 ERROR - x509_encode_ecdsa_signature: Could not encode the s integer tag\n");
       return res;
     } else {
       length += res;
@@ -802,7 +942,7 @@ x509_encode_ecdsa_signature(uint8_t **sign_pos, uint8_t *sign_start,
     /* Encode the r signature component */
     res = x509_encode_signature_component(sign_pos, sign_start, r_buf, ECC_DEFAULT_SIGN_LEN);
     if(res < 0) {
-      LOG_ERR("X.509 ERROR - x509_encode_ecdsa_signature: Could not encode the r integer tag\n");
+      NRF_LOG_ERROR("X.509 ERROR - x509_encode_ecdsa_signature: Could not encode the r integer tag\n");
       return res;
     } else {
       length += res;
@@ -813,7 +953,7 @@ x509_encode_ecdsa_signature(uint8_t **sign_pos, uint8_t *sign_start,
                                      (ASN1_TAG_SEQUENCE | ASN1_P_C_BIT),
                                      length);
     if(res < 0) {
-      LOG_ERR("X.509 ERROR - x509_encode_ecdsa_signature: Could not encode the Ecdsa-Sig-Value tag\n");
+      NRF_LOG_ERROR("X.509 ERROR - x509_encode_ecdsa_signature: Could not encode the Ecdsa-Sig-Value tag\n");
       return res;
     } else {
       length += res;
@@ -827,7 +967,7 @@ x509_encode_ecdsa_signature(uint8_t **sign_pos, uint8_t *sign_start,
     /* Encode the signature bit-string */
     res = asn1_encode_length_and_tag(sign_pos, sign_start, ASN1_TAG_BIT_STRING, length);
     if(res < 0) {
-      LOG_ERR("X.509 ERROR - x509_encode_ecdsa_signature: Could not encode signature bit-string\n");
+      NRF_LOG_ERROR("x509_ees: Could not encode signature bit-string\n");
       return res;
     } else {
       length += res;
@@ -836,7 +976,7 @@ x509_encode_ecdsa_signature(uint8_t **sign_pos, uint8_t *sign_start,
     return length;
   }
 
-  LOG_ERR("X.509 ERROR - x509_encode_ecdsa_signature: Could not generate signature\n");
+  NRF_LOG_ERROR("x509_ees: Could not generate signature\n");
   return -1;
 }
 /*----------------------------------------------------------------------------*/
@@ -852,7 +992,7 @@ x509_decode_signature_component(uint8_t **sign_pos, uint8_t *sign_end,
   /* */
   res = asn1_decode_tag(sign_pos, sign_end, &component_tlv->length, component_tlv->tag);
   if(res < 0) {
-    LOG_ERR("X.509 ERROR - x509_decode_signature_component: Could not decode the signature component\n");
+    NRF_LOG_ERROR("X.509 ERROR - x509_decode_signature_component: Could not decode the signature component\n");
     return res;
   }
 
@@ -870,7 +1010,7 @@ x509_decode_signature_component(uint8_t **sign_pos, uint8_t *sign_end,
 /*----------------------------------------------------------------------------*/
 int
 x509_verify_ecdsa_signature(uint8_t *buffer, uint16_t buf_len, uint8_t *sign_start,
-                            uint16_t sign_len, uint8_t num_words, x509_key_context *pk_ctx)
+                            uint16_t sign_len, uint8_t num_words, x509_key_context *pk_ctx, int flag)
 {
   int res = 0;
   uint16_t length = 0;
@@ -888,13 +1028,13 @@ x509_verify_ecdsa_signature(uint8_t *buffer, uint16_t buf_len, uint8_t *sign_sta
   /* Decode bit-string */
   res = asn1_decode_bit_string(&sign_pos, end, &signature);
   if(res < 0) {
-    LOG_ERR("X.509 ERROR - x509_verify_ecdsa_signature: Could not decode signature bit-string\n");
-    return res;
+    NRF_LOG_ERROR("X.509 ERROR - x509_verify_ecdsa_signature: Could not decode signature bit-string\n");
+    return -1041;
   }
   /* Check if the bit-string */
   if((signature.zero_bits != 0)) {
-    LOG_ERR("X.509 ERROR - x509_verify_ecdsa_signature: The signature contains unused bits\n");
-    return -1;
+    NRF_LOG_ERROR("X.509 ERROR - x509_verify_ecdsa_signature: The signature contains unused bits\n");
+    return -1042;
   }
 
   /* Update the pointer to the sequence inside the bit-string */
@@ -904,8 +1044,8 @@ x509_verify_ecdsa_signature(uint8_t *buffer, uint16_t buf_len, uint8_t *sign_sta
      ASN.1 integers of length (key_len) bytes*/
   res = asn1_decode_tag(&sequence_pos, end, &length, (ASN1_TAG_SEQUENCE | ASN1_P_C_BIT));
   if((res < 0) || (length < (2 * num_words * WORD_LEN_BYTES + 4))) {
-    LOG_ERR("X.509 ERROR - x509_verify_ecdsa_signature: Malformed ecdsa-sig-value sequence\n");
-    return res;
+    NRF_LOG_ERROR("X.509 ERROR - x509_verify_ecdsa_signature: Malformed ecdsa-sig-value sequence\n");
+    return -1043;
   }
 
   /* Decode r signature component */
@@ -913,39 +1053,51 @@ x509_verify_ecdsa_signature(uint8_t *buffer, uint16_t buf_len, uint8_t *sign_sta
   asn1_tlv r_component_tlv;
   res = x509_decode_signature_component(&sequence_pos, end, num_words, &r_component_tlv);
   if(res < 0) {
-    LOG_ERR("X.509 ERROR - x509_verify_ecdsa_signature: Could not decode the r component\n");
-    return res;
+    NRF_LOG_ERROR("X.509 ERROR - x509_verify_ecdsa_signature: Could not decode the r component\n");
+    return -1044;
   }
 
   /* Decode s signature component*/
   asn1_tlv s_component_tlv;
   res = x509_decode_signature_component(&sequence_pos, end, num_words, &s_component_tlv);
   if(res < 0) {
-    LOG_ERR("X.509 ERROR - x509_verify_ecdsa_signature: Could not decode the s component\n");
-    return res;
+    NRF_LOG_ERROR("X.509 ERROR - x509_verify_ecdsa_signature: Could not decode the s component\n");
+    return -1042;
   }
 //  bigint_decode(s, num_words, s_component_tlv.value, s_component_tlv.length);
   //store-r-s(component_tlv.value)
 
   if(sequence_pos != end) {
-    LOG_ERR("X.509 ERROR - x509_verify_ecdsa_signature: Signature not aligned with end of buffer\n");
-    return -1;
+    NRF_LOG_ERROR("X.509 ERROR - x509_verify_ecdsa_signature: Signature not aligned with end of buffer\n");
+    return -1043;
   }
 
   /* Verify the signature */
 
 #if 0 < WITH_COMPRESSION && EST_DEBUG_X509
-  LOG_DBG("Content of buffer to check:\n");
+  NRF_LOG_DEBUG("Content of buffer to check:\n");
   hdumps(buffer, data_len);
 #endif
 
-	int st = verify_ecc_signature(pk_ctx, buffer, data_len, r_component_tlv.value, r_component_tlv.length, s_component_tlv.value, s_component_tlv.length);
+  int st;
+
+  if(!flag) {
+   st = verify_ecc_signature(pk_ctx, buffer, data_len, r_component_tlv.value, r_component_tlv.length, s_component_tlv.value, s_component_tlv.length);
+  } else
+  {
+#if STANDALONE_VERSION
+    st = verify_ecc_signature(pk_ctx, buffer, data_len, r_component_tlv.value, r_component_tlv.length, s_component_tlv.value, s_component_tlv.length);
+#else
+    st = verify_own_signature(buffer, data_len, r_component_tlv.value, r_component_tlv.length, s_component_tlv.value, s_component_tlv.length);
+#endif
+  }
+
 	if (st < 0) {
-		LOG_ERR("X.509 ERROR - x509_verify_ecdsa_signature: The ECDSA signature could not be verified\n");
-		return -1;
+		NRF_LOG_ERROR("x509_ves: signature could not be verified\n");
+		return -1044;
 	}
 
-	LOG_DBG("x509_verify_ecdsa_signature: ECDSA signature verified\n");
+	NRF_LOG_DEBUG("x509_ves: done");
 
   /* The signature is valid */
   return 0;
@@ -1005,28 +1157,35 @@ x509_decode_certificate_sequence(uint8_t **pos, uint8_t *end, x509_certificate *
   uint8_t *cert_pos;
   x509_certificate *tmp;
   x509_certificate *chain_pos;
-  tmp = NULL;
-  chain_pos = NULL;
-  *head = tmp;
+  tmp = NULL; //malloc(sizeof(x509_certificate)); //NULL;
+  chain_pos = NULL; //malloc(sizeof(x509_certificate)); //NULL;
+  //memset(tmp, 0, sizeof(x509_certificate));
+  //memset(chain_pos, 0, sizeof(x509_certificate));
 
+  //TODO, double check sequence
+
+  *head = tmp;
+  //NRF_LOG_DEBUG("x509_decode_certificate_sequence");
   /* Set of certificateChoices */
   while((*pos < end) && (res >= 0)) {
 
     cert_pos = (*pos);
     res = asn1_decode_tag(pos, end, &length, (ASN1_TAG_SEQUENCE | ASN1_P_C_BIT));
     if(res < 0) {
-      return res;
+      NRF_LOG_ERROR("asn1_decode_tag ERROR");
+      return -12;
     }
     cert_end = (*pos) + length;
 
     /* Only a single certificate */
     tmp = x509_decode_certificate(&cert_pos, cert_end);
+    NRF_LOG_DEBUG("x509_decode_certificate");
 
     if(tmp == NULL) {
-      LOG_ERR("x509_decode_certificate_sequence: Could not decode certificate\n");
+      NRF_LOG_ERROR("x509_dcs: Could not decode certificate\n");
       /* Remove the certificates */
       x509_memb_remove_certificates((*head));
-      return -1;
+      return -13;
     }
     (*pos) += length;
 
@@ -1047,8 +1206,9 @@ x509_decode_certificate_sequence(uint8_t **pos, uint8_t *end, x509_certificate *
     }
   }
 #if EST_DEBUG_X509
-  LOG_DBG("x509_decode_certificate_sequence - Certificate sequence decoded\n");
+  NRF_LOG_DEBUG("x509_dcs - Certificate sequence decoded\n");
 #endif
+  NRF_LOG_DEBUG("x509_decode_certificate_sequence done");
   return 0;
 }
 /*----------------------------------------------------------------------------*/
@@ -1059,12 +1219,25 @@ x509_decode_certificate(uint8_t **pos, uint8_t *end)
   int res = 0;
 
   /* Allocate memory for certificate */
+#if USE_X509_MEMB
+  NRF_LOG_DEBUG("x509_dc MEMB");
   cert = x509_memb_create_certificate();
+#else
+  NRF_LOG_DEBUG("using malloc");
+  cert = malloc(sizeof(x509_certificate)); // x509_memb_create_certificate();
+  memset(cert, 0, sizeof(x509_certificate));
+#endif
+
+
+  if(!cert) {
+    NRF_LOG_DEBUG("x509 malloc FAIL");
+    return NULL;
+  }
 
 #if EST_DEBUG_X509
-  LOG_DBG("x509_decode_certificate -Certificate start: %p, end: %p, length: %d, X.509 Cert %p \n", pos, end, (int)(end - (*pos)), cert);
+  NRF_LOG_DEBUG("x509_decode_certificate -Certificate start: %p, end: %p, length: %d, X.509 Cert %p \n", pos, end, (int)(end - (*pos)), cert);
   hdumps(*pos, (int)(end - (*pos)));
-  LOG_DBG("\n");
+  NRF_LOG_DEBUG("\n");
 //#endif
 #endif
 
@@ -1076,10 +1249,12 @@ x509_decode_certificate(uint8_t **pos, uint8_t *end)
   /* Set the start of the data that is signed signature */
   cert->tbs_cert_start = (*pos);
 
+  //NRF_LOG_DEBUG("x509_decode_certificate 3");
   /* Decode tbsCertificate */
   res = x509_decode_tbs_certificate(pos, end, cert);
+  //NRF_LOG_DEBUG("x509_decode_certificate 4");
   if(res < 0) {
-    LOG_ERR("X.509 ERROR - x509_decode_certificate: Could not decode certificate\n");
+    NRF_LOG_ERROR("X.509 ERROR - x509_dc: Could not decode certificate\n");
     x509_memb_remove_certificates(cert);
     return NULL;
   }
@@ -1092,7 +1267,7 @@ x509_decode_certificate(uint8_t **pos, uint8_t *end)
                                          &cert->certificate_signature_algorithm.algorithm_oid,
                                          &cert->certificate_signature_algorithm.parameters);
   if(res < 0) {
-    LOG_ERR("X.509 ERROR - x509_decode_certificate: Could not decode algorithm identifier\n");
+    NRF_LOG_ERROR("X.509 ERROR - x509_dc: Could not decode algorithm identifier\n");
     x509_memb_remove_certificates(cert);
     return NULL;
   }
@@ -1101,7 +1276,7 @@ x509_decode_certificate(uint8_t **pos, uint8_t *end)
   cert->sign_start = (*pos);
   res = x509_decode_signature(pos, end, &cert->certificate_signature);
   if(res < 0) {
-    LOG_ERR("X.509 ERROR - x509_decode_certificate: Could not decode signature\n");
+    NRF_LOG_ERROR("X.509 ERROR - x509_dc: Could not decode signature\n");
     x509_memb_remove_certificates(cert);
     return NULL;
   }
@@ -1121,7 +1296,7 @@ x509_decode_tbs_certificate(uint8_t **pos, uint8_t *end, x509_certificate *cert)
   /* Decode TBSCertificate constructed sequence */
   res = asn1_decode_tag(pos, end, &cert_len, (ASN1_TAG_SEQUENCE | ASN1_P_C_BIT));
   if(res < 0) {
-    LOG_ERR("X.509 ERROR - x509_decode_tbs_certificate: Could not decode TBSCertificate sequence\n");
+    NRF_LOG_ERROR("X.509 ERROR - x509_decode_tbs_certificate: Could not decode TBSCertificate sequence\n");
     return res;
   }
 
@@ -1129,14 +1304,14 @@ x509_decode_tbs_certificate(uint8_t **pos, uint8_t *end, x509_certificate *cert)
   res = x509_decode_version(pos, end, &cert->version);
   if(res < 0) {
     /* Some test data has no version so we try to skip it */
-    LOG_ERR("X.509 ERROR - x509_decode_tbs_certificate: Could not decode version\n");
+    NRF_LOG_ERROR("X.509 ERROR - x509_decode_tbs_certificate: Could not decode version\n");
   }
 
   /* Decode serial Number */
   cert->serial_number.tag = ASN1_TAG_INTEGER;
   res = asn1_decode_tag(pos, end, &cert->serial_number.length, cert->serial_number.tag);
   if(res < 0) {
-    LOG_ERR("X.509 ERROR - x509_decode_tbs_certificate: Could not decode serial\n");
+    NRF_LOG_ERROR("X.509 ERROR - x509_decode_tbs_certificate: Could not decode serial\n");
     return res;
   }
 
@@ -1149,35 +1324,35 @@ x509_decode_tbs_certificate(uint8_t **pos, uint8_t *end, x509_certificate *cert)
                                          &cert->signature_algorithm_ID.algorithm_oid,
                                          &cert->signature_algorithm_ID.parameters);
   if(res < 0) {
-    LOG_ERR("X.509 ERROR - x509_decode_tbs_certificate: Could not decode signature algorithm identifier\n");
+    NRF_LOG_ERROR("X.509 ERROR - x509_decode_tbs_certificate: Could not decode signature algorithm identifier\n");
     return res;
   }
 
   /* Decode Issuer */
   res = x509_decode_issuer(pos, end, &cert->issuer_name);
   if(res < 0) {
-    LOG_ERR("X.509 ERROR - x509_decode_tbs_certificate: Could not decode issuer\n");
+    NRF_LOG_ERROR("X.509 ERROR - x509_decode_tbs_certificate: Could not decode issuer\n");
     return res;
   }
 
   /* Decode Validity */
   res = x509_decode_validity(pos, end, &cert->validity);
   if(res < 0) {
-    LOG_ERR("X.509 ERROR - x509_decode_tbs_certificate: Could not decode validity\n");
+    NRF_LOG_ERROR("X.509 ERROR - x509_decode_tbs_certificate: Could not decode validity\n");
     return res;
   }
 
   /* Decode Subject */
   res = x509_decode_subject(pos, end, &cert->subject_name);
   if(res < 0) {
-    LOG_ERR("X.509 ERROR - x509_decode_tbs_certificate: Could not decode subject\n");
+    NRF_LOG_ERROR("X.509 ERROR - x509_decode_tbs_certificate: Could not decode subject\n");
     return res;
   }
 
   /* Decode subjectPublicKeyInfo */
   res = x509_decode_pk_info(pos, end, &cert->pk_info);
   if(res < 0) {
-    LOG_ERR("X.509 ERROR - x509_decode_tbs_certificate: Could not decode subjectPublicKeyInfo\n");
+    NRF_LOG_ERROR("X.509 ERROR - x509_decode_tbs_certificate: Could not decode subjectPublicKeyInfo\n");
     return res;
   }
 
@@ -1187,14 +1362,14 @@ x509_decode_tbs_certificate(uint8_t **pos, uint8_t *end, x509_certificate *cert)
     res = asn1_decode_tag(pos, end, &length,
                           (ASN1_CLASS_CONTEXT_SPECIFIC | ASN1_P_C_BIT | 0x01));
     if(res < 0) {
-      LOG_ERR("X.509 ERROR - x509_decode_tbs_certificate: Could not decode [1]\n");
+      NRF_LOG_ERROR("X.509 ERROR - x509_decode_tbs_certificate: Could not decode [1]\n");
       return res;
     }
 
     /* Decode the bit-string */
     res = asn1_decode_bit_string(pos, (*pos) + length, &cert->issuer_unique_ID);
     if(res < 0) {
-      LOG_ERR("X.509 ERROR - x509_decode_tbs_certificate: Could not decode issuerUniqueID\n");
+      NRF_LOG_ERROR("X.509 ERROR - x509_decode_tbs_certificate: Could not decode issuerUniqueID\n");
       return res;
     }
   }
@@ -1204,14 +1379,14 @@ x509_decode_tbs_certificate(uint8_t **pos, uint8_t *end, x509_certificate *cert)
     res = asn1_decode_tag(pos, end, &length,
                           (ASN1_CLASS_CONTEXT_SPECIFIC | ASN1_P_C_BIT | 0x02));
     if(res < 0) {
-      LOG_ERR("X.509 ERROR - x509_decode_tbs_certificate: Could not decode [2]\n");
+      NRF_LOG_ERROR("X.509 ERROR - x509_decode_tbs_certificate: Could not decode [2]\n");
       return res;
     }
 
     /* Decode the bit-string */
     res = asn1_decode_bit_string(pos, (*pos) + length, &cert->subject_unique_ID);
     if(res < 0) {
-      LOG_ERR("X.509 ERROR - x509_decode_tbs_certificate: Could not decode subjectUniqueID\n");
+      NRF_LOG_ERROR("X.509 ERROR - x509_decode_tbs_certificate: Could not decode subjectUniqueID\n");
       return res;
     }
   }
@@ -1221,7 +1396,7 @@ x509_decode_tbs_certificate(uint8_t **pos, uint8_t *end, x509_certificate *cert)
     res = asn1_decode_tag(pos, end, &length,
                           (ASN1_CLASS_CONTEXT_SPECIFIC | ASN1_P_C_BIT | 0x03));
     if(res < 0) {
-      LOG_ERR("X.509 ERROR - x509_decode_tbs_certificate: Could not decode [3]\n");
+      NRF_LOG_ERROR("X.509 ERROR - x509_decode_tbs_certificate: Could not decode [3]\n");
       return res;
     }
 
@@ -1230,7 +1405,7 @@ x509_decode_tbs_certificate(uint8_t **pos, uint8_t *end, x509_certificate *cert)
     res = asn1_decode_tag(pos, (*pos) + length,
                           &cert->extensions.length, cert->extensions.tag);
     if(res < 0) {
-      LOG_ERR("X.509 ERROR - x509_decode_tbs_certificate: Could not decode extensions sequence\n");
+      NRF_LOG_ERROR("X.509 ERROR - x509_decode_tbs_certificate: Could not decode extensions sequence\n");
       return res;
     }
 
@@ -1252,7 +1427,7 @@ x509_decode_pk_info(uint8_t **pos, uint8_t *end, x509_subject_pk_info *pk_info)
   /* Decode subjectPublicKeyInfo constructed sequence */
   res = asn1_decode_tag(pos, end, &length, (ASN1_TAG_SEQUENCE | ASN1_P_C_BIT));
   if(res < 0) {
-    LOG_ERR("X.509 ERROR - x509_decode_pk_info: Could not decode subjectPublicKeyInfo sequence\n");
+    NRF_LOG_ERROR("X.509 ERROR - x509_decode_pk_info: Could not decode subjectPublicKeyInfo sequence\n");
     return res;
   }
   /* Set a pointer that points to the end of the subjectPublicKeyInfo */
@@ -1263,14 +1438,14 @@ x509_decode_pk_info(uint8_t **pos, uint8_t *end, x509_subject_pk_info *pk_info)
                                          &pk_info->public_key_algorithm.algorithm_oid,
                                          &pk_info->public_key_algorithm.parameters);
   if(res < 0) {
-    LOG_ERR("X.509 ERROR - x509_decode_pk_info: Could not decode algorithm identifier\n");
+    NRF_LOG_ERROR("X.509 ERROR - x509_decode_pk_info: Could not decode algorithm identifier\n");
     return res;
   }
 
   /* Decode public key bit-string */
   res = asn1_decode_bit_string(pos, pk_end, &pk_info->subject_public_key);
   if(res < 0) {
-    LOG_ERR("X.509 ERROR - x509_decode_pk_info: Could not decode pub-key bit-string\n");
+    NRF_LOG_ERROR("X.509 ERROR - x509_decode_pk_info: Could not decode pub-key bit-string\n");
     return res;
   }
 
@@ -1278,7 +1453,7 @@ x509_decode_pk_info(uint8_t **pos, uint8_t *end, x509_subject_pk_info *pk_info)
   res = x509_verify_public_key(&pk_info->public_key_algorithm.algorithm_oid,
                                &pk_info->public_key_algorithm.parameters, &pk_info->subject_public_key);
   if(res < 0) {
-    LOG_ERR("X.509 ERROR - x509_decode_pk_info: Malformed public key\n");
+    NRF_LOG_ERROR("X.509 ERROR - x509_decode_pk_info: Malformed public key\n");
     return res;
   }
 
@@ -1297,7 +1472,7 @@ x509_pk_info_to_pk_ctx(x509_subject_pk_info *pk_info, x509_key_context *pk_ctx)
              pk_info->public_key_algorithm.algorithm_oid.length) == 0) {
     pk_ctx->pk_alg = ECC_PUBLIC_KEY;
   } else {
-    LOG_ERR("X.509 ERROR - x509_pk_info_to_pk_ctx: Unsupported public-key algorithm \n");
+    NRF_LOG_ERROR("X.509 ERROR - x509_pk_info_to_pk_ctx: Unsupported public-key algorithm \n");
     return -1;
   }
 
@@ -1311,7 +1486,7 @@ x509_pk_info_to_pk_ctx(x509_subject_pk_info *pk_info, x509_key_context *pk_ctx)
     pk_ctx->curve = SECP256R1_CURVE;
     key_length = ECC_DEFAULT_KEY_LEN;
   } else {
-    LOG_ERR("X.509 ERROR - x509_pk_info_to_pk_ctx: Unsupported ECC curve\n");
+    NRF_LOG_ERROR("X.509 ERROR - x509_pk_info_to_pk_ctx: Unsupported ECC curve\n");
     return -1;
   }
 
@@ -1319,7 +1494,7 @@ x509_pk_info_to_pk_ctx(x509_subject_pk_info *pk_info, x509_key_context *pk_ctx)
                                &pk_info->public_key_algorithm.parameters,
                                &pk_info->subject_public_key);
   if(res < 0) {
-    LOG_ERR("X.509 ERROR - x509_pk_info_to_pk_ctx: Malformed Public Key\n");
+    NRF_LOG_ERROR("X.509 ERROR - x509_pk_info_to_pk_ctx: Malformed Public Key\n");
     return res;
   }
 
@@ -1346,19 +1521,19 @@ x509_decode_version(uint8_t **pos, uint8_t *end, uint8_t *version)
 
   res = asn1_decode_tag(pos, end, &length, (ASN1_CLASS_CONTEXT_SPECIFIC | ASN1_P_C_BIT));
   if(res < 0) {
-    LOG_ERR("X.509 ERROR - x509_decode_version: [0] tag missing\n");
+    NRF_LOG_ERROR("X.509 ERROR - x509_decode_version: [0] tag missing\n");
     return res;
   }
 
   res = asn1_decode_integer(pos, (*pos + length), &tmp);
   if(res < 0) {
-    LOG_ERR("X.509 ERROR - x509_decode_version: Could not decode integer\n");
+    NRF_LOG_ERROR("X.509 ERROR - x509_decode_version: Could not decode integer\n");
     return res;
   }
 
   /* version = 2 is used for X.509v3 certificates */
   if((tmp != X509_VERSION_1) && (tmp != X509_VERSION_2) && (tmp != X509_VERSION_3)) {
-    LOG_ERR("X.509 ERROR - x509_decode_version: unsupported version %d\n", (int)tmp);
+    NRF_LOG_ERROR("X.509 ERROR - x509_decode_version: unsupported version %d\n", (int)tmp);
     return -1;
   }
 
@@ -1376,7 +1551,7 @@ x509_decode_subject(uint8_t **pos, uint8_t *end, asn1_tlv *subject)
   subject->tag = (ASN1_TAG_SEQUENCE | ASN1_P_C_BIT);
   res = asn1_decode_tag(pos, end, &subject->length, subject->tag);
   if(res < 0) {
-    LOG_ERR("X.509 ERROR: x509_decode_issuer: issuer malformed\n");
+    NRF_LOG_ERROR("X.509 ERROR: x509_decode_subject: subject malformed\n");
     return -1;
   }
 
@@ -1395,7 +1570,7 @@ x509_decode_issuer(uint8_t **pos, uint8_t *end, asn1_tlv *issuer)
   issuer->tag = (ASN1_TAG_SEQUENCE | ASN1_P_C_BIT);
   res = asn1_decode_tag(pos, end, &issuer->length, issuer->tag);
   if(res < 0) {
-    LOG_ERR("X.509 ERROR: x509_decode_issuer: issuer malformed\n");
+    NRF_LOG_ERROR("X.509 ERROR: x509_decode_issuer: issuer malformed\n");
     return -1;
   }
 
@@ -1414,19 +1589,19 @@ x509_decode_validity(uint8_t **pos, uint8_t *end, x509_validity *validity)
 
   res = asn1_decode_tag(pos, end, &length, (ASN1_TAG_SEQUENCE | ASN1_P_C_BIT));
   if(res < 0) {
-    LOG_ERR("X.509 ERROR: x509_decode_validity: Could not decode Validity sequence\n");
+    NRF_LOG_ERROR("X.509 ERROR: x509_decode_validity: Could not decode Validity sequence\n");
     return res;
   }
 
   res = x509_decode_time(pos, end, &validity->not_before);
   if(res < 0) {
-    LOG_ERR("X.509 ERROR: x509_decode_validity: Could not decode Not Before\n");
+    NRF_LOG_ERROR("X.509 ERROR: x509_decode_validity: Could not decode Not Before\n");
     return res;
   }
 
   res = x509_decode_time(pos, end, &validity->not_after);
   if(res < 0) {
-    LOG_ERR("X.509 ERROR: x509_decode_validity: Could not decode Not After\n");
+    NRF_LOG_ERROR("X.509 ERROR: x509_decode_validity: Could not decode Not After\n");
     return res;
   }
 
@@ -1451,19 +1626,19 @@ x509_decode_time(uint8_t **pos, uint8_t *end, x509_time *time)
       res = x509_parse_generalized_time(*pos, length, time);
     }
   } else {
-    LOG_ERR("X.509 ERROR - x509_decode_time: Unknown time format %02X\n", **pos);
+    NRF_LOG_ERROR("X.509 ERROR - x509_decode_time: Unknown time format %02X\n", **pos);
     return -1;
   }
   /* Verify that the parse functions were successful */
   if(res < 0) {
-    LOG_ERR("X.509 ERROR - x509_decode_time: Could not parse time\n");
+    NRF_LOG_ERROR("X.509 ERROR - x509_decode_time: Could not parse time\n");
     return res;
   }
 
   /* Verify that the time is valid */
   res = x509_verify_valid_time(time);
   if(res < 0) {
-    LOG_ERR("X.509 ERROR - x509_decode_time: Invalid time\n");
+    NRF_LOG_ERROR("X.509 ERROR - x509_decode_time: Invalid time\n");
     return res;
   }
 
@@ -1481,7 +1656,7 @@ x509_chars_to_int(uint8_t **pos, uint16_t len)
 
   /* Copy the pointer to a temporary location*/
   memcpy(str, (*pos), len);
-  str[len + 1] = '\0';
+  //str[len + 1] = '\0'; //TODO??
 
   /* Update pointer */
   (*pos) += len;
@@ -1494,7 +1669,7 @@ x509_parse_utc_time(uint8_t *buf, uint16_t buf_len, x509_time *time)
 {
 
   if(buf_len < X509_UTC_TIME_MIN_LENGTH) {
-    LOG_ERR("X.509 ERROR: UTC time shorter than minimum\n");
+    NRF_LOG_ERROR("X.509 ERROR: UTC time shorter than minimum\n");
     return -1;
   }
 
@@ -1548,7 +1723,7 @@ x509_parse_generalized_time(uint8_t *buf, uint16_t buf_len, x509_time *time)
 {
 
   if(buf_len < X509_G_TIME_MIN_LENGTH) {
-    LOG_ERR("X.509 ERROR: Generalized time shorter than minimum\n");
+    NRF_LOG_ERROR("X.509 ERROR: Generalized time shorter than minimum\n");
     return -1;
   }
 
@@ -1607,7 +1782,7 @@ x509_decode_signature(uint8_t **sign_start, uint8_t *sign_end, asn1_bitstring *s
 
   res = asn1_decode_bit_string(sign_start, sign_end, signature);
   if(res < 0) {
-    LOG_ERR("X.509 ERROR - x509_decode_signature: Could not decode signature bit-string\n");
+    NRF_LOG_ERROR("X.509 ERROR - x509_decode_signature: Could not decode signature bit-string\n");
     return res;
   }
 
@@ -1624,7 +1799,7 @@ x509_set_signature_type(x509_algorithm_ID *signature_algorithm_tlv, x509_key_con
              signature_algorithm_tlv->algorithm_oid.length) == 0) {
     key_ctx->sign = (uint8_t)ECDSA_WITH_SHA256;
   } else {
-    LOG_ERR("X.509 ERROR - x509_set_signature_type: Unknown signature oid\n");
+    NRF_LOG_ERROR("X.509 ERROR - x509_set_signature_type: Unknown signature oid\n");
     return -1;
   }
 
@@ -1640,25 +1815,25 @@ x509_verify_public_key(asn1_tlv *algorithm_oid, asn1_tlv *parameters, asn1_bitst
     if(oid_cmp(OID_CURVE_NAME_SECP256R1, parameters->value, parameters->length) == 0) {
       key_length = ECC_DEFAULT_KEY_LEN;
     } else {
-      LOG_ERR("X.509 ERROR - x509_verify_public_key: Unknown ECC CURVE\n");
+      NRF_LOG_ERROR("X.509 ERROR - x509_verify_public_key: Unknown ECC CURVE\n");
       return -1;
     }
 
     /* Verify the length */
     if(public_key->length != (2 * key_length + 1)) {
-      LOG_ERR("X.509 ERROR - x509_verify_public_key: Incorrect bit-string length %u expected %u\n",
+      NRF_LOG_ERROR("X.509 ERROR - x509_verify_public_key: Incorrect bit-string length %u expected %u\n",
                public_key->length, (2 * key_length + 1));
       return -1;
     }
 
     /* Verify compression */
     if(public_key->bit_string[0] != ECC_POINT_UNCOMPRESSED) {
-      LOG_ERR("X.509 ERROR - x509_verify_public_key: Unsupported ECC compression %02X, expected %02X\n",
+      NRF_LOG_ERROR("X.509 ERROR - x509_verify_public_key: Unsupported ECC compression %02X, expected %02X\n",
                public_key->bit_string[0], ECC_POINT_UNCOMPRESSED);
       return -1;
     }
   } else {
-    LOG_ERR("X.509 ERROR - x509_verify_public_key: Unknown Public Key Algorithm\n");
+    NRF_LOG_ERROR("X.509 ERROR - x509_verify_public_key: Unknown Public Key Algorithm\n");
     return -1;
   }
 
@@ -1670,13 +1845,13 @@ x509_verify_validity(x509_validity *cert_validity, x509_time *current_time)
 {
   /* Verify that current_time is after the start of the validity range */
   if(x509_datetime_after(&cert_validity->not_before, current_time) < 0) {
-    LOG_ERR("x509_verify_validity: Current time is before Not Before \n");
+    NRF_LOG_ERROR("x509_verify_validity: Current time is before Not Before \n");
     return -1;
   }
 
   /* Verify that current_time is before the end of the validity range */
   if(x509_datetime_before(&cert_validity->not_after, current_time) < 0) {
-    LOG_ERR("x509_verify_validity: Current time is after Not After \n");
+    NRF_LOG_ERROR("x509_verify_validity: Current time is after Not After \n");
     return -1;
   }
 
@@ -1708,8 +1883,10 @@ x509_verify_valid_time(x509_time *time)
 int
 x509_datetime_compare_to(x509_time *time1, x509_time *time2)
 {
+  x509_print_time(time1);
+  x509_print_time(time2);
   int res = 0;
-  /* TODO: Update the time based on time zones, Could be to much trouble*/
+  /* TODO: Add checks for time zones. Currently assuming same TZ */
 
   /* Compare the dates in the two structures */
   res = x509_date_compare_to(time1, time2);
@@ -1717,7 +1894,8 @@ x509_datetime_compare_to(x509_time *time1, x509_time *time2)
   if(res > 0) {
     return 1;
   } else if(res == 0) {
-    res = x509_time_compare_to(time1, time2);
+    //res = x509_time_compare_to(time1, time2);
+    res = x509_time_compare_to_upto_min(time1, time2); //TODO, decide
     if(res > 0) {
       return 1;
     } else if(res == 0) {
@@ -1751,6 +1929,26 @@ x509_date_compare_to(x509_time *time1, x509_time *time2)
 }
 /*----------------------------------------------------------------------------*/
 int
+x509_time_compare_to_upto_min(x509_time *time1, x509_time *time2)
+{
+
+  /* Compare the hour, minute and second of time1 and time2 */
+  if(time1->hour > time2->hour) {
+    return 1;
+  } else if(time1->hour == time2->hour) {
+    if(time1->minute > time2->minute) {
+      return 1;
+    } else if(time1->minute == time2->minute) {
+        return 0;
+    }
+
+  }
+
+  return -1;
+}
+/*----------------------------------------------------------------------------*/
+/*----------------------------------------------------------------------------*/
+int
 x509_time_compare_to(x509_time *time1, x509_time *time2)
 {
 
@@ -1781,7 +1979,7 @@ x509_datetime_after(x509_time *time, x509_time *current_time)
   res = x509_datetime_compare_to(time, current_time);
 
   /* Check if time < current_time */
-  if(res < 0) {
+  if(res <= 0) { //was <
     return 0;
   }
 
@@ -1809,7 +2007,7 @@ x509_verify_cert_status(x509_certificate *cert)
 {
   /* TODO: (Certificate Revocation) Implement revocation status checking, either CRLs or OCSP
    * or Something different */
-  LOG_DBG("X.509 WARNING - x509_verify_cert_status: Certificate revocation checking not implemented!\n");
+  NRF_LOG_DEBUG("X.509 WARNING - x509_verify_cert_status: Certificate revocation checking not implemented!\n");
 
   return 0;
 }
@@ -1819,29 +2017,29 @@ x509_verify_name(asn1_tlv *expected_name, asn1_tlv *name)
 {
   /* Verify the pointers */
   if(expected_name == NULL || name == NULL) {
-    LOG_ERR("X.509 ERROR - x509_verify_name: NULL pointer \n");
-    return -1;
+    NRF_LOG_ERROR("X.509 ERROR - x509_verify_name: NULL pointer \n");
+    return -6001;
   }
 
   /* Verify the tags */
   if(expected_name->tag != name->tag) {
-    LOG_ERR("X.509 ERROR - x509_verify_name: ASN.1 Tags don't match\n");
-    return -1;
+    NRF_LOG_ERROR("X.509 ERROR - x509_verify_name: ASN.1 Tags don't match\n");
+    return -6002;
   }
 
   /* Verify the values of the expected_name and name */
   #if 0 < WITH_COMPRESSION && EST_DEBUG_X509
-    LOG_DBG("Expected:\n");
+    NRF_LOG_DEBUG("Expected:\n");
     hdump(expected_name->value, name->length);
-    LOG_DBG("\nGot:\n");
+    NRF_LOG_DEBUG("\nGot:\n");
     hdump(name->value, name->length);
   #endif
 
   /* Verify the lengths */
   if(expected_name->length != name->length) {
     //printf("expected_name->value %s, name->value %s\n", expected_name->value, name->value);
-    LOG_ERR("X.509 ERROR - x509_verify_name: ASN.1 Lengths don't match %d %d\n", expected_name->length, name->length);
-    return -1;
+    NRF_LOG_ERROR("X.509 ERROR - x509_verify_name: ASN.1 Lengths don't match %d %d\n", expected_name->length, name->length);
+    return -6003;
   }
 
   /*
@@ -1850,8 +2048,8 @@ x509_verify_name(asn1_tlv *expected_name, asn1_tlv *name)
 #define ISSUER_PREAMBLE_LEN 11
 
   if(memcmp(expected_name->value+ISSUER_PREAMBLE_LEN, name->value+ISSUER_PREAMBLE_LEN, name->length-ISSUER_PREAMBLE_LEN) != 0) {
-    LOG_ERR("X.509 ERROR - x509_verify_name: ASN.1 Values don't match\n");
-    return -1;
+    NRF_LOG_ERROR("X.509 ERROR - x509_verify_name: ASN.1 Values don't match\n");
+    return -6004;
   }
   return 0;
 }
@@ -1863,7 +2061,7 @@ x509_verify_issuer(asn1_tlv *working_issuer_name, asn1_tlv *issuer_name)
   res = x509_verify_name(working_issuer_name, issuer_name);
 
   if(res < 0) {
-    LOG_ERR("X.509 ERROR - x509_verify_issuer: working_issuer_name != issuer_name\n");
+    NRF_LOG_ERROR("X.509 ERROR - x509_verify_issuer: working_issuer_name != issuer_name\n");
   }
 
   return res;
@@ -1876,7 +2074,7 @@ x509_verify_subject(asn1_tlv *expected_subject_name, asn1_tlv *subject_name)
   res = x509_verify_name(expected_subject_name, subject_name);
 
   if(res < 0) {
-    LOG_ERR("X.509 ERROR - x509_verify_subject: working_subject_name != subject_name\n");
+    NRF_LOG_ERROR("X.509 ERROR - x509_verify_subject: working_subject_name != subject_name\n");
   }
 
   return res;
@@ -1908,21 +2106,22 @@ x509_verify_certificate(x509_certificate *cert, asn1_tlv *working_issuer_name,
   /* Create key context from working_public_key_info */
   res = x509_pk_info_to_pk_ctx(working_public_key_info, &working_pub_key_ctx);
   if(res < 0) {
-    return res;
+    return -1011;
   }
 
   /* Set the signature algorithm of the public key context from the cert */
   res = x509_set_signature_type(&cert->certificate_signature_algorithm,
                                 &working_pub_key_ctx);
   if(res < 0) {
-    return res;
+    return -1012;
   }
 
+  //NRF_LOG_DEBUG("!");
   /* Validate signature */
   res = x509_verify_signature(cert->tbs_cert_start, cert->tbs_cert_len, cert->sign_start,
-                              cert->sign_len, &working_pub_key_ctx);
+                              cert->sign_len, &working_pub_key_ctx, 0);
   if(res < 0) {
-	  LOG_ERR("x509_verify_certificate: signature verify failed\n");
+	  NRF_LOG_ERROR("x509_vc: sign.ver fail\n");
     return res;
   }
 
@@ -1930,17 +2129,17 @@ x509_verify_certificate(x509_certificate *cert, asn1_tlv *working_issuer_name,
   if(current_time != NULL) {
     res = x509_verify_validity(&cert->validity, current_time);
     if(res < 0) {
-      LOG_ERR("x509_verify_certificate: current_time not within validity range\n");
+      NRF_LOG_ERROR("x509_vc: current_time not within validity range\n");
       return res;
     }
   } else {
-    LOG_WARN("x509_verify_certificate: Current time not set, skipping time validation\n");
+    NRF_LOG_WARNING("x509_vc: Current time not set, skipping time validation\n");
   }
 
   /* Is the certificate revoked? */
   /* res = x509_verify_cert_status(cert); */
   /* if(res < 0) { */
-  /*   LOG_ERR("X.509 ERROR - x509_verify_certificate: The certificate is not valid\n"); */
+  /*   NRF_LOG_ERROR("X.509 ERROR - x509_verify_certificate: The certificate is not valid\n"); */
   /*   return res; */
   /* } */
 
@@ -1950,7 +2149,7 @@ x509_verify_certificate(x509_certificate *cert, asn1_tlv *working_issuer_name,
      issuer name provided in the trust anchor information */
   res = x509_verify_issuer(working_issuer_name, &cert->issuer_name);
   if(res < 0) {
-    LOG_ERR("x509_verify_certificate: The issuer name does not match the working issuer name \n");
+    NRF_LOG_ERROR("x509_vc: The issuer name does not match the working issuer name \n");
     return res;
   }
   /* TODO: Verify extensions?, e.g. what the allowed
@@ -1991,27 +2190,27 @@ x509_verify_certificate_path(x509_certificate *path,
   memcpy(&working_public_key_info, &trust_anchor->pk_info, sizeof(x509_subject_pk_info));
 
 #if STACK_CHECK_ENABLED
-    LOG_DBG("stack_check_get_reserved_size() - stack_check_get_usage(): %d\n",(int)(stack_check_get_reserved_size() - stack_check_get_usage()));
+    NRF_LOG_DEBUG("stack_check_get_reserved_size() - stack_check_get_usage(): %d\n",(int)(stack_check_get_reserved_size() - stack_check_get_usage()));
 #endif
 
   if(current_cert == NULL) {
 
-    LOG_DBG("Check single CA cert only\n");
+    NRF_LOG_DEBUG("Single CA cert\n");
     res = x509_verify_certificate(trust_anchor, &working_issuer_name, &working_public_key_info, current_time);
     if(res < 0) {
-      LOG_ERR("x509_verify_certificate: Invalid CA cert\n");
-      return res;
+      NRF_LOG_ERROR("x509_vc: ca cert err\n");
+      return -1001;
     }
   } else {
 
-    LOG_DBG("Check cert-chain\n");
+    NRF_LOG_DEBUG("Check cert-chain\n");
     while((max_path_length > 0) && (current_cert != NULL)) {
       /* Verify the current certificate in the path */
       res = x509_verify_certificate(current_cert, &working_issuer_name, &working_public_key_info, current_time);
 
       if(res < 0) {
-        LOG_ERR("x509_verify_certificate_path: Invalid path\n");
-        return res;
+        NRF_LOG_ERROR("x509_vcp: Invalid path\n");
+        return -1002;
       }
 
       /* Update the inputs to the validation function */
@@ -2024,7 +2223,7 @@ x509_verify_certificate_path(x509_certificate *path,
     }
   }
   if(current_cert != NULL) {
-    LOG_ERR("x509_verify_certificate_path: Certificate path too long\n");
+    NRF_LOG_ERROR("x509_vcp: Certificate path too long\n");
     return -1;
   }
 
@@ -2038,3 +2237,27 @@ x509_verify_certificate_path(x509_certificate *path,
   return 0;
 }
 /*----------------------------------------------------------------------------*/
+int
+fix_cacerts_order(x509_certificate *head)
+{
+  /* Check if the self signed CA is the head, otherwise swap the order */
+  if(x509_cert_is_self_signed(head)) {
+    NRF_LOG_DEBUG("Found a not self signed cert, swap certificate order!\n");
+    x509_certificate *tmp_cert = head->next;
+    head->next = NULL;
+    //int i = 0;
+    while(tmp_cert != NULL) {
+      //NRF_LOG_DEBUG("%d\n", i++);
+      x509_certificate *next_cert = tmp_cert->next;
+      tmp_cert->next = head;
+      head = tmp_cert;
+      tmp_cert = next_cert;
+    }
+    if(x509_verify_issuer(&head->issuer_name, &head->subject_name) < 0) {
+      return -1;
+    }
+  }
+  return 0;
+}
+/*----------------------------------------------------------------------------*/
+

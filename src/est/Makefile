@@ -10,13 +10,34 @@ _OBJ += mbedtls-wrapper.o
 #other-ecc.o ecc-sha1.o secp256r1.o sha224-256.o
 _OBJ += memb.o
 _OBJ += encoder.o decoder.o
-#_OBJ += xiot.o
 
+ifeq ($(UC),1)
+${info Compiling with CBOR}
+CFLAGS += -DUSE_CBOR_ENCODING=1
+_OBJ += xiot.o
+else
+${info Compiling with standard format}
+endif
+
+#Standalone flags:
+CFLAGS += -DSTANDALONE_VERSION=1
+
+#Test with Nexus flag:
+ifeq ($(N),1)
+${info Compiling for use with Nexus server}
+CFLAGS += -DEST_WITH_NEXUS=1
+else
+${info Compiling for use with local EST server}
+endif
+
+#CFLAGS += -DPLATFORM_HAS_TIME=1 #in project-conf
+
+#management
 OBJ = $(patsubst %,$(BUILD)/%,$(_OBJ))
 
 #DEPS = $(CURDIR)/client.h
 
-CFLAGS += -Wall -Werror -g
+CFLAGS += -Wall -Werror -g3
 CBOR_FLAGS += -DNANOCBOR_BYTEORDER_HEADER=\"nanocbor/nanocbor.h\"
 CBOR_FLAGS += -DNANOCBOR_HTOBE32_FUNC=__builtin_bswap32
 CBOR_FLAGS += -DNANOCBOR_HTOBE64_FUNC=__builtin_bswap64
@@ -41,8 +62,12 @@ all: $(OBJ)
 $(BUILD)/memb.o: $(UTIL)/memb.c
 	$(CC) -c -o $@ $< $(CFLAGS) $(INCLUDES) 
 
-#$(BUILD)/xiot.o: $(UTIL)/xiot.c
-#	$(CC) -c -o $@ $< $(CFLAGS) $(INCLUDES) 
+
+ifeq ($(UC),1)
+$(BUILD)/xiot.o: $(UTIL)/xiot.c
+	$(CC) -c -o $@ $< $(CFLAGS) $(INCLUDES) 
+endif
+
 
 $(BUILD)/encoder.o: $(CBOR)/src/encoder.c
 	$(CC) -c -o $@ $< $(CFLAGS) $(INCLUDES) 

@@ -37,25 +37,41 @@
 #ifndef EST_CLIENT_H
 #define EST_CLIENT_H
 
-/*
- * EST path info
- */
-#define CRTS_PATH "crts"
-#define SEN_PATH "sen"
-#define SKG_PATH "skg"
 
-static uint8_t client_mac_id[] = { 0xe,0x9,0xa,0xc,0x8,0x7,0xb,0x1 }; //TODO read from HW
+//extern const uint8_t client_mac_id[]; // = { 0xe,0x91,0xa2,0xc3,0x84,0x75,0xb6,0x17 }; //TODO read from HW
 
+#define DUMMY client_mac_id[0]
+#ifndef DUMMY
+#warning We have a problem
+#endif
 
-#define COAP_CONTENT_FORMAT_CRTS 280
-#define COAP_CONTENT_FORMAT_PKCS10 286
-#define COAP_CONTENT_FORMAT_CBOREN 12001
-
+#ifdef USE_CBOR_ENCODING
+#define COAP_TEST_CONTENT_FORMAT_FOR_SEN COAP_CONTENT_FORMAT_CBOREN
+#else
 #define COAP_TEST_CONTENT_FORMAT_FOR_SEN COAP_CONTENT_FORMAT_PKCS10
-/*
- * Settings we might need to trim to smallest possible
- */
-#define TRUSTSTORE_PARSE_BUFFER_SIZE 1024
+#endif
+
+///*
+// * EST path info
+// */
+//#ifdef EST_WITH_NEXUS
+//#define EST_CRTS_URL "coaps://51.124.21.81/.well-known/est/coap/crts"
+//#define EST_SEN_URL "coaps://51.124.21.81/.well-known/est/coap/sen"
+//#define CRTS_PATH ".well-known/est/coap/crts"
+//#define SEN_PATH ".well-known/est/coap/sen"
+//#define SKG_PATH ".well-known/est/coap/skg"
+//#else
+//#define EST_CRTS_URL "coaps://[localhost]/crts"
+//#define EST_SEN_URL "coaps://[localhost]/sen"
+//#define CRTS_PATH "crts"
+//#define SEN_PATH "sen"
+//#define SKG_PATH "skg"
+//#endif
+
+///*
+// * Settings we might need to trim to smallest possible
+// */
+//#define TRUSTSTORE_PARSE_BUFFER_SIZE 1024
 
 
 enum est_client_state {

@@ -41,19 +41,23 @@
 
 #include "stdio.h"
 
-#include "../util/log.h"
+#if STANDALONE_VERSION
+#include "util/standalone_log.h"
 #define LOG_MODULE "oid"
-#ifdef LOG_CONF_LEVEL_EST_OID
-#define LOG_LEVEL LOG_CONF_LEVEL_EST_OID
+#ifdef LOG_CONF_LEVEL_EST_ASN1
+#define LOG_LEVEL LOG_CONF_LEVEL_EST_ASN1
 #else
-#define LOG_LEVEL LOG_LEVEL_ERR
+#define LOG_LEVEL LOG_LEVEL_ERR //DBG
+#endif
+#else
+#include "util/nrf_log_wrapper.h"
 #endif
 
-#if LOG_LEVEL == LOG_LEVEL_DBG
-#include "socket-dtls.h"
-#define EST_DEBUG_OID 1
-#define EST_HEXDUMP hdumps
-#endif
+//#if LOG_LEVEL == LOG_LEVEL_DBG
+//#include "socket-dtls.h"
+//#define EST_DEBUG_OID 1
+//#define EST_HEXDUMP hdumps
+//#endif
 
 
 /*---------------------------------------------------------------------------*/

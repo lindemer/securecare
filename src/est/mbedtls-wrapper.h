@@ -29,18 +29,33 @@
 #ifndef MBEDTLS_WRAPPER_H_
 #define MBEDTLS_WRAPPER_H_
 
-#include <coap2/coap.h>
+//#include <coap2/coap.h> //neded for coap_context_t
 #include "est-x509.h"
 
+#if STANDALONE_VERSION
+/*
+ * libcoap includes
+ */
+#include <coap2/net.h>
 /*
  * MBED includes
  */
 #include "mbedtls/pk.h"
 #include <mbedtls/x509_crt.h>
+#else
+//#include "nrf_log_default_backends.h"
+#include "nrf_crypto.h"
+#endif
+
+//TODO DAMNIT
+#include "mbedtls/pk.h"
+#include <mbedtls/x509_crt.h>
+
 /*
  * Bigint defines that are still used
  */
 #define WORD_LEN_BYTES 4 /**<-- Length of a word in bytes */
+
 
 /**
  * MBED flags
@@ -54,11 +69,12 @@
  * File flags
  */
 #define PEM_HEADER_AND_FOOTER_LEN	28
+#define PEM_KEY_LEN               121
 
 struct pki_info_t {
   unsigned char *fts_cert_buf; //Factory trust store [2048];
-  mbedtls_x509_crt *mbedtls_truststore_certs;
-  unsigned char *ets_cert_buf; //[PKI_ENROLLED_TS_LEN];
+  //unsigned char *ets_cert_buf; //[PKI_ENROLLED_TS_LEN];
+  unsigned char ets_cert_buf[1024];
   unsigned char *factory_cert_buf; //[512];
   unsigned char *enrolled_cert_buf; //[PKI_ENROLLED_CERT_LEN];
   x509_certificate *ca_cert;
@@ -69,15 +85,32 @@ struct pki_info_t {
   int enrolled_cert_buf_len;
   uint8_t factory_key_len;
   uint8_t enrollment_key_len;
+#if STANDALONE_VERSION
+  mbedtls_x509_crt *mbedtls_truststore_certs;
   mbedtls_pk_context *enrollment_key_ctx;
   mbedtls_pk_context *verify_key_ctx;
+#else
+  mbedtls_pk_context *enrollment_key_ctx; //TODO
+  unsigned char private_enrollment_key[32];
+  unsigned char public_enrollment_key_x[32];
+  unsigned char public_enrollment_key_y[32];
+//  nrf_crypto_ecc_private_key_t * private_enrollment_key;
+//  nrf_crypto_ecc_public_key_t * public_enrollment_key;
+//  nrf_crypto_ecc_public_key_t * public_verify_key;
+#endif
 
 };
 
+#ifdef STANDALONE_VERSION
 struct libcoap_info_t {
 	coap_context_t *ctx;
 	coap_session_t *session;
 };
+
+int libcoap_save_setting(int coap_setting_type, void *setting);
+int libcoap_get_setting(int coap_setting_type, void *setting);
+
+#endif
 
 /** Protocol level for TLS.
  *  Here, the same socket protocol level for TLS as in Linux was used.
@@ -157,18 +190,25 @@ enum tls_credential_type {
 };
 
 
-int est_dtls_wrapper_init(const char* ca_certs_path);
+int est_dtls_wrapper_init(const char* ca_certs_path, int init_nrf_crypto);
 int est_dtls_wrapper_free();
 /*---------------------------------------------------------------------------*/
 int create_ecc_signature(const unsigned char *buffer, size_t data_len, unsigned char *r_buf, const size_t r_len, unsigned char *s_buf, const size_t s_len);
 int verify_ecc_signature(x509_key_context *pk_ctx, const unsigned char *buffer, size_t data_len, const unsigned char *r_buf, const size_t r_len, const unsigned char *s_buf, const size_t s_len);
+int verify_own_signature(const unsigned char *buffer, size_t data_len, const unsigned char *r_buf, const size_t r_len, const unsigned char *s_buf, const size_t s_len);
+
 int generate_enrollment_keys(x509_key_context *key_ctx);
 /*---------------------------------------------------------------------------*/
 int tls_credential_add(enum tls_credential_type type, void *cred, uint16_t credlen);
 int tls_credential_get(enum tls_credential_type type, void *cred, uint16_t *credlen);
 /*---------------------------------------------------------------------------*/
+void print_hex(char const * p_msg, uint8_t const * p_data, size_t size);
+/*---------------------------------------------------------------------------*/
+int mbedtls_wrapper_is_locked();
+void mbedtls_wrapper_release();
 
-int libcoap_save_setting(int coap_setting_type, void *setting);
-int libcoap_get_setting(int coap_setting_type, void *setting);
+//void get_simple_enroll_data(uint8_t *buffer);
+//int get_private_enrollment_key(unsigned char *buf_d);
+int get_pem_enrollment_key(unsigned char *pem_buf);
 
 #endif /* MBEDTLS_WRAPPER_H_ */

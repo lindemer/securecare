@@ -42,18 +42,28 @@
 
 #include "stdlib.h"
 #include "string.h"
-#include "../util/log.h"
 
+#if STANDALONE_VERSION
 #define LOG_MODULE "asn1"
 #ifdef LOG_CONF_LEVEL_EST_ASN1
 #define LOG_LEVEL LOG_CONF_LEVEL_EST_ASN1
 #else
 #define LOG_LEVEL LOG_LEVEL_ERR //DBG
 #endif
-
-#if LOG_LEVEL == LOG_LEVEL_DBG
-#define EST_DEBUG_ASN1 1
+#include "util/standalone_log.h"
+#else
+//#include "util/nrf_log_wrapper.h"
+#include "nrf_log.h"
+#define LOG_ERR           NRF_LOG_ERROR
+#define LOG_WARN          LOG_WARN(...)//NRF_LOG_WARNING
+#define LOG_INFO          //NRF_LOG_INFO
+#define LOG_DBG           //NRF_LOG_DEBUG
 #endif
+
+
+//#if LOG_LEVEL == LOG_LEVEL_DBG
+//#define EST_DEBUG_ASN1 1
+//#endif
 
 
 /*----------------------------------------------------------------------------*/
@@ -459,7 +469,7 @@ asn1_encode_integer(uint8_t **pos, uint8_t *start, uint32_t value)
         *--(*pos) = (uint8_t)(tmp >> 24);
         length += 1;
       } else {
-        LOG_DBG("ASN.1 ERROR: asn1_encode_integer - Larger than 2147483647\n");
+        LOG_ERR("ASN.1 ERROR: asn1_encode_integer - Larger than 2147483647\n");
         return -1;
       }
     }
@@ -470,7 +480,7 @@ asn1_encode_integer(uint8_t **pos, uint8_t *start, uint32_t value)
    * positive integers */
   if((value > 0) && (**pos & 0x80)) {
     if(*pos - start < 1) {
-      LOG_DBG("ASN.1 ERROR: asn1_encode_integer - buffer to small for integer\n");
+      LOG_ERR("ASN.1 ERROR: asn1_encode_integer - buffer to small for integer\n");
       return -1;
     }
 
@@ -481,7 +491,7 @@ asn1_encode_integer(uint8_t **pos, uint8_t *start, uint32_t value)
   /* Write the length and tag */
   res = asn1_encode_length_and_tag(pos, start, ASN1_TAG_INTEGER, length);
   if(res < 0) {
-    LOG_DBG("ASN.1 ERROR: asn1_encode_integer - Could not encode length and tag\n");
+    LOG_ERR("ASN.1 ERROR: asn1_encode_integer - Could not encode length and tag\n");
     return res;
   } else {
     length += res;
@@ -577,7 +587,7 @@ asn1_decode_bit_string(uint8_t **pos, uint8_t *end, asn1_bitstring *str)
 
   /* First byte is the number of unused bits */
   if(str->length < 1) {
-    LOG_DBG("ASN.1 ERROR: asn1_decode_bit_string - bit string can't be less than 1 byte\n");
+    LOG_ERR("ASN.1 ERROR: asn1_decode_bit_string - bit string can't be less than 1 byte\n");
     return -1;
   }
 
@@ -586,7 +596,7 @@ asn1_decode_bit_string(uint8_t **pos, uint8_t *end, asn1_bitstring *str)
   str->zero_bits = **pos;
 
   if(str->zero_bits > 7) {
-    LOG_DBG("ASN.1 ERROR: asn1_decode_bit_string - The number of zero bits can't exceed 7 bits\n");
+    LOG_ERR("ASN.1 ERROR: asn1_decode_bit_string - The number of zero bits can't exceed 7 bits\n");
     return -1;
   }
   (*pos)++;
@@ -595,7 +605,7 @@ asn1_decode_bit_string(uint8_t **pos, uint8_t *end, asn1_bitstring *str)
   *pos += str->length;
 
   if(*pos != end) {
-    LOG_DBG("ASN.1 ERROR: asn1_decode_bit_string - bit string not aligned with end\n");
+    LOG_ERR("ASN.1 ERROR: asn1_decode_bit_string - bit string not aligned with end\n");
     return -1;
   }
 #if EST_DEBUG_ASN1

@@ -48,6 +48,24 @@
 #include "est-x509.h"
 #include "stdio.h"
 
+#if STANDALONE_VERSION
+#include "standalone_log.h"
+#include "util/nrf_log_wrapper.h"
+#define LOG_MODULE "pkcs"
+#ifdef LOG_CONF_LEVEL_PKCS
+#define LOG_LEVEL LOG_CONF_LEVEL_PKCS
+#else
+#define LOG_LEVEL LOG_LEVEL_DBG
+#endif
+#include "util/standalone_log.h"
+#else //== not standalone version
+#include "nrf_log.h"
+#include "nrf_log_ctrl.h"
+//#define NRF_LOG_MODULE_NAME mwrap
+//NRF_LOG_MODULE_REGISTER();
+//#include "nrf_log_wrapper.h"
+#endif
+
 /*----------------------------------------------------------------------------*/
 void
 pkcs10_init(pkcs10_request *req)
@@ -55,15 +73,18 @@ pkcs10_init(pkcs10_request *req)
   memset(req, 0, sizeof(pkcs10_request));
 
 #if EST_DEBUG_PKCS10
-  PKCS10_DBG("pkcs10_init request at %p initialized\n", req);
+  NRF_LOG_INFO("pkcs10_init request at %p initialized\n", req);
 #endif
 }
 /*----------------------------------------------------------------------------*/
 int
 pkcs10_set_default_subject(pkcs10_request *req, uint8_t *value, uint16_t value_length)
 {
-
+#if TEST_ENROLL_SUBJECT
+  return x509_set_subject(&req->subject, value, value_length);
+#else
   return x509_set_eui64_subject(&req->subject, value, value_length);
+#endif
 }
 /*----------------------------------------------------------------------------*/
 int
@@ -106,7 +127,7 @@ pkcs10_encode(pkcs10_request *req, uint8_t *buffer, uint16_t len)
   /* Encode the Certification Request Info */
   res = pkcs10_encode_request_info(&data_pos, data_start, req->key_ctx, &req->subject, &req->attribute_set);
   if(res < 0) {
-    PKCS10_DBG("PKCS #10 ERROR - pkcs10_encode: Could not encode CertificationRequestInfo\n");
+    NRF_LOG_ERROR("pkcs10_encode: Could not enc CertReqInfo\n");
     return res;
   }
   data_len = res;
@@ -117,7 +138,7 @@ pkcs10_encode(pkcs10_request *req, uint8_t *buffer, uint16_t len)
   /* Sign request info and write to original buffer */
   res = x509_encode_signature(&pos, start, data_start, data_len, req->key_ctx);
   if(res < 0) {
-    PKCS10_DBG("PKCS #10 ERROR - pkcs10_encode: Could not sign request\n");
+    NRF_LOG_ERROR("PKCS #10 ERROR - pkcs10_encode: Could not sign request\n");
     return res;
   }
   sign_len = res;
@@ -133,14 +154,14 @@ pkcs10_encode(pkcs10_request *req, uint8_t *buffer, uint16_t len)
     sign_algo.length = OID_LENGTH(OID_ALGORITHM_ECDSA_WITH_SHA256);
     break;
   default:
-    PKCS10_DBG("PKCS #10 ERROR - pkcs10_encode: Unknown signature algorithm %u\n", req->key_ctx->sign);
+    NRF_LOG_INFO("pkcs10_encode: Unknown signature algorithm %u\n", req->key_ctx->sign);
     return -1;
   }
 
   /* Encode the signature algorithm identifier */
   res = x509_encode_algorithm_identifier(&pos, start, &sign_algo, NULL);
   if(res < 0) {
-    PKCS10_DBG("PKCS #10 ERROR - pkcs10_encode: Could not encode signatureAlgorithm\n");
+    NRF_LOG_INFO("PKCS #10 ERROR - pkcs10_encode: Could not encode signatureAlgorithm\n");
     return res;
   }
   length += res;
@@ -154,23 +175,24 @@ pkcs10_encode(pkcs10_request *req, uint8_t *buffer, uint16_t len)
                                    (ASN1_TAG_SEQUENCE | ASN1_P_C_BIT),
                                    length);
   if(res < 0) {
-    PKCS10_DBG("PKCS #10 ERROR - pkcs10_encode: Could not encode CertificationRequest sequence \n");
+    NRF_LOG_INFO("PKCS #10 ERROR - pkcs10_encode: Could not encode CertificationRequest sequence \n");
     return res;
   } else {
     length += res;
   }
 
   /* Verify the signature that we created */
-  res = x509_verify_signature(data_start, data_len, sign_start, sign_len, req->key_ctx);
+  res = x509_verify_signature(data_start, data_len, sign_start, sign_len, req->key_ctx, 1); //TODO
+  //res = x509_verify_signature(data_start, data_len, sign_start, sign_len, NULL);
   if(res < 0) {
-    PKCS10_DBG("PKCS #10 ERROR - pkcs10_encode: Signature verification failed \n");
+    NRF_LOG_INFO("PKCS #10 ERROR - pkcs10_encode: Signature verification failed \n");
     return res;
   } else {
-    PKCS10_DBG("PKCS #10 Signature verification SUCCESSFUL\n");
+    NRF_LOG_INFO("PKCS #10 Signature verification SUCCESSFUL\n");
   }
 
 #if EST_DEBUG_PKCS10
-  PKCS10_DBG("pkcs10_encode encoded %d bytes\n", (int)length);
+  NRF_LOG_INFO("pkcs10_encode encoded %d bytes\n", (int)length);
 #endif
 
   return length;
@@ -189,7 +211,7 @@ pkcs10_encode_request_info(uint8_t **pos, uint8_t *start, x509_key_context *key_
     res = asn1_encode_length_and_tag(pos, start,
                                      (ASN1_CLASS_CONTEXT_SPECIFIC | ASN1_P_C_BIT), 0);
     if(res < 0) {
-      PKCS10_DBG("PKCS #10 ERROR - pkcs10_encode_request_info: Could not encode [0] \n");
+      NRF_LOG_INFO("PKCS #10 ERROR - pkcs10_encode_request_info: Could not encode [0] \n");
       return res;
     } else {
       length += res;
@@ -197,14 +219,14 @@ pkcs10_encode_request_info(uint8_t **pos, uint8_t *start, x509_key_context *key_
   } else {
     res = asn1_encode_buffer(pos, start, attributes->value, attributes->length);
     if(res < 0) {
-      PKCS10_DBG("PKCS #10 ERROR - pkcs10_encode_request_info: Could not encode attributes \n");
+      NRF_LOG_INFO("PKCS #10 ERROR - pkcs10_encode_request_info: Could not encode attributes \n");
       return res;
     }
     length += res;
 
     res = asn1_encode_length_and_tag(pos, start, attributes->tag, attributes->length);
     if(res < 0) {
-      PKCS10_DBG("PKCS #10 ERROR - pkcs10_encode_request_info: Could not encode attributes \n");
+      NRF_LOG_INFO("PKCS #10 ERROR - pkcs10_encode_request_info: Could not encode attributes \n");
       return res;
     }
     length += res;
@@ -213,7 +235,7 @@ pkcs10_encode_request_info(uint8_t **pos, uint8_t *start, x509_key_context *key_
     res = asn1_encode_length_and_tag(pos, start,
                                      (ASN1_CLASS_CONTEXT_SPECIFIC | ASN1_P_C_BIT), length);
     if(res < 0) {
-      PKCS10_DBG("PKCS #10 ERROR - pkcs10_encode_request_info: Could not encode [0] \n");
+      NRF_LOG_INFO("PKCS #10 ERROR - pkcs10_encode_request_info: Could not encode [0] \n");
       return res;
     } else {
       length += res;
@@ -223,7 +245,7 @@ pkcs10_encode_request_info(uint8_t **pos, uint8_t *start, x509_key_context *key_
   /* encode the subjectPKInfo */
   res = x509_encode_pk_info(pos, start, key_ctx);
   if(res < 0) {
-    PKCS10_DBG("PKCS #10 ERROR - pkcs10_encode_request_info: Could not encode subjectPKInfo \n");
+    NRF_LOG_INFO("PKCS #10 ERROR - pkcs10_encode_request_info: Could not encode subjectPKInfo \n");
     return res;
   }
   length += res;
@@ -231,7 +253,7 @@ pkcs10_encode_request_info(uint8_t **pos, uint8_t *start, x509_key_context *key_
   /* Encode the subject */
   res = x509_encode_subject(pos, start, subject);
   if(res < 0) {
-    PKCS10_DBG("PKCS #10 ERROR - pkcs10_encode_request_info: Could not encode subject \n");
+    NRF_LOG_INFO("PKCS #10 ERROR - pkcs10_encode_request_info: Could not encode subject \n");
     return res;
   }
   length += res;
@@ -239,7 +261,7 @@ pkcs10_encode_request_info(uint8_t **pos, uint8_t *start, x509_key_context *key_
   /* Encode the version,  */
   res = asn1_encode_integer(pos, start, PKCS10_VERSION_0);
   if(res < 0) {
-    PKCS10_DBG("PKCS #10 ERROR - pkcs10_encode_request_info: Could not encode version \n");
+    NRF_LOG_INFO("PKCS #10 ERROR - pkcs10_encode_request_info: Could not encode version \n");
     return res;
   }
   length += res;
@@ -249,14 +271,14 @@ pkcs10_encode_request_info(uint8_t **pos, uint8_t *start, x509_key_context *key_
                                    (ASN1_TAG_SEQUENCE | ASN1_P_C_BIT),
                                    length);
   if(res < 0) {
-    PKCS10_DBG("PKCS #10 ERROR - pkcs10_encode_request_info: Could not encode CertificationRequestInfo \n");
+    NRF_LOG_INFO("PKCS #10 ERROR - pkcs10_encode_request_info: Could not encode CertificationRequestInfo \n");
     return res;
   } else {
     length += res;
   }
 
 #if EST_DEBUG_PKCS10
-  PKCS10_DBG("pkcs10_encode_request_info encoded %d bytes\n", (int)length);
+  NRF_LOG_INFO("pkcs10_encode_request_info encoded %d bytes\n", (int)length);
 #endif
 
   return length;

@@ -43,8 +43,8 @@
 #ifndef EST_CMS_H
 #define EST_CMS_H
 
-#include "../est/est-asn1.h"
-#include "../est/est-x509.h"
+#include "est-asn1.h"
+#include "est-x509.h"
 
 #define CMS_DBG(...)
 
@@ -116,7 +116,7 @@ void cms_init(cms_signed_data *cms);
  *      content [0] EXPLICIT ANY DEFINED BY contentType }
  *
  * @param buffer the buffer that stores the CMS ContentInfo
- * @param buf_len the length of the ConentInfo
+ * @param buf_len the length of the ContentInfo
  * @param cms the structure to store the decoded ContentInfo
  * @return 0 if successful, -1 otherwise
  */

@@ -676,10 +676,10 @@ setup_pki(coap_context_t *ctx) {
 		 */
 		dtls_pki.verify_peer_cert = 1;
 		dtls_pki.require_peer_cert = 1;
-		dtls_pki.allow_self_signed = 0;
+		dtls_pki.allow_self_signed = 1; //TODO
 		dtls_pki.allow_expired_certs = 0;
-		dtls_pki.cert_chain_validation = 1;
-		dtls_pki.cert_chain_verify_depth = 2;
+		dtls_pki.cert_chain_validation = 1; //TODO
+		dtls_pki.cert_chain_verify_depth = 5; //TODO
 		dtls_pki.check_cert_revocation = 0;
 		dtls_pki.allow_no_crl = 1;
 		dtls_pki.allow_expired_crl = 1;
@@ -740,6 +740,7 @@ open_session(coap_context_t *ctx, coap_proto_t proto, coap_address_t *bind_addr,
 			coap_dtls_pki_t *dtls_pki = setup_pki(ctx);
 			session = coap_new_client_session_pki(ctx, bind_addr, dst, proto,
 					dtls_pki);
+			//coap_endpoint_set_default_mtu(session->endpoint, 1280); //TODO
 		} else {
 			/* No PKI or PSK defined, as encrypted, use PKI */
 			printf("ERROR must specify trust store and factory cert\n");
@@ -800,7 +801,7 @@ get_session(coap_context_t *ctx, const char *local_addr, const char *local_port,
 int set_pki_data(char *factory_cert_file, char *factory_key_file, char *r_ca_file, char *i_ca_file) {
 	cert_file = factory_cert_file;
 	cert_priv_buf = factory_key_file;
-	//root_ca_file = r_ca_file;
+	root_ca_file = r_ca_file;
 	ca_file = i_ca_file;
 
 	return 1;

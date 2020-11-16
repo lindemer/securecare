@@ -46,13 +46,8 @@
 #ifndef EST_H_
 #define EST_H_
 
-//#include "../est/est-x509.h"
 #include "stdint.h"
-
-#if 0 < WITH_COMPRESSION
-#include "cbor.h"
-#include "cn-cbor.h"
-#endif
+//#include "est-x509.h"
 
 /* Server default, override as needed */
 #ifdef EST_SERVER_CONF_IPV6
@@ -65,11 +60,16 @@
 #define EST_CLIENT_BUFFER_LENGTH 1024
 #endif
 
+#define COAP_CONTENT_FORMAT_CRTS 280
+#define COAP_CONTENT_FORMAT_PKCS10 286
+#define COAP_CONTENT_FORMAT_CBOREN 12001
+
 /*
  * START copied from other contiki files
  */
 #define EST_WITH_ECC 1
 #define UIP_802154_LONGADDR_LEN  8
+#define TEST_SUBJECT_LEN 16 //RISE Demo Server
 //#define LLADDR
 //extern uint8_t uip_lladdr[]; // = { 0xe,0x9,0xa,0xc,0x8,0x7,0xb,0x1 };
 
@@ -138,12 +138,13 @@ int est_process_enroll_response(uint8_t *buffer, uint16_t buf_len, unsigned char
  * @param buf_len the length of the buffer
  * @return length of the request if successful, 0 otherwise
  */
-uint16_t est_create_enroll_request(uint8_t *buffer, uint16_t buf_len); //, int is_skg_request);
-uint16_t est_create_enroll_request_cbor(uint8_t *buffer, uint16_t buf_len); //, int is_skg_request);
+int16_t est_create_enroll_request(uint8_t *buffer, uint16_t buf_len); //, int is_skg_request);
+int16_t est_create_enroll_request_cbor(uint8_t *buffer, uint16_t buf_len); //, int is_skg_request);
 
 void est_set_socket_callbacks(int (*setsockopt)(int level, int optname,
         void *optval, uint16_t optlen),
     int (*getsockopt)(int level, int optname,
          void *optval, uint16_t *optlen));
+
 
 #endif /* EST_H_ */

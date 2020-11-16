@@ -77,6 +77,10 @@
 #define ASN1_TAG_GENERALIZED_TIME        0x18
 #define ASN1_TAG_UNIVERSAL_STRING        0x1C
 
+#define ASN1_TAG_KEY_USAGE               "\x55\x1D\x0F"
+#define ASN1_TAG_KEY_USAGE_DIGITAL_SIGN  "\x03\x02\x07\x80"
+
+
 /* The Constructed bit is used when the ASN.1 structure holds further TLV values
    if it is 0 then the ASN.1 TLV is primative*/
 #define ASN1_P_C_BIT                    0x20

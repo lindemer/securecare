@@ -1,146 +1,157 @@
-#include "xiot.h"
-//#include "cn-cbor.h"
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
 
-//#include "est-x509.h"
+#include "xiot.h"
+//#include "cn-cbor.h"
+//#include "log.h"
+#if STANDALONE_VERSION
+#include "util/nrf_log_wrapper.h"
+#define LOG_MODULE "xiot"
+#ifdef LOG_CONF_LEVEL_XIOT
+#define LOG_LEVEL LOG_CONF_LEVEL_XIOT
+#else
+#define LOG_LEVEL LOG_LEVEL_DBG
+#endif
+#include "standalone_log.h"
+#else //== not standalone version
+//#define NRF_LOG_LEVEL 5
+//#define NRF_LOG_MODULE_NAME est
+#include "nrf_log_ctrl.h"
+#include "nrf_log.h"
+//NRF_LOG_MODULE_REGISTER();
+//#include "nrf_log_wrapper.h"
+#endif
+
+
+#include "est-asn1.h"
 //#include "sha.h"
 //#include "dtls.h"
 
 //#include "uECC.h"
 
-
-#if DEBUG_XIOT
-#define PRINTF(...) printf(__VA_ARGS__)
-static int debug_count = 0;
-#else
-#define PRINTF(...)
-#endif
-
 #define MAX_CHAIN_LEN 2
 #define MAX_EXT_PARTS 6
-static xiot_ext_t ext_storage[MAX_EXT_PARTS];
-static int x_freep = 0;
+//static xiot_ext_t ext_storage[MAX_EXT_PARTS];
+//static int x_freep = 0;
 
 // Helper functions
-time_t my_timegm (struct tm *tm) {
-    time_t ret;
-    //char *tz;
-    //tz = getenv("TZ");
-    //setenv("TZ", "GMT", 1);
-    //tzset();
-    //ret = ext_mktime(tm);
-    ret = ext_mktime(tm);
-//    if(tz)
-//        setenv("TZ", tz, 1);
-//    else
-//        unsetenv("TZ");
-//    tzset();
-    return ret; //ext_mktime(tm); //ret;
-}
+//time_t my_timegm (struct tm *tm) {
+//    time_t ret;
+//    //char *tz;
+//    //tz = getenv("TZ");
+//    //setenv("TZ", "GMT", 1);
+//    //tzset();
+//    //ret = ext_mktime(tm);
+//    ret = ext_mktime(tm);
+////    if(tz)
+////        setenv("TZ", tz, 1);
+////    else
+////        unsetenv("TZ");
+////    tzset();
+//    return ret; //ext_mktime(tm); //ret;
+//}
 
-static xiot_ext_t * get_ext_space(void) {
+//static xiot_ext_t * get_ext_space(void) {
+//
+//  xiot_ext_t* ext;
+//  ext = &ext_storage[x_freep]; /* WAS: calloc(1, sizeof(xiot_ext_t)); */
+//  memset(ext, 0, sizeof(xiot_ext_t));
+//  //printf("x_freep:%d ", x_freep);
+//  //hdump(ext, sizeof(xiot_ext_t));
+//
+//  x_freep = (x_freep + 1) % MAX_EXT_PARTS;
+//  return ext;
+//}
 
-  xiot_ext_t* ext;
-  ext = &ext_storage[x_freep]; /* WAS: calloc(1, sizeof(xiot_ext_t)); */
-  memset(ext, 0, sizeof(xiot_ext_t));
-  //printf("x_freep:%d ", x_freep);
-  //hdump(ext, sizeof(xiot_ext_t));
+//static size_t xiot_parse_eui64(char* buffer_out, char* buffer_in, size_t length)
+//{
+//    char tmp_str[3] = {0};
+//
+//    int in = 0;
+//    size_t out = 0;
+//    while(in < length){
+//        if(buffer_in[in] == '-'){
+//            in ++;
+//            continue;
+//        }
+//        strncpy(tmp_str, (char*) buffer_in+in, 2);
+//        buffer_out[out] = strtol(tmp_str, NULL, 16);
+//        in += 2;
+//        out ++;
+//    }
+//    return out;
+//}
 
-  x_freep = (x_freep + 1) % MAX_EXT_PARTS;
-  return ext;
-}
+//static xiot_ext_t* xiot_decode_extensions(uint8_t* buf, size_t length)
+//{
+//    xiot_ext_t* root = NULL;
+//
+//    // Helper temporaries
+//    int n = 0;
+//    xiot_ext_t* ext;
+//    xiot_ext_t* last;
+//
+//    // Loop over the buffer
+//    while(n < length){
+//        if(buf[n++] != 0x30 || buf[n] == 0x00){ // First byte not sequence or size equals 0
+//            break;
+//        }
+//
+//        if(buf[n] & 0x80){
+//            n += buf[n] & 0x7F; // Jump over the size
+//        }
+//        n++; // Jump to OID
+//
+//        if(buf[n++] != 0x06){ // First element always OID
+//            break;
+//        }
+//
+//
+//        // Create new xiot_ext_t
+//        ext = get_ext_space();
+//
+//        if(root == NULL){
+//            root = ext;
+//        } else {
+//            last->next = ext;
+//        }
+//        last = ext;
+//
+//        n += 3; // Jump to third byte of OID
+//        // Get the OID
+//        ext->oid = buf[n++];
+//
+//        // Check critical
+//        if(buf[n] == 0x01){ // If set should not be false, since explicit tagging
+//            ext->critical = true;
+//            n += 3;
+//        }
+//
+//        // Get value
+//        n++; // Don't care about tag
+//        ext->length = buf[n++];
+//        ext->value = &buf[n];
+//
+//        // Update for next extension
+//        n += ext->length;
+//        PRINTF("XIOT-DEBUG: Content of x_freep-1 after %d:\n", x_freep);
+//        //hdump(ext, sizeof(xiot_ext_t));
+//    }
+//
+//    return root;
+//}
 
-static size_t xiot_parse_eui64(char* buffer_out, char* buffer_in, size_t length)
-{
-    char tmp_str[3] = {0};
-        
-    int in = 0;
-    size_t out = 0;
-    while(in < length){
-        if(buffer_in[in] == '-'){
-            in ++;
-            continue;
-        }
-        strncpy(tmp_str, (char*) buffer_in+in, 2);
-        buffer_out[out] = strtol(tmp_str, NULL, 16);
-        in += 2;
-        out ++;
-    }
-    return out;
-}
-
-static xiot_ext_t* xiot_decode_extensions(uint8_t* buf, size_t length)
-{
-    xiot_ext_t* root = NULL;
-    
-    // Helper temporaries
-    int n = 0;
-    xiot_ext_t* ext;
-    xiot_ext_t* last;
-    
-    // Loop over the buffer
-    while(n < length){
-        if(buf[n++] != 0x30 || buf[n] == 0x00){ // First byte not sequence or size equals 0
-            break;
-        }
-        
-        if(buf[n] & 0x80){
-            n += buf[n] & 0x7F; // Jump over the size
-        }
-        n++; // Jump to OID
-        
-        if(buf[n++] != 0x06){ // First element always OID
-            break;
-        }
-
-
-        // Create new xiot_ext_t
-        ext = get_ext_space();
-
-        if(root == NULL){
-            root = ext;
-        } else {
-            last->next = ext;
-        }
-        last = ext;
-        
-        n += 3; // Jump to third byte of OID
-        // Get the OID
-        ext->oid = buf[n++];
-        
-        // Check critical
-        if(buf[n] == 0x01){ // If set should not be false, since explicit tagging
-            ext->critical = true;
-            n += 3;
-        }   
-        
-        // Get value
-        n++; // Don't care about tag
-        ext->length = buf[n++];
-        ext->value = &buf[n];
-        
-        // Update for next extension
-        n += ext->length;
-        PRINTF("XIOT-DEBUG: Content of x_freep-1 after %d:\n", x_freep);
-        //hdump(ext, sizeof(xiot_ext_t));
-    }
-    
-    return root;
-}
-
-static void xiot_free_extensions(xiot_ext_t* root)
-{
-    if(root){
-        if(root->next){
-            xiot_free_extensions(root->next);
-        }
-        //free(root);
-    }
-}
+//static void xiot_free_extensions(xiot_ext_t* root)
+//{
+//    if(root){
+//        if(root->next){
+//            xiot_free_extensions(root->next);
+//        }
+//        //free(root);
+//    }
+//}
 
 static int xiot_encode_length(uint8_t* buf, int length)
 {
@@ -201,7 +212,7 @@ static int xiot_encode_uint(uint8_t* buf, uint64_t integer)
     return n;
 }
 
-static int xiot_encode_cn(uint8_t* buf, const char* str, int length, uint8_t encoding, bool ca)
+static int xiot_encode_cn(uint8_t* buf, uint8_t* str, int length, uint8_t encoding, bool ca)
 {
    /*
     * Note: Will only work for strings of 
@@ -212,7 +223,8 @@ static int xiot_encode_cn(uint8_t* buf, const char* str, int length, uint8_t enc
     int encoded = 0;
 
     if(!ca){
-        length = 23; // 01-23-45-67-89-AB-CD-EF  
+        length = XIOT_EUI64_FULL_LEN;
+            //23; // 01-23-45-67-89-AB-CD-EF
     }
 
     buf[n++] = 0x30;
@@ -246,38 +258,43 @@ static int xiot_encode_cn(uint8_t* buf, const char* str, int length, uint8_t enc
         int i;
         uint8_t* tmp = (uint8_t*) str;
 
-        for(i = 0; i < 8; i++){
+        NRF_LOG_DEBUG("subject of len %d\n", XIOT_EUI64_SHORT_LEN);
+        //hdumps((const unsigned char*)tmp, XIOT_EUI64_SHORT_LEN);
+
+        for(i = 0; i < XIOT_EUI64_SHORT_LEN; i++){
             if(i != 0){
                 buf[n++] = '-';
             }
-
-            if(((tmp[i] >> 4) & 0x0F) < 0x0A){
-                buf[n++] = 0x30 + ((tmp[i] >> 4) & 0x0F);
-            } else {
-                buf[n++] = 0x37 + ((tmp[i] >> 4) & 0x0F);
-            }
-
-            if((tmp[i] & 0x0F) < 0x0A){
-                buf[n++] = 0x30 + (tmp[i] & 0x0F);
-            } else {
-                buf[n++] = 0x37 + (tmp[i] & 0x0F);
-            }            
+            snprintf((char *)buf+n, 3, "%02X", tmp[i]);
+            //printf("%02X ", tmp[i]);
+            n+=2;
+//            if(((tmp[i] >> 4) & 0x0F) < 0x0A){
+//                buf[n++] = 0x30 + ((tmp[i] >> 4) & 0x0F);
+//            } else {
+//                buf[n++] = 0x37 + ((tmp[i] >> 4) & 0x0F);
+//            }
+//
+//            if((tmp[i] & 0x0F) < 0x0A){
+//                buf[n++] = 0x30 + (tmp[i] & 0x0F);
+//            } else {
+//                buf[n++] = 0x37 + (tmp[i] & 0x0F);
+//            }
         }
     }
 
     return n;
 }
 
-static int xiot_encode_validity(uint8_t* buf, time_t not_before, time_t not_after)
+static int xiot_encode_validity(uint8_t* buf, struct tm not_before, struct tm not_after)
 {
     /*
     * Note: Will only work for dates
-    * with year greater than 2000. 
+    * with year greater than 2000.
     */
     int n = 0;
     struct tm *info;
-    static struct tm input[2];
-    time_t times[2] = {not_before, not_after};
+    //static struct tm input[2];
+    struct tm times[2] = {not_before, not_after};
 
     buf[n++] = 0x30;
     buf[n++] = 0x1E; // 0x1E if seconds, 0x1A if not
@@ -285,9 +302,9 @@ static int xiot_encode_validity(uint8_t* buf, time_t not_before, time_t not_afte
     int i;
     for(i = 0; i < 2; i++){
         //info = my_gmtime(&times[i], &input[i]); //Joel-TODO
-        info = gmtime_r(&times[i], &input[i]); //Joel-TODO
+        info = &times[i]; //gmtime_r(&times[i], &input[i]); //Joel-TODO
 
-        printf("Time: %d %d %d %d %d %d\n", info->tm_year, info->tm_mon, info->tm_mday, info->tm_hour, info->tm_min, info->tm_sec);
+        //printf("Time: %d %d %d %d %d %d\n", info->tm_year, info->tm_mon, info->tm_mday, info->tm_hour, info->tm_min, info->tm_sec);
         buf[n++] = 0x17;
         buf[n++] = 0x0D; // 0x0D if seconds, 0x0B if not
         buf[n++] = 0x30 + (info->tm_year-100)/10;
@@ -353,12 +370,18 @@ static int xiot_encode_extension(uint8_t* buf, const uint8_t* value, int length,
 
     buf[n++] = 0x04;
 
-    encoded = xiot_encode_length(&buf[n], length);
-    n += encoded;
+    if(length) {
 
-    memcpy(&buf[n], value, length);
-    n += length;
-
+      encoded = xiot_encode_length(&buf[n], length);
+      n += encoded;
+//      printf("Checking ext. value:\n");
+//      hdumps(value, length);
+//      printf("\n");
+      memcpy(&buf[n], value, length);
+      n += length;
+    } else {
+      NRF_LOG_DEBUG("extension with len 0");
+    }
     return n;
 }
 
@@ -375,9 +398,13 @@ static size_t xiot_construct_tbs(uint8_t* buf, xiot_cert_t* cert)
         buf[n++] = XIOT_VERSION_INSERT[i];
     }
 
+    NRF_LOG_DEBUG("XIOT_VERSION_INSERT done\n");
+
     // Serial number
-    encoded = xiot_encode_uint(&buf[n], cert->serial_number);
+    encoded = xiot_encode_uint(&buf[n], (uint64_t)cert->serial_number);
     n += encoded;
+
+    NRF_LOG_DEBUG("xiot_encode_uint done\n");
 
     // Signature
     for(i = 0; i < strlen(XIOT_SIG_ALG_INSERT); i++){
@@ -394,6 +421,7 @@ static size_t xiot_construct_tbs(uint8_t* buf, xiot_cert_t* cert)
 
     // Subject
     encoded = xiot_encode_cn(&buf[n], cert->subject, cert->subject_length, XIOT_SUBJECT_STRING_ENCODING, cert->subject_ca);
+    NRF_LOG_DEBUG("xiot_encode_cn done: %d\n", encoded);
     n += encoded;
 
     // Subject public key info
@@ -402,6 +430,7 @@ static size_t xiot_construct_tbs(uint8_t* buf, xiot_cert_t* cert)
 
     // Extensions
     if(cert->extensions != NULL){
+
         int size = 0;
         int sizepos;
 
@@ -412,7 +441,9 @@ static size_t xiot_construct_tbs(uint8_t* buf, xiot_cert_t* cert)
 
         xiot_ext_t* extension = cert->extensions;
 
+
         while(extension != NULL){
+          NRF_LOG_DEBUG("handle extensions: extension->length = %lu\n", extension->length);
             encoded = xiot_encode_extension(
                     &buf[n],
                     extension->value, 
@@ -477,7 +508,7 @@ static size_t xiot_construct_signature(uint8_t* buf, const uint8_t* signature)
 
     return n;
 }
-//#if 0 < uECC
+#if 0 < uECC
 static size_t xiot_sign_tbs(uint8_t* signature, const uint8_t* tbs_cert, size_t tbs_length, const uint8_t* private_key)
 {
     const struct uECC_Curve_t* curve;
@@ -513,7 +544,7 @@ static size_t xiot_sign_tbs(uint8_t* signature, const uint8_t* tbs_cert, size_t 
 
     return 32;
 }
-//#endif //end of if WITH_ECC
+#endif //end of if WITH_ECC
 
 // Library funtions
 //size_t xiot_compress(uint8_t* compressed, const uint8_t* uncompressed, size_t length)
@@ -964,6 +995,7 @@ static size_t xiot_sign_tbs(uint8_t* signature, const uint8_t* tbs_cert, size_t 
 
 size_t xiot_construct(uint8_t* decompressed, xiot_cert_t* cert, uint8_t* ca_private)
 {
+  NRF_LOG_DEBUG("Let's get started\n");
     int encoded;
     int n = 0;
     int i;
@@ -985,19 +1017,23 @@ size_t xiot_construct(uint8_t* decompressed, xiot_cert_t* cert, uint8_t* ca_priv
     }
 
     // Construct sign
-    if(cert->signature[0] == 0){
-        uint8_t signature[64];
-        if(xiot_sign_tbs(signature, &buf[2], encoded, ca_private) == 0){
-            return 0;
-        }
-        encoded = xiot_construct_signature(&buf[n], signature);
-        n += encoded;
+    if(cert->signature[0] == 0){ //Decompressed signature is not provided by caller, needs to be reconstructed
+      //TODO
+      NRF_LOG_ERROR("Cannot reconstruct sign\n");
+      return -1;
+//        uint8_t signature[64];
+//        if(xiot_sign_tbs(signature, &buf[2], encoded, ca_private) == 0){
+//            return 0;
+//        }
+//        encoded = xiot_construct_signature(&buf[n], signature);
+//        n += encoded;
 
     } else {
+      NRF_LOG_DEBUG("Reconstruct ASN1 signature data\n");
         encoded = xiot_construct_signature(&buf[n], cert->signature);
         n += encoded;
     }
-
+    //NRF_LOG_DEBUG("Hepp\n");
     // Set length
     static uint8_t length[8];
     encoded = xiot_encode_length(length, n-2);

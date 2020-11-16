@@ -6,6 +6,8 @@
 #include <time.h>
 #include <stdbool.h>
 
+#include "est-asn1.h"
+
 /* String type defines */
 #define XIOT_ISSUER_STRING_ENCODING ASN1_TAG_UTF8_STRING
 #define XIOT_SUBJECT_STRING_ENCODING ASN1_TAG_UTF8_STRING
@@ -18,29 +20,37 @@
 #define XIOT_MAX_COMPRESSED     512
 #define XIOT_MAX_DECOMPRESSED   1024
 
+#define XIOT_EUI64_FULL_LEN     23
+#define XIOT_EUI64_SHORT_LEN    8
+
+#define XIOT_MAX_EXT_VALUE_LENGTH 8
+
 /* Constants to insert when constructing X.509 certificates */
 #define XIOT_VERSION_INSERT     "\xA0\x03\x02\x01\x02"
 #define XIOT_SIG_ALG_INSERT     "\x30\x0A\x06\x08\x2A\x86\x48\xCE\x3D\x04\x03\x02"
-#define XIOT_SUB_PUB_INSERT     "\x30\x59\x30\x13\x06\x07\x2A\x86\x48\xCE\x3D\x02\x01\x06\x08\x2A\x86\x48\xCE\x3D\x03\x01\x07\x03\x42"  
+#define XIOT_SUB_PUB_INSERT     "\x30\x59\x30\x13\x06\x07\x2A\x86\x48\xCE\x3D\x02\x01\x06\x08\x2A\x86\x48\xCE\x3D\x03\x01\x07\x03\x42"
+
+//#define XIOT_DIGITAL
 
 /* Structure to hold extensions */
 typedef struct xiot_ext{
-    uint8_t         oid;
-    bool            critical;
-    uint8_t*        value;
-    size_t          length;
-    struct xiot_ext* next; 
+    uint8_t                                   oid;
+    bool                                      critical;
+    uint8_t                                   value[XIOT_MAX_EXT_VALUE_LENGTH];
+    size_t                                    length;
+    struct xiot_ext*                          next;
 }xiot_ext_t;
 
 /* Structure to hold decoded certificates */
 typedef struct xiot_cert{
-    uint32_t        serial_number;
+    uint32_t        serial_number; //32 or 64? //TODO
     //uint32_t        serial_number;
-    char            issuer[XIOT_MAX_SUBJECT_LENGTH];
+    uint8_t         issuer[XIOT_MAX_SUBJECT_LENGTH];
     size_t          issuer_length;
     struct tm       not_before;
     struct tm       not_after;
-    char            subject[XIOT_MAX_SUBJECT_LENGTH];
+    uint8_t         subject[XIOT_MAX_SUBJECT_LENGTH];
+    //char?
     size_t          subject_length;
     bool            subject_ca;
     uint8_t         public_key[64];
@@ -119,6 +129,20 @@ int xiot_verify_validity(xiot_cert_t* cert, time_t time);
 time_t ext_mktime(struct tm *tmbuf); //well, need to be somewhere
 
 //void hdump(const unsigned char *packet, int length);
+
+static inline uint32_t uint16_to_int(const unsigned char *field)
+{
+  return ((uint32_t)field[0] << 8)
+   | (uint32_t)field[1];
+
+}
+
+static inline uint32_t uint24_to_int(const unsigned char *field)
+{
+  return ((uint32_t)field[0] << 16)
+   | ((uint32_t)field[1] << 8)
+   | (uint32_t)field[2];
+}
 
 static inline uint32_t uint32_to_int(const unsigned char *field)
 {

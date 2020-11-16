@@ -50,13 +50,20 @@
 #include "est-x509.h"
 
 
-#include "log.h"
-
+#if STANDALONE_VERSION
+#include "util/nrf_log_wrapper.h"
 #define LOG_MODULE "cms"
-#ifdef LOG_CONF_LEVEL_EST_CMS
-#define LOG_LEVEL LOG_CONF_LEVEL_EST_CMS
+#ifdef LOG_CONF_LEVEL_EST_ASN1
+#define LOG_LEVEL LOG_CONF_LEVEL_EST_ASN1
 #else
-#define LOG_LEVEL LOG_LEVEL_DBG
+#define LOG_LEVEL LOG_LEVEL_ERR //DBG
+#endif
+#include "util/standalone_log.h"
+#else
+#define NRF_LOG_MODULE_NAME cms
+#include "nrf_log.h"
+NRF_LOG_MODULE_REGISTER();
+//#include "util/nrf_log_wrapper.h"
 #endif
 
 /*----------------------------------------------------------------------------*/
@@ -65,12 +72,12 @@ cms_init(cms_signed_data *cms)
 {
   memset(cms, 0, sizeof(cms_signed_data));
 #if EST_DEBUG_CMS
-  LOG_DBG("CMS Response at %p initialized\n", cms);
+  NRF_LOG_DEBUG("CMS Response at %p initialized\n", cms);
 #endif
 }
 /*----------------------------------------------------------------------------*/
 int
-cms_decode_content_info(uint8_t *buffer, uint16_t buf_len, uint8_t *cert_buffer, int *certificate_len, cms_signed_data *cms)
+cms_decode_content_info(uint8_t *buffer, uint16_t buf_len, uint8_t *resulting_raw_cert_buffer, int *certificate_len, cms_signed_data *cms)
 {
   int res = 0;
   uint8_t *pos;
@@ -85,16 +92,16 @@ cms_decode_content_info(uint8_t *buffer, uint16_t buf_len, uint8_t *cert_buffer,
   /* Decode ContentInfo Sequence */
   res = asn1_decode_tag(&pos, end, &length, (ASN1_TAG_SEQUENCE | ASN1_P_C_BIT));
   if(res < 0) {
-    LOG_ERR("cms_decode_content_info: Malformed ContentInfo\n");
+    NRF_LOG_ERROR("cms dci - Malformed ContentInfo\n");
     return res;
   }
 
-  LOG_DBG("cms_decode_content_info - ContentInfo Sequence decoded\n");
+  NRF_LOG_DEBUG("cms dci - ContentInfo Sequence decoded\n");
 
   /* Decode ContentType OID */
   res = asn1_decode_tag(&pos, end, &content_type_oid.length, ASN1_TAG_OID);
   if(res < 0) {
-    LOG_ERR("cms_decode_content_info: Could not decode ContentType OID\n");
+    NRF_LOG_ERROR("cms dci - Could not decode ContentType OID\n");
     return res;
   }
   content_type_oid.tag = ASN1_TAG_OID;
@@ -103,51 +110,49 @@ cms_decode_content_info(uint8_t *buffer, uint16_t buf_len, uint8_t *cert_buffer,
   /* Advance to the next tag */
   pos += content_type_oid.length;
 
-  LOG_DBG("cms_decode_content_info - ContentType OID decoded\n");
-
   /* Content */
   if(oid_cmp(OID_ID_SIGNED_DATA, content_type_oid.value, content_type_oid.length) == 0) {
-    LOG_DBG("cms_decode_content_info - ContentType is SignedData\n");
+    NRF_LOG_DEBUG("cms_decode_content_info - ContentType is SignedData\n");
 
     /* Remove the explicit tag if it is there */
     res = asn1_decode_tag(&pos, end, &length,
                           (ASN1_CLASS_CONTEXT_SPECIFIC | ASN1_P_C_BIT));
     if(res < 0) {
-      LOG_WARN("Explicit tag missing, try to continue\n");
+      NRF_LOG_WARNING("cms dci - Explicit tag missing, try to continue\n");
     }
 
-    res = cms_decode_signed_data(&pos, end, cert_buffer, certificate_len, cms);
-
-    if(res < 0) {
-      LOG_ERR("cms_decode_content_info - Could not decode signed data\n");
-      return res;
-    }
-
-    LOG_DBG("cms_decode_content_info - Signed Data Decoded\n");
 
   } else {
-    LOG_ERR("cms_decode_content_info - Unsupported or unknown tag\n");
+    NRF_LOG_ERROR("cms dci - Unsupported or unknown tag\n");
     return -1;
+  }
+
+  res = cms_decode_signed_data(&pos, end, resulting_raw_cert_buffer, certificate_len, cms);
+
+  if(res < 0) {
+    NRF_LOG_ERROR("cms dci - Could not decode signed data\n");
+    return res;
   }
 
   if(pos != end) {
-    LOG_ERR("cms_decode_content_info - Not all data decoded!\n");
+    NRF_LOG_ERROR("cms dci - Not all data decoded!\n");
     return -1;
   }
 #if EST_DEBUG_CMS
-  LOG_DBG("cms_decode_content_info - All Data Decoded\n");
+  NRF_LOG_DEBUG("cms dci - All Data Decoded\n");
   hdump(pos-325, 325);
-
+#else
+  NRF_LOG_DEBUG("cms dci - decoded\n");
 #endif
 
-  /* If we are here then the message should be decoded */
+  /* If we are here then the message should be fully decoded */
   return 0;
 }
 /*----------------------------------------------------------------------------*/
 int
 cms_decode_signed_data(uint8_t **pos, uint8_t *end, uint8_t *cert_buf, int *certificates_len, cms_signed_data *cms)
 {
-  LOG_DBG("cms_decode_signed_data START\n");
+  NRF_LOG_DEBUG("cms dsd START\n");
   int res = 0;
   uint16_t length = 0;
   uint32_t CMSVersion = 0;
@@ -158,34 +163,34 @@ cms_decode_signed_data(uint8_t **pos, uint8_t *end, uint8_t *cert_buf, int *cert
   /* Decode version */
   res = cms_decode_version(pos, end, &CMSVersion);
   if((res < 0) || (cms_verify_version(CMSVersion) < 0)) {
-    LOG_ERR("cms_decode_signed_data - could not verify version\n");
-    return res;
+    NRF_LOG_ERROR("cms dsd - could not verify version\n");
+    return -21;
   }
 
-  LOG_DBG("cms_decode_signed_data - Signed Data Version Decoded\n");
+  //NRF_LOG_DEBUG("cms dsd - version decoded\n");
 
 
   /* Decode digestAlgorithms constructed set SHOULD be empty e.g. with a length of zero */
   res = asn1_decode_tag(pos, end, &length, (ASN1_TAG_SET | ASN1_P_C_BIT));
   if(res < 0) {
-    LOG_ERR("WARNING: cms_decode_signed_data - could not decode digestAlgorithms\n");
+    NRF_LOG_ERROR("WARNING: cms dsd - could not decode digestAlgorithms\n");
   }
   if(length != 0) {
-    LOG_ERR("WARNING: cms_decode_signed_data - digestAlgorithm not empty, try to continue\n");
+    NRF_LOG_ERROR("WARNING: cms dsd - digestAlgorithm not empty, try to continue\n");
     pos += length;
   }
 
-  LOG_DBG("cms_decode_signed_data - Signed Data digestAlgorithms Decoded\n");
+  //NRF_LOG_DEBUG("cms dsd - digestAlgorithms Decoded\n");
 
 
   /* Decode encapContentInfo constructed sequence */
   /* Decode and verify that OID is OID_ID_DATA */
   res = cms_decode_and_verify_encapContentInfo(pos, end, OID_ID_DATA);
   if(res < 0) {
-    LOG_DBG("CMS ERROR: cms_decode_signed_data - could not decode encapContentInfo\n");
-    return res;
+    NRF_LOG_DEBUG("CMS ERROR: cms dsd - could not decode encapContentInfo\n");
+    return -22;
   }
-  LOG_DBG("cms_decode_signed_data - Signed Data encapContentInfo Decoded\n");
+  //NRF_LOG_DEBUG("cms dsd - encapContentInfo Decoded\n");
 
 
   /* Decode implicit tag 0 */
@@ -194,27 +199,33 @@ cms_decode_signed_data(uint8_t **pos, uint8_t *end, uint8_t *cert_buf, int *cert
   res = asn1_decode_tag(pos, end, &length,
                         (ASN1_CLASS_CONTEXT_SPECIFIC | ASN1_P_C_BIT));
   if(res < 0) {
-    LOG_WARN("WARNING: cms_decode_signed_data - Explicit tag missing, try to continue\n");
+    NRF_LOG_WARNING("WARNING: cms dsd - Explicit tag missing, try to continue\n");
   }
 
   /* Update and initalize */
-  uint8_t *certificates_end;
 
+  /* Instead of end here we use pos + length so we know when we have reached
+     the end of the list of certificates */
+
+  uint8_t *certificates_end;
   certificates_end = *pos + length;
+
+  /*
+   * Here is the place to store away the "raw" certificate data,
+   * before further parsing
+   */
   size_t clen = certificates_end-*pos;
   memcpy(cert_buf, *pos, clen);
   *certificates_len = (int)clen;
 
-  /* Instead of end here we use pos + length so we know when we have reached
-     the end of the list of certificates */
   res = x509_decode_certificate_sequence(pos, certificates_end, &cms->head);
 
   if((res < 0)) {
-    LOG_ERR("cms_decode_signed_data - Could not decode certificates\n");
+    NRF_LOG_ERROR("cms dsd - Could not decode certificates\n");
     return res;
   }
 
-  LOG_DBG("cms_decode_signed_data - Signed Data certificates Decoded\n");
+  NRF_LOG_DEBUG("cms dsd - cert decoded\n");
 
 
   /* Decode implicit tag 1, if it is not there => continue */
@@ -222,25 +233,22 @@ cms_decode_signed_data(uint8_t **pos, uint8_t *end, uint8_t *cert_buf, int *cert
   if(**pos == (ASN1_CLASS_CONTEXT_SPECIFIC | ASN1_P_C_BIT | 0x01)) {
     res = asn1_decode_tag(pos, end, &length, (ASN1_CLASS_CONTEXT_SPECIFIC | ASN1_P_C_BIT | 0x01));
     if(res < 0) {
-      LOG_ERR("cms_decode_signed_data - Could not decode crls\n");
-      return res;
+      NRF_LOG_ERROR("cms dsd - Could not decode crls\n");
+      return -23;
     }
     /* Skip over the crls field */
     (*pos) += length;
   }
 
-  LOG_DBG("cms_decode_signed_data - Signed Data CRLs Decoded\n");
-
-
   /* Decode signerInfos, SHOULD be an empty constructed set if not empty ignore */
   res = asn1_decode_tag(pos, end, &length, (ASN1_TAG_SET | ASN1_P_C_BIT));
   if(res < 0) {
-    LOG_ERR("WARNING: cms_decode_signed_data - Could not decode signerInfos\n");
+    NRF_LOG_ERROR("WARNING: cms dsd - Could not decode signerInfos\n");
     res = 0;
     length = 0;
   }
   (*pos) += length;
-  LOG_DBG("cms_decode_signed_data - Signed Data signerInfos Decoded\n");
+  NRF_LOG_DEBUG("cms dsd - signerInfos Decoded\n");
 
   return 0;
 }
@@ -266,7 +274,7 @@ cms_verify_version(uint32_t CMSVersion)
   case CMS_VERSION_5:
     break;
   default:
-    LOG_DBG("CMS ERROR: cms_verify_version - Unsupported version %u\n", (int)CMSVersion);
+    NRF_LOG_DEBUG("CMS ERROR: cms_verify_version - Unsupported version %u\n", (int)CMSVersion);
     return -1;
   }
 
@@ -287,11 +295,11 @@ cms_decode_and_verify_encapContentInfo(uint8_t **pos, uint8_t *end, char *str_oi
   /* Decode EncapsulatedContentInfo sequence */
   res = asn1_decode_tag(pos, end, &seq_len, (ASN1_TAG_SEQUENCE | ASN1_P_C_BIT));
   if(res < 0) {
-    LOG_DBG("CMS ERROR: cms_decode_and_verify_encapContentInfo - could not decode EncapsulatedContentInfo sequence\n");
+    NRF_LOG_DEBUG("CMS ERROR: cms_decode_and_verify_encapContentInfo - could not decode EncapsulatedContentInfo sequence\n");
     return res;
   }
 #if EST_DEBUG_CMS
-  LOG_DBG("cms_decode_and_verify_encapContentInfo - EncapsulatedContentInfo Sequence Decoded\n");
+  NRF_LOG_DEBUG("cms_decode_and_verify_encapContentInfo - EncapsulatedContentInfo Sequence Decoded\n");
 #endif
   seq_len += (*pos - content_info_start);   /* length of tag and length */
 
@@ -299,11 +307,11 @@ cms_decode_and_verify_encapContentInfo(uint8_t **pos, uint8_t *end, char *str_oi
   content_type.tag = ASN1_TAG_OID;
   res = asn1_decode_tag(pos, end, &content_type.length, content_type.tag);
   if(res < 0) {
-    LOG_DBG("CMS ERROR: cms_decode_and_verify_encapContentInfo - eContentType could not be decoded\n");
+    NRF_LOG_DEBUG("CMS ERROR: cms_decode_and_verify_encapContentInfo - eContentType could not be decoded\n");
     return res;
   }
 #if EST_DEBUG_CMS
-  LOG_DBG("cms_decode_and_verify_encapContentInfo -  eContentType OID Decoded\n");
+  NRF_LOG_DEBUG("cms_decode_and_verify_encapContentInfo -  eContentType OID Decoded\n");
 #endif
 
   /* Get the value and update position pointer */
@@ -312,7 +320,7 @@ cms_decode_and_verify_encapContentInfo(uint8_t **pos, uint8_t *end, char *str_oi
 
   /* Check if it is the expected eContentType*/
   if(oid_cmp(str_oid, content_type.value, content_type.length) < 0) {
-    LOG_DBG("CMS ERROR: cms_decode_and_verify_encapContentInfo - unsupported eContentType\n");
+    NRF_LOG_DEBUG("CMS ERROR: cms_decode_and_verify_encapContentInfo - unsupported eContentType\n");
     return -1;
   }
 
@@ -325,11 +333,11 @@ cms_decode_and_verify_encapContentInfo(uint8_t **pos, uint8_t *end, char *str_oi
   if(**pos == (ASN1_CLASS_CONTEXT_SPECIFIC | ASN1_P_C_BIT)) {
     res = asn1_decode_tag(pos, end, &length, (ASN1_CLASS_CONTEXT_SPECIFIC | ASN1_P_C_BIT));
     if(res < 0) {
-      LOG_DBG("CMS ERROR: cms_decode_and_verify_encapContentInfo - Could not decode [0]\n");
+      NRF_LOG_DEBUG("CMS ERROR: cms_decode_and_verify_encapContentInfo - Could not decode [0]\n");
       return res;
     }
 #if EST_DEBUG_CMS
-    LOG_DBG("cms_decode_and_verify_encapContentInfo - eContent explicit [0] tag Decoded\n");
+    NRF_LOG_DEBUG("cms_decode_and_verify_encapContentInfo - eContent explicit [0] tag Decoded\n");
 #endif
 
     /* Skip over the eContent field because we don't support it */

@@ -2,7 +2,19 @@ PROJECT_NAME     := app
 TARGETS          := app
 OUTPUT_DIRECTORY := build
 
+ifeq ($(SOT), 0)
+ ${info Compiling with standard Openthread binaries, original config}
+SDK_ROOT := /home/ubuntu/nRF5_SDK_0
+else
+ifeq ($(SOT), 1)
+ ${info Compiling with standard Openthread binaries, modified config}
+SDK_ROOT := /home/ubuntu/nRF5_SDK_1
+else
+${info Compiling with custom Openthread binaries}
 SDK_ROOT := ${NRF5_SDK}
+endif
+endif
+
 PROJ_DIR := .
 KEYS_DIR := ../../../key
 
@@ -171,6 +183,24 @@ INC_FOLDERS += \
   $(SDK_ROOT)/components/libraries/crypto/backend/oberon \
 
 # Libraries common to all targets
+
+ifeq ($(CB), 1)
+${info "Compiling with software backend"}
+LIB_FILES += \
+  $(SDK_ROOT)/external/openthread/lib/nrf52840/gcc/libopenthread-cli-ftd.a \
+  $(SDK_ROOT)/external/openthread/lib/nrf52840/gcc/libopenthread-ftd.a \
+  $(SDK_ROOT)/external/openthread/lib/nrf52840/gcc/libopenthread-nrf52840-transport.a \
+  $(SDK_ROOT)/external/openthread/lib/nrf52840/gcc/libopenthread-platform-utils.a \
+  $(SDK_ROOT)/external/openthread/lib/nrf52833/gcc/libmbedcrypto.a \
+  $(SDK_ROOT)/external/openthread/lib/nrf52840/gcc/libopenthread-nrf52840-sdk.a \
+  $(SDK_ROOT)/external/openthread/lib/nrf52840/gcc/libnordicsemi-nrf52840-radio-driver.a \
+  $(SDK_ROOT)/external/micro-ecc/nrf52hf_armgcc/armgcc/micro_ecc_lib_nrf52.a \
+  $(SDK_ROOT)/external/nrf_oberon/lib/cortex-m4/hard-float/liboberon_3.0.3.a \
+  $(SDK_ROOT)/external/openthread/lib/nrf52840/gcc/libopenthread-nrf52840-transport.a \
+  $(SDK_ROOT)/external/openthread/lib/nrf52840/gcc/libopenthread-platform-utils.a \
+#$(SDK_ROOT)/external/openthread/lib/nrf52833/gcc/libmbedcrypto.a \#sic, see software only instructions
+else 
+${info "Compiling with pre-compiled libs"}
 LIB_FILES += \
   $(SDK_ROOT)/external/openthread/lib/nrf52840/gcc/libopenthread-cli-ftd.a \
   $(SDK_ROOT)/external/openthread/lib/nrf52840/gcc/libopenthread-ftd.a \
@@ -179,6 +209,7 @@ LIB_FILES += \
   $(SDK_ROOT)/external/nrf_security/lib/libmbedcrypto_glue.a \
   $(SDK_ROOT)/external/nrf_security/lib/libmbedcrypto_glue_cc310.a \
   $(SDK_ROOT)/external/nrf_security/lib/libmbedcrypto_glue_vanilla.a \
+  $(SDK_ROOT)/external/nrf_security/lib/libmbedtls_base_vanilla.a \
   $(SDK_ROOT)/external/nrf_security/lib/libmbedcrypto_vanilla_backend.a \
   $(SDK_ROOT)/external/nrf_security/lib/libmbedtls_tls_vanilla.a \
   $(SDK_ROOT)/external/nrf_security/lib/libmbedtls_x509_vanilla.a \
@@ -199,8 +230,9 @@ LIB_FILES += \
   $(SDK_ROOT)/external/nrf_security/lib/libmbedtls_base_vanilla.a \
   $(SDK_ROOT)/external/nrf_security/lib/libmbedtls_tls_vanilla.a \
   $(SDK_ROOT)/external/nrf_security/lib/libmbedtls_x509_vanilla.a \
-  $(SDK_ROOT)/external/nrf_security/lib/libnrf_cc310_platform_0.9.2.a \
-  $(SDK_ROOT)/external/openthread/lib/nrf52840/gcc/libopenthread-ftd.a \
+  $(SDK_ROOT)/external/nrf_security/lib/libnrf_cc310_platform_0.9.2.a 
+  
+endif
 
 # Optimization flags
 OPT = -O3 -g3

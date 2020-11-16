@@ -60,7 +60,7 @@
 #ifdef X509_CONF_MAX_STORED_CERTIFICATES
 #define X509_MAX_STORED_CERTIFICATES X509_CONF_MAX_STORED_CERTIFICATES
 #else
-#define X509_MAX_STORED_CERTIFICATES 6 /**<- The number of certificates that are allocated default 6 */
+#define X509_MAX_STORED_CERTIFICATES 3 /**<- The number of certificates that are allocated default 6 */
 #endif
 
 #define X509_MAX_CHAIN_LENGTH 3
@@ -70,8 +70,15 @@
 #define X509_MIN_YEAR 1900
 #define X509_MAX_YEAR 3000
 
-#define X509_EUI64_SUBJECT_SIZE 34 /**<- The size of the buffer to store the EUI-64 subject */
-#define X509_CBOR_EUI64_SUBJECT_SIZE 8 /** 6 or 8 */
+#define X509_EUI64_SUBJECT_SIZE 34 /**<- The size of the buffer to store the EUI-64 subject: 34 = 23 + 11 (11-22-33-44-55-66-77-88) */
+#define TEST_ENROLL_SUBJECT_SIZE 29 //TODO /**<- The size of the buffer to store the test subject */
+#if TEST_ENROLL_SUBJECT
+#define ENROLL_SUBJECT_SIZE TEST_ENROLL_SUBJECT_SIZE
+#else
+#define ENROLL_SUBJECT_SIZE X509_EUI64_SUBJECT_SIZE
+#endif
+
+//#define X509_CBOR_EUI64_SUBJECT_SIZE 8 /** 6 or 8 */
 
 #define X509_EUI64_DELIM "-"
 
@@ -320,6 +327,7 @@ int x509_memb_remove_certificates(x509_certificate *cert);
  * @param value_length the size of the value buffer
  */
 int x509_set_eui64_subject(asn1_tlv *subject, uint8_t *value, uint16_t value_length);
+int x509_set_subject(asn1_tlv *subject, uint8_t *value, uint16_t value_length);
 
 /******************************************************************************
  * X.509 Decode/Encode functions
@@ -561,7 +569,7 @@ int x509_encode_signature(uint8_t **sign_pos, uint8_t *sign_start, uint8_t *buff
  * @return 0 if the signature verification was successful, -1 otherwise
  */
 int x509_verify_signature(uint8_t *buffer, uint16_t buf_len, uint8_t *sign_start,
-                          uint16_t sign_len, x509_key_context *pk_ctx);
+                          uint16_t sign_len, x509_key_context *pk_ctx, int flag);
 
 /**
  * Decodes a signature bit-string
@@ -638,7 +646,7 @@ int x509_decode_signature_component(uint8_t **sign_pos, uint8_t *sign_end,
  */
 int x509_verify_ecdsa_signature(uint8_t *buffer, uint16_t buf_len,
                                 uint8_t *sign_start, uint16_t sign_len, uint8_t num_words,
-                                x509_key_context *pk_ctx);
+                                x509_key_context *pk_ctx, int flag);
 
 /**
  * Finds the public key components
@@ -732,18 +740,18 @@ int x509_verify_validity(x509_validity *cert_validity, x509_time *current_time);
  */
 int x509_verify_valid_time(x509_time *time);
 
-/**
- * Verifies a signature that was calculated over the the data in [buffer; sign_start -1]
- * with the public key stored in pk_ctx
- * @param buffer contains the data that was signed and the signature
- * @param buf_len total length of data
- * @param sign_start the position in buffer where the signature starts
- * @param sign_len the length of the signature
- * @param pk_ctx a public key context that is used to verify the signature
- * @return 0 if the signature verification was successful, -1 otherwise
- */
-int x509_verify_signature(uint8_t *buffer, uint16_t buf_len, uint8_t *sign_start,
-                          uint16_t sign_len, x509_key_context *pk_ctx);
+///**
+// * Verifies a signature that was calculated over the the data in [buffer; sign_start -1]
+// * with the public key stored in pk_ctx
+// * @param buffer contains the data that was signed and the signature
+// * @param buf_len total length of data
+// * @param sign_start the position in buffer where the signature starts
+// * @param sign_len the length of the signature
+// * @param pk_ctx a public key context that is used to verify the signature
+// * @return 0 if the signature verification was successful, -1 otherwise
+// */
+//int x509_verify_signature(uint8_t *buffer, uint16_t buf_len, uint8_t *sign_start,
+//                          uint16_t sign_len, x509_key_context *pk_ctx);
 
 /**
  * Verifies the status of a certificate e.g. if the certificate is revoked or not.
@@ -797,9 +805,9 @@ int x509_cert_is_self_signed(x509_certificate *cert);
  * @param pk_ctx the public key context to verify the signature
  * @return 0 if the verification was successful, -1 otherwise
  */
-int x509_verify_ecdsa_signature(uint8_t *buffer, uint16_t buf_len,
-                                uint8_t *sign_start, uint16_t sign_len, uint8_t num_words,
-                                x509_key_context *pk_ctx);
+//int x509_verify_ecdsa_signature(uint8_t *buffer, uint16_t buf_len,
+//                                uint8_t *sign_start, uint16_t sign_len, uint8_t num_words,
+//                                x509_key_context *pk_ctx);
 
 #endif /* EST_WITH_ECC */
 
@@ -850,7 +858,7 @@ int x509_date_compare_to(x509_time *time1, x509_time *time2);
  *        -1 if the time in time1 is before the time in time2
  */
 int x509_time_compare_to(x509_time *time1, x509_time *time2);
-
+int x509_time_compare_to_upto_min(x509_time *time1, x509_time *time2);
 /**
  * Print current time
  */
@@ -865,5 +873,7 @@ void x509_set_ctime(char *str);
  * Get current time
  */
 x509_time *x509_get_ctime(void);
+
+int fix_cacerts_order(x509_certificate *head); //For debugging
 
 #endif /* EST_X509_H */
