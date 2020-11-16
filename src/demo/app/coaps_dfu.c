@@ -80,7 +80,6 @@ static const uint8_t suit_remote_addr[16] =
 
 #if COAPS_DFU_DTLS_ENABLE
 static void coaps_connect(const uint8_t addr[16], const uint16_t port);
-
 static const char * suit_psk_secret = "secret";
 static const char * suit_psk_id = "identity";
 static const uint16_t suit_remote_port = OT_DEFAULT_COAP_SECURE_PORT;

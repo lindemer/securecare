@@ -39,6 +39,8 @@ SRC_FILES += \
   $(SDK_ROOT)/components/libraries/util/app_error.c \
   $(SDK_ROOT)/components/libraries/util/app_error_handler_gcc.c \
   $(SDK_ROOT)/components/libraries/util/app_error_weak.c \
+  $(SDK_ROOT)/components/libraries/fifo/app_fifo.c \
+  $(SDK_ROOT)/components/libraries/uart/app_uart_fifo.c \
   $(SDK_ROOT)/components/libraries/scheduler/app_scheduler.c \
   $(SDK_ROOT)/components/libraries/timer/app_timer2.c \
   $(SDK_ROOT)/components/libraries/util/app_util_platform.c \
@@ -64,13 +66,18 @@ SRC_FILES += \
   $(SDK_ROOT)/components/libraries/sha256/sha256.c \
   $(SDK_ROOT)/modules/nrfx/mdk/system_nrf52840.c \
   $(SDK_ROOT)/integration/nrfx/legacy/nrf_drv_clock.c \
+  $(SDK_ROOT)/integration/nrfx/legacy/nrf_drv_power.c \
+  $(SDK_ROOT)/components/libraries/uart/retarget.c \
+  $(SDK_ROOT)/integration/nrfx/legacy/nrf_drv_uart.c \
   $(SDK_ROOT)/components/drivers_nrf/nrf_soc_nosd/nrf_nvic.c \
   $(SDK_ROOT)/modules/nrfx/hal/nrf_nvmc.c \
   $(SDK_ROOT)/components/drivers_nrf/nrf_soc_nosd/nrf_soc.c \
   $(SDK_ROOT)/modules/nrfx/soc/nrfx_atomic.c \
   $(SDK_ROOT)/modules/nrfx/drivers/src/nrfx_clock.c \
   $(SDK_ROOT)/modules/nrfx/drivers/src/nrfx_gpiote.c \
+  $(SDK_ROOT)/modules/nrfx/drivers/src/nrfx_ppi.c \
   $(SDK_ROOT)/modules/nrfx/drivers/src/nrfx_nvmc.c \
+  $(SDK_ROOT)/modules/nrfx/drivers/src/nrfx_timer.c \
   $(SDK_ROOT)/components/libraries/crypto/nrf_crypto_ecc.c \
   $(SDK_ROOT)/components/libraries/crypto/nrf_crypto_ecdsa.c \
   $(SDK_ROOT)/components/libraries/crypto/nrf_crypto_hash.c \
@@ -81,6 +88,7 @@ SRC_FILES += \
   $(PROJ_DIR)/main.c \
   $(PROJ_DIR)/coaps_dfu.c \
   $(PROJ_DIR)/addr_parse.c \
+  $(PROJ_DIR)/../rplidar/rplidar.c \
   $(PROJ_DIR)/background_dfu_state.c \
   $(SDK_ROOT)/components/iot/background_dfu/background_dfu_block.c \
   $(SDK_ROOT)/components/iot/background_dfu/background_dfu_operation.c \
@@ -106,14 +114,18 @@ SRC_FILES += \
   $(PROJ_DIR)/../../../lib/NanoCBOR/src/decoder.c \
   $(PROJ_DIR)/../../cose/cose.c \
   $(PROJ_DIR)/../../cose/suit.c \
+  $(SDK_ROOT)/modules/nrfx/drivers/src/nrfx_uart.c \
+  $(SDK_ROOT)/modules/nrfx/drivers/src/nrfx_uarte.c \
 
 # Include folders common to all targets
 INC_FOLDERS += \
   $(PROJ_DIR) \
   $(PROJ_DIR)/../common \
+  $(PROJ_DIR)/../rplidar \
   $(PROJ_DIR)/../../cose \
   $(PROJ_DIR)/../../../lib/NanoCBOR/include \
   $(SDK_ROOT)/components/libraries/crypto/backend/cc310 \
+  $(SDK_ROOT)/components/libraries/fifo \
   $(SDK_ROOT)/external/nrf_cc310/include \
   $(SDK_ROOT)/external/nrf_security/include \
   $(SDK_ROOT)/components/libraries/crypto/backend/cifra \
@@ -125,6 +137,7 @@ INC_FOLDERS += \
   $(SDK_ROOT)/components/libraries/atomic \
   $(SDK_ROOT)/components/iot/ipv6_parse \
   $(SDK_ROOT)/components/iot/ble_6lowpan \
+  $(SDK_ROOT)/components/libraries/uart \
   $(SDK_ROOT)/components/iot/coap \
   $(SDK_ROOT)/modules/nrfx/hal \
   $(SDK_ROOT)/components/libraries/atomic_fifo \
@@ -202,9 +215,8 @@ LIB_FILES += \
 else 
 ${info "Compiling with pre-compiled libs"}
 LIB_FILES += \
-  $(SDK_ROOT)/external/openthread/lib/nrf52840/gcc/libopenthread-cli-ftd.a \
   $(SDK_ROOT)/external/openthread/lib/nrf52840/gcc/libopenthread-ftd.a \
-  $(SDK_ROOT)/external/openthread/lib/nrf52840/gcc/libopenthread-nrf52840-transport.a \
+  $(SDK_ROOT)/external/openthread/lib/nrf52840/gcc/libopenthread-nrf52840-transport-none.a \
   $(SDK_ROOT)/external/openthread/lib/nrf52840/gcc/libopenthread-platform-utils.a \
   $(SDK_ROOT)/external/nrf_security/lib/libmbedcrypto_glue.a \
   $(SDK_ROOT)/external/nrf_security/lib/libmbedcrypto_glue_cc310.a \
@@ -225,7 +237,7 @@ LIB_FILES += \
   $(SDK_ROOT)/external/nrf_oberon/lib/cortex-m4/hard-float/liboberon_3.0.3.a \
   $(SDK_ROOT)/external/nrf_security/lib/libmbedcrypto_cc310_backend.a \
   $(SDK_ROOT)/external/nrf_security/lib/libmbedcrypto_vanilla_backend.a \
-  $(SDK_ROOT)/external/openthread/lib/nrf52840/gcc/libopenthread-nrf52840-transport.a \
+  $(SDK_ROOT)/external/openthread/lib/nrf52840/gcc/libopenthread-nrf52840-transport-none.a \
   $(SDK_ROOT)/external/openthread/lib/nrf52840/gcc/libopenthread-platform-utils.a \
   $(SDK_ROOT)/external/nrf_security/lib/libmbedtls_base_vanilla.a \
   $(SDK_ROOT)/external/nrf_security/lib/libmbedtls_tls_vanilla.a \
