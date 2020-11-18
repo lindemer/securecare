@@ -77,10 +77,10 @@ CFLAGS += -DNRF_CRYPTO_BACKEND_NRF_SW_ENABLED=0 #todo? nah 1 gives error
 #  /home/ubuntu/eclipse-workspace/openthread/third_party/mbedtls/repo/library/oid.c \
 #/home/ubuntu/eclipse-workspace/openthread/third_party/mbedtls/repo/library/x509_crt.c \
 
-ifeq ($(N), 1)
-${info Cheating for Nexus EST testing}
-SRC_FILES += /home/ubuntu/eclipse-workspace/openthread/third_party/mbedtls/repo/library/x509_crt.c
-endif
+#ifeq ($(N), 1)
+#${info Cheating for Nexus EST testing}
+#SRC_FILES += /home/ubuntu/eclipse-workspace/openthread/third_party/mbedtls/repo/library/x509_crt.c
+#endif
 
 ifeq ($(UC),1)
 SRC_FILES += $(PROJ_DIR)/../../est/util/xiot.c
@@ -406,11 +406,11 @@ INC_FOLDERS += \
 #  $(SDK_ROOT)/external/nrf_oberon/lib/cortex-m4/hard-float/liboberon_3.0.3.a \
 #  $(SDK_ROOT)/external/nrf_security/lib/libmbedcrypto_cc310_backend.a \
 
+ #$(SDK_ROOT)/external/openthread/lib/nrf52840/gcc/libopenthread-cli-ftd.a \
 
 ifeq ($(CB), 1)
 ${info "Compiling with mbedtls software backend"}
 LIB_FILES += \
-  $(SDK_ROOT)/external/openthread/lib/nrf52840/gcc/libopenthread-cli-ftd.a \
   $(SDK_ROOT)/external/openthread/lib/nrf52840/gcc/libopenthread-ftd.a \
   $(SDK_ROOT)/external/openthread/lib/nrf52840/gcc/libopenthread-nrf52840-transport.a \
   $(SDK_ROOT)/external/openthread/lib/nrf52840/gcc/libopenthread-platform-utils.a \

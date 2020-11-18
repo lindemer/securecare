@@ -1,0 +1,7 @@
+target remote localhost:1234
+mon speed 10000
+mon flash download=1
+load
+break mbedtls_ssl_send_alert_message
+mon reset 0
+

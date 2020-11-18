@@ -51,8 +51,32 @@
 #include "background_dfu_state.h"
 #include "thread_utils.h"
 #include "project-conf.h"
+/*
+ * Lidar
+ */
+#include "lidar-wrapper.h"
+//#include "app_uart.h"
+//#include "rplidar.h"
 
-//#include <openthread/cli.h>
+//#if defined (UART_PRESENT)
+//#include "nrf_uart.h"
+//#elif defined (UARTE_PRESENT)
+//#include "nrf_uarte.h"
+//#endif
+
+//// Thingy:91 GPIO pins
+//#define SPARE1 NRF_GPIO_PIN_MAP(0, 6)
+//#define SPARE2 NRF_GPIO_PIN_MAP(0, 5)
+//#define SPARE3 NRF_GPIO_PIN_MAP(0, 26)
+//#define SPARE4 NRF_GPIO_PIN_MAP(0, 27)
+//
+//#define UART_TX_BUF_SIZE 256
+//#define UART_RX_BUF_SIZE 256
+
+/*
+ * Openthread
+ */
+#include <openthread/cli.h>
 #include <openthread/thread.h>
 #include <openthread/thread_ftd.h>
 #include <openthread/dataset_ftd.h>
@@ -64,8 +88,6 @@
 
 // Maximum app_scheduler event size.
 //#define SCHED_EVENT_DATA_SIZE           APP_TIMER_SCHED_EVENT_DATA_SIZE
-
-void handle_dfu_command(uint8_t argc, char *argv[]);
 
 /* Override default network settings with the OpenThread border router defaults. This is for
  * development purposes only. Commissioning should be used to add devices to the network in
@@ -91,36 +113,6 @@ const char client_mac_id[] = "RISE Demo Server";//{ 0xe,0x9,0xa,0xc,0x8,0x7,0xb,
 const uint8_t client_mac_id[] = { 0xe,0x9,0xa,0xc,0x8,0x7,0xb,0x1 }; //TODO read from HW
 #endif
 
-//static otCliCommand m_user_commands[] =
-//{
-//    {
-//        .mName = "dfu",
-//        .mCommand = handle_dfu_command
-//    }
-//};
-
-//void handle_dfu_command(uint8_t argc, char *argv[])
-//{
-//    if (argc == 0)
-//    {
-//        otCliAppendResult(OT_ERROR_PARSE);
-//        return;
-//    }
-//
-//    if (strcmp(argv[0], "diag") == 0)
-//    {
-//        struct background_dfu_diagnostic diag;
-//        coaps_dfu_diagnostic_get(&diag);
-//        otCliOutputFormat("build_id: 0x%08x, "
-//                              "state: %d, "
-//                              "prev_state: %d, ",
-//                              diag.build_id,
-//                              diag.state,
-//                              diag.prev_state);
-//        otCliOutputFormat("\r\n");
-//        otCliAppendResult(OT_ERROR_NONE);
-//    }
-//}
 
 void coaps_dfu_handle_error(void)
 {
@@ -266,6 +258,7 @@ static void log_init(void)
     NRF_LOG_DEFAULT_BACKENDS_INIT();
 }
 
+
 /***************************************************************************************************
  * @section Main
  **************************************************************************************************/
@@ -294,11 +287,8 @@ int main(int argc, char *argv[])
     background_dfu_state_t initial_state = BACKGROUND_EST_IDLE;
 
     if (*(uint32_t *)EST_FLASH_START_ADDRESS == EST_DONE_SYMBOL) {
-      initial_state = BACKGROUND_DFU_IDLE;
+      initial_state = CONFIG_STATE_AFTER_EST;
     }
-#if TEST_PERIODIC_TIMER
-    initial_state = BACKGROUND_PERIODIC_IDLE;
-#endif
 
     err_code = coaps_dfu_init(thread_ot_instance_get(), initial_state);
     APP_ERROR_CHECK(err_code);
@@ -309,6 +299,8 @@ int main(int argc, char *argv[])
     {
         thread_process();
         app_sched_execute();
+
+        lidar_update();
 
         if (NRF_LOG_PROCESS() == false)
         {

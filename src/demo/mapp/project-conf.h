@@ -32,10 +32,10 @@
 #define PROJECT_CONF_H
 
 #include "est.h"
+#include "rplidar.h"
 
 #undef MBEDTLS_CHACHAPOLY_C
 #undef MBEDTLS_CHACHA20_C
-
 
 #define COAPS_DFU_DTLS_ENABLE 1
 
@@ -125,12 +125,6 @@ __ALIGN(4) static const uint8_t demo_node_key_priv[32] =
 
 #ifdef EST_WITH_NEXUS
 
-//#define FACTORY_CERT_PATH "/home/ubuntu/eclipse-workspace/securecare/nexus/nexus_factory_cert.pem"
-//#define CA_CERT_PATH      "/home/ubuntu/eclipse-workspace/securecare/nexus/ts/"
-//#define CA_CERT_STRING "NULL" //empty, should not be used!
-//#define CA_CERT_STRING "MIIBkjCCATmgAwIBAgICJxwwCgYIKoZIzj0EAwIwODELMAkGA1UEBhMCU0UxEjAQBgNVBAoTCUVTVC1Db0FQUzEVMBMGA1UEAxMMRVNULUNvQVBTIENBMB4XDTIwMDYwNTE5NDMyN1oXDTI1MDYwNTE3NDMyN1owODELMAkGA1UEBhMCU0UxEjAQBgNVBAoTCUVTVC1Db0FQUzEVMBMGA1UEAxMMRVNULUNvQVBTIENBMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEzeSzSReaFHPk6166dCW2aafaKIiOlCM4ZP3VxfLmmj2Q8q8LAYQh7xbyIEnq8p+bo3W3YMsgNz8GwDtepqD8SqMzMDEwDwYDVR0TAQH/BAUwAwEB/zARBgNVHQ4ECgQIRi0+wat3BfIwCwYDVR0PBAQDAgEGMAoGCCqGSM49BAMCA0cAMEQCICO9hiAzg7+9vBojLbx44aN4FqsaNcvscxoB51dV729HAiBACvbJXMCz6zt7a4cENvzB9HiZoSpqbwSYUEZdkGIfkA=="
-
-
 
 #define FACTORY_CERT      \
 "-----BEGIN CERTIFICATE-----\r\n"  \
@@ -181,41 +175,12 @@ __ALIGN(4) static const uint8_t demo_node_key_priv[32] =
  "Egvkp4o=\r\n"  \
  "-----END CERTIFICATE-----\r\n"
 
-
-/*
-#define INITIAL_TRUSTSTORE \
- "-----BEGIN CERTIFICATE-----\r\n"  \
- "MIIBsTCCAVagAwIBAgICJx0wCgYIKoZIzj0EAwIwODELMAkGA1UEBhMCU0UxEjAQ\r\n"  \
- "BgNVBAoTCUVTVC1Db0FQUzEVMBMGA1UEAxMMRVNULUNvQVBTIENBMB4XDTIwMDYw\r\n"  \
- "NTE5NDMyOFoXDTI1MDYwNTE3NDMyN1owQDELMAkGA1UEBhMCU0UxEjAQBgNVBAoT\r\n"  \
- "CUVTVC1Db0FQUzEdMBsGA1UEAxMURVNULUNvQVBTIGlzc3VpbmcgQ0EwWTATBgcq\r\n"  \
- "hkjOPQIBBggqhkjOPQMBBwNCAAS/XVji5qoI0ZUpHXRSdHjVv+MthvW7JQX9+bqI\r\n"  \
- "dYnnQ+I7shDueFO06Fi1vflQcLvbgcAbx+/dEK/kyAubJFHKo0gwRjAPBgNVHRMB\r\n"  \
- "Af8EBTADAQH/MBEGA1UdDgQKBAhGAUBdRFLUwzATBgNVHSMEDDAKgAhGLT7Bq3cF\r\n"  \
- "8jALBgNVHQ8EBAMCAQYwCgYIKoZIzj0EAwIDSQAwRgIhAKHULL0kmYBucUhoVbDV\r\n"  \
- "Ig3Dv+acemPFBcspLE0gI5WFAiEApqPdhGRWhQjok7vpopMB5HfJRP7VlkSi3wNo\r\n"  \
- "Egvkp4o=\r\n"  \
- "-----END CERTIFICATE-----\r\n" \
- "-----BEGIN CERTIFICATE-----\r\n"   \
- "MIIBkjCCATmgAwIBAgICJxwwCgYIKoZIzj0EAwIwODELMAkGA1UEBhMCU0UxEjAQ\r\n"  \
- "BgNVBAoTCUVTVC1Db0FQUzEVMBMGA1UEAxMMRVNULUNvQVBTIENBMB4XDTIwMDYw\r\n"  \
- "NTE5NDMyN1oXDTI1MDYwNTE3NDMyN1owODELMAkGA1UEBhMCU0UxEjAQBgNVBAoT\r\n"  \
- "CUVTVC1Db0FQUzEVMBMGA1UEAxMMRVNULUNvQVBTIENBMFkwEwYHKoZIzj0CAQYI\r\n"  \
- "KoZIzj0DAQcDQgAEzeSzSReaFHPk6166dCW2aafaKIiOlCM4ZP3VxfLmmj2Q8q8L\r\n"  \
- "AYQh7xbyIEnq8p+bo3W3YMsgNz8GwDtepqD8SqMzMDEwDwYDVR0TAQH/BAUwAwEB\r\n"  \
- "/zARBgNVHQ4ECgQIRi0+wat3BfIwCwYDVR0PBAQDAgEGMAoGCCqGSM49BAMCA0cA\r\n"  \
- "MEQCICO9hiAzg7+9vBojLbx44aN4FqsaNcvscxoB51dV729HAiBACvbJXMCz6zt7\r\n"  \
- "a4cENvzB9HiZoSpqbwSYUEZdkGIfkA==\r\n"  \
- "-----END CERTIFICATE-----\r\n"
-*/
-
 //Internet says "root at the bottom", at least for your own chain: https://www.digicert.com/kb/ssl-support/pem-ssl-creation.htm
 
 //#define INITIAL_TRUSTSTORE I_CA_CERT
 //#define INITIAL_TRUSTSTORE I_CA_CERT""ROOT_CA_CERT
 #define INITIAL_TRUSTSTORE ROOT_CA_CERT""I_CA_CERT //== 1279
 //"\r\n"ROOT_CA_CERT
-
 
 #define CA_CERT_STRING "MIIBkjCCATmgAwIBAgICJxwwCgYIKoZIzj0EAwIwODELMAkGA1UEBhMCU0UxEjAQBgNVBAoTCUVTVC1Db0FQUzEVMBMGA1UEAxMMRVNULUNvQVBTIENBMB4XDTIwMDYwNTE5NDMyN1oXDTI1MDYwNTE3NDMyN1owODELMAkGA1UEBhMCU0UxEjAQBgNVBAoTCUVTVC1Db0FQUzEVMBMGA1UEAxMMRVNULUNvQVBTIENBMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEzeSzSReaFHPk6166dCW2aafaKIiOlCM4ZP3VxfLmmj2Q8q8LAYQh7xbyIEnq8p+bo3W3YMsgNz8GwDtepqD8SqMzMDEwDwYDVR0TAQH/BAUwAwEB/zARBgNVHQ4ECgQIRi0+wat3BfIwCwYDVR0PBAQDAgEGMAoGCCqGSM49BAMCA0cAMEQCICO9hiAzg7+9vBojLbx44aN4FqsaNcvscxoB51dV729HAiBACvbJXMCz6zt7a4cENvzB9HiZoSpqbwSYUEZdkGIfkA=="
 
@@ -244,7 +209,6 @@ __ALIGN(4) static const uint8_t demo_node_key_priv[32] =
  "-----END EC PRIVATE KEY-----\r\n"
 
 #define FACTORY_KEY_LEN 233
-
 
 #define INITIAL_TRUSTSTORE    \
  "-----BEGIN CERTIFICATE-----\r\n"   \
@@ -275,22 +239,32 @@ __ALIGN(4) static const uint8_t demo_node_key_priv[32] =
  * Node/hw specific settings
  */
 #define TRUSTSTORE_PARSE_BUFFER_SIZE 1024
-#define BACKGROUND_EST_GET_CACERTS_CONFIG 9
-//9 = BACKGROUND_EST_GET_CACERTS_BLOCKWISE
+
 #define SENSOR_PERIOD    1000 //ms
 #define SENSOR_DATA_PATH "sensor"
 
-//#define EST_FLASH_START_ADDRESS 0x0007F000
+//With SENSOR_PRESENT set to 0 the lidar sensor will not be started, the periodic process will send dummy data
+#if SENSOR_PRESENT
+#pragma message "Assuming lidar sensor present!"
+#else
+#pragma message "No sensor present"
+#endif
+
+/*
+ * EST flash settings
+ */
 static const uint32_t EST_FLASH_START_ADDRESS = 0x0007F000;
 static const uint32_t EST_DONE_SYMBOL = 2147483647;
 //#define EST_DONE_SYMBOL 4294967295
 
-#if TEST_PERIODIC_TIMER
-#define BACKGROUND_SECOND_STATE BACKGROUND_PERIODIC_REPORTING
-#else
-#define BACKGROUND_SECOND_STATE BACKGROUND_EST_GET_CACERTS_CONFIG
-#endif
+/*
+ * State settings
+ */
+#define CONFIG_INITIAL_STATE BACKGROUND_EST_IDLE        //Alt. BACKGROUND_PERIODIC_IDLE || BACKGROUND_DFU_IDLE
+#define CONFIG_STATE_AFTER_EST BACKGROUND_PERIODIC_IDLE //Alt. BACKGROUND_DFU_IDLE
 
+//CACERTS setting, blockwise = 9
+#define BACKGROUND_EST_GET_CACERTS_CONFIG 9
 
 #if TEST_ENROLL_SUBJECT
 extern const char client_mac_id[];
@@ -303,7 +277,6 @@ extern const uint8_t client_mac_id[];
 #else
 #define EST_CONTENT_FORMAT_FOR_SEN COAP_CONTENT_FORMAT_PKCS10
 #endif
-
 
 
 #endif //ifndef PROJECT_CONF_H

@@ -29,6 +29,9 @@
  * POSSIBILITY OF SUCH DAMAGE.
  **/
 
+#ifndef RPLIDAR_H
+#define RPLIDAR_H
+
 #include <stdbool.h>
 
 #define RPLIDAR_SUCCESS                 0x0
@@ -139,3 +142,5 @@ uint16_t rplidar_push_sweep(rplidar_sweep_t * sweep,
          rplidar_point_t * point, bool accummulate);
 
 float rplidar_get_mean(rplidar_sweep_t * sweep);
+
+#endif
