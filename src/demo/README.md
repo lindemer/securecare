@@ -44,3 +44,7 @@ To receive data from a node that has done enrollment with local test EST server:
 ```
 ./build/demo-server -c ../../certs/rfc-test-root.pem -C ../../certs/rfc-test-root.pem
 ```
+## Needed custom OpenThread libs
+
+Download and unzip to securecare/lib/openthread
+https://drive.google.com/file/d/11jLNBr1zIQ14X9MzqY5HFAKeH10oepqQ/view?usp=sharing
