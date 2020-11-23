@@ -260,17 +260,17 @@ uint16_t rplidar_push_sweep(rplidar_sweep_t * sweep,
     return delta;
 }
 
-float rplidar_get_mean(rplidar_sweep_t * sweep)
+uint32_t rplidar_get_mean(rplidar_sweep_t * sweep)
 {
-    float mean = 0;
+    uint32_t mean = 0;
 
     for (int i = 0; i <= RPLIDAR_APERTURE; i++)
     {
-        mean += (float)(sweep->delta[i]); 
+        mean += sweep->delta[i]; 
     }
     for (int j = 360 - RPLIDAR_APERTURE; j < 360; j++) 
     {
-        mean += (float)(sweep->delta[j]); 
+        mean += sweep->delta[j]; 
     }
     mean /= RPLIDAR_APERTURE * 2 + 1;
     return mean;

@@ -65,6 +65,8 @@
 #include "nanocbor/nanocbor.h"
 
 #include "mbedtls-wrapper.h"
+#include "lidar-wrapper.h"
+
 #include "project-conf.h"
 
 #define NRF_LOG_MODULE_NAME background_dfu

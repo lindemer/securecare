@@ -252,6 +252,7 @@ __ALIGN(4) static const uint8_t demo_node_key_priv[32] =
 //With SENSOR_PRESENT set to 0 the lidar sensor will not be started, the periodic process will send dummy data
 #if SENSOR_PRESENT
 #pragma message "Assuming lidar sensor present!"
+#define HAVE_LIDAR 1
 #else
 #pragma message "No sensor present"
 #endif
