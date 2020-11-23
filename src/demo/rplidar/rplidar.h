@@ -63,15 +63,15 @@
 
 /* Range (in degrees) in which statistics will be computed on the scan data.
  *
- *                359   1
- *    |-------------| 0 |-------------|
- *    ^                               ^
- *    360 - RPLIDAR_APERTURE          RPLIDAR_APERTURE
+ *                
+ *    |-------------| 180 |-------------|
+ *    ^                                 ^
+ *    180 - RPLIDAR_APERTURE            180 + RPLIDAR_APERTURE
  *
  * The effective width of this range is 1 + RPLIDAR_APERTURE * 2.
  */
 #define RPLIDAR_APERTURE                5
-#define RPLIDAR_HIT_THRESHOLD           30 // [mm]    
+#define RPLIDAR_HIT_THRESHOLD           50 // [mm]    
 
 typedef struct rplidar_point_t
 {
