@@ -246,7 +246,7 @@ uint16_t rplidar_push_sweep(rplidar_sweep_t * sweep,
             if (point->deg >= 180 - RPLIDAR_APERTURE || 
                 point->deg <= 180 + RPLIDAR_APERTURE)
             {
-                if (delta > RPLIDAR_HIT_THRESHOLD) sweep->hits++;
+                if (delta > RPLIDAR_HIT_MIN && delta < RPLIDAR_HIT_MAX) sweep->hits++;
                 if (delta > sweep->delta[point->deg])
                 {
                     sweep->swap1[point->deg] = (int)point->mm;
@@ -261,7 +261,7 @@ uint16_t rplidar_push_sweep(rplidar_sweep_t * sweep,
             if (point->deg >= 180 - RPLIDAR_APERTURE || 
                 point->deg <= 180 + RPLIDAR_APERTURE)
             {
-                if (delta > RPLIDAR_HIT_THRESHOLD) sweep->hits++;
+                if (delta > RPLIDAR_HIT_MIN && delta < RPLIDAR_HIT_MAX) sweep->hits++;
                 if (delta > sweep->delta[point->deg])
                 {
                     sweep->swap0[point->deg] = (int)point->mm;
