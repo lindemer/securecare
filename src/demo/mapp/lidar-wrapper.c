@@ -169,14 +169,15 @@ int lidar_update() {
   if(lidar_is_running) {
     rplidar_point_t point;
     rplidar_get_point(&point);
+    NRF_LOG_INFO("deg=%d, mm %d", point.deg, point.mm);
     rplidar_push_sweep(&global_sweep, &point, false);
     return 0;
   }
   return -1;
 }
 
-int lidar_get_data(int *mean, int *hits) {
-  *mean = 100*rplidar_get_mean(&global_sweep);
+int lidar_get_data(uint32_t *mean, uint32_t *hits) {
+  *mean = rplidar_get_mean(&global_sweep);
   *hits = global_sweep.hits;
   rplidar_clear_sweep(&global_sweep);
   return 0;

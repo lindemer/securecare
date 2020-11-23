@@ -284,7 +284,7 @@ int main(int argc, char *argv[])
      * if so, the enrolled trust store and certificate have been written to flash
      * @EST_FLASH_START_ADDRESS
      */
-    background_dfu_state_t initial_state = BACKGROUND_EST_IDLE;
+    background_dfu_state_t initial_state = CONFIG_INITIAL_STATE;
 
     if (*(uint32_t *)EST_FLASH_START_ADDRESS == EST_DONE_SYMBOL) {
       initial_state = CONFIG_STATE_AFTER_EST;

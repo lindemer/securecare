@@ -40,6 +40,6 @@ void stop_lidar();
  **************************************************************************************************/
 int lidar_update();
 
-int lidar_get_data(int *mean, int *hits);
+int lidar_get_data(uint32_t  *mean, uint32_t *hits);
 
 #endif

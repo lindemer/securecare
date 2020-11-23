@@ -142,3 +142,5 @@ uint16_t rplidar_push_sweep(rplidar_sweep_t * sweep,
          rplidar_point_t * point, bool accummulate);
 
 uint32_t rplidar_get_mean(rplidar_sweep_t * sweep);
+
+#endif

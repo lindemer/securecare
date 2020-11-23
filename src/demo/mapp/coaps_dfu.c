@@ -1003,7 +1003,7 @@ uint32_t background_dfu_random(void)
 int16_t
 read_sensor_data(uint8_t *buffer, uint16_t buf_len)
 {
-  int mean = 12, hits = 13;
+  uint32_t  mean = 12, hits = 13;
 
 #if HAVE_LIDAR
   int ret = lidar_get_data(&mean, &hits);
@@ -1013,8 +1013,8 @@ read_sensor_data(uint8_t *buffer, uint16_t buf_len)
   nanocbor_encoder_t encoder;
   nanocbor_encoder_init(&encoder, buffer, 50);
   nanocbor_fmt_array(&encoder, 2); //only two items in array
-  nanocbor_fmt_int(&encoder, hits);
-  nanocbor_fmt_int(&encoder, mean);
+  nanocbor_fmt_uint(&encoder, hits);
+  nanocbor_fmt_uint(&encoder, mean);
   return nanocbor_encoded_len(&encoder);
 }
 
