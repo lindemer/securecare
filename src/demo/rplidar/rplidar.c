@@ -34,6 +34,11 @@
 #include "rplidar.h"
 #include "nrf_delay.h"
 
+#include "nrf_log.h"
+#include "nrf_log_ctrl.h"
+#include "nrf_log_default_backends.h"
+
+
 #ifdef UART_PRESENT
 #include "nrf_uart.h"
 #endif
@@ -187,9 +192,14 @@ uint32_t rplidar_get_point(rplidar_point_t * point)
             point->sync = measurement.sync;
             point->deg = (measurement.angle >> 1) / 64;
             point->mm = measurement.dist / 4;
+
+//            if(359==point->deg) {
+//              NRF_LOG_INFO("%d", point->mm);
+//            }
             return RPLIDAR_SUCCESS;       
         }
     } 
+
 
     return RPLIDAR_OPERATION_TIMEOUT;
 }

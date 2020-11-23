@@ -131,8 +131,8 @@ int main(void)
 
 	if (loops == 1000)
 	{
-            uint32_t mean = rplidar_get_mean(&sweep);
-	    NRF_LOG_INFO("%d hits, %d mean", sweep.hits, mean);
+       ///     uint32_t mean = rplidar_get_mean(&sweep);
+	    //NRF_LOG_INFO("%d hits, %d mean", sweep.hits, mean);
             rplidar_clear_sweep(&sweep);
             loops = 0;
 	}
