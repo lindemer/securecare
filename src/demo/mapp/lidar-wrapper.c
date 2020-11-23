@@ -78,7 +78,8 @@
  */
 rplidar_sweep_t global_sweep;
 int lidar_is_running = 0;
-
+int loop = 0;
+#define LOOP_THRESHOLD 1000
 /*
  * Lidar stuff
  */
@@ -169,7 +170,7 @@ int lidar_update() {
   if(lidar_is_running) {
     rplidar_point_t point;
     rplidar_get_point(&point);
-    NRF_LOG_INFO("deg=%d, mm %d", point.deg, point.mm);
+    //NRF_LOG_INFO("deg=%d, mm %d", point.deg, point.mm);
     rplidar_push_sweep(&global_sweep, &point, false);
     return 0;
   }

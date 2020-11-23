@@ -70,7 +70,7 @@
  *
  * The effective width of this range is 1 + RPLIDAR_APERTURE * 2.
  */
-#define RPLIDAR_APERTURE                15
+#define RPLIDAR_APERTURE                5
 #define RPLIDAR_HIT_THRESHOLD           30 // [mm]    
 
 typedef struct rplidar_point_t
