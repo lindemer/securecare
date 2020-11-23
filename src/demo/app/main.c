@@ -275,14 +275,14 @@ int main(int argc, char *argv[])
 
     rplidar_response_device_info_t info;
     err_code = rplidar_get_device_info(&info);
-    APP_ERROR_CHECK(err_code);
+    //APP_ERROR_CHECK(err_code);
 
     rplidar_response_device_health_t health;
     err_code = rplidar_get_device_health(&health);
-    APP_ERROR_CHECK(err_code);
+    //APP_ERROR_CHECK(err_code);
 
     err_code = rplidar_start_scan(false);
-    APP_ERROR_CHECK(err_code);
+    //APP_ERROR_CHECK(err_code);
 
     nrf_gpio_cfg_output(SPARE2);
     nrf_gpio_pin_set(SPARE2);
