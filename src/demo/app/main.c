@@ -67,7 +67,7 @@
 #include <openthread/platform/alarm-milli.h>
 
 #define ENABLE_COAPS_DFU 
-#define ENABLE_RPLIDAR
+//#define ENABLE_RPLIDAR
 
 // Thingy:91 GPIO pins
 #define SPARE1 NRF_GPIO_PIN_MAP(0, 6)
@@ -288,16 +288,12 @@ int main(int argc, char *argv[])
     nrf_gpio_pin_set(SPARE2);
     nrf_delay_ms(100);
 
-    rplidar_point_t point;
 #endif // ENABLE_RPLIDAR
 
     while (true)
     {
         thread_process();
         app_sched_execute();
-
-        rplidar_get_point(&point);
-	NRF_LOG_INFO("deg=%d, mm=%d", point.deg, point.mm);
 
         if (NRF_LOG_PROCESS() == false)
         {

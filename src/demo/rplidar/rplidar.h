@@ -138,4 +138,4 @@ void rplidar_clear_sweep(rplidar_sweep_t * sweep);
 uint16_t rplidar_push_sweep(rplidar_sweep_t * sweep,
          rplidar_point_t * point, bool accummulate);
 
-float rplidar_get_mean(rplidar_sweep_t * sweep);
+uint32_t rplidar_get_mean(rplidar_sweep_t * sweep);
