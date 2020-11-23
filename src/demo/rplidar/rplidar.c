@@ -238,13 +238,13 @@ uint16_t rplidar_push_sweep(rplidar_sweep_t * sweep,
          rplidar_point_t * point, bool accumulate)
 {
     int delta = 0;
-    if (point->deg < 360 && point->deg >= 0)
+    if (point->deg < 360 && point->deg > 0)
     {
         if (sweep->swap)
         {
             delta = abs(sweep->swap0[point->deg] - (int)(point->mm));
-            if (point->deg >= (360 - RPLIDAR_APERTURE) || 
-                point->deg <= RPLIDAR_APERTURE)
+            if (point->deg >= 180 - RPLIDAR_APERTURE || 
+                point->deg <= 180 + RPLIDAR_APERTURE)
             {
                 if (delta > RPLIDAR_HIT_THRESHOLD) sweep->hits++;
                 if (delta > sweep->delta[point->deg])
@@ -258,8 +258,8 @@ uint16_t rplidar_push_sweep(rplidar_sweep_t * sweep,
         else
         {
             delta = abs(sweep->swap1[point->deg] - (int)(point->mm));
-            if (point->deg >= (360 - RPLIDAR_APERTURE) || 
-                point->deg <= RPLIDAR_APERTURE)
+            if (point->deg >= 180 - RPLIDAR_APERTURE || 
+                point->deg <= 180 + RPLIDAR_APERTURE)
             {
                 if (delta > RPLIDAR_HIT_THRESHOLD) sweep->hits++;
                 if (delta > sweep->delta[point->deg])
@@ -278,15 +278,12 @@ uint32_t rplidar_get_mean(rplidar_sweep_t * sweep)
 {
     uint32_t mean = 0;
 
-    for (int i = 0; i <= RPLIDAR_APERTURE; i++)
+    for (int i = 180 - RPLIDAR_APERTURE; i <= 180 + RPLIDAR_APERTURE; i++)
     {
         mean += sweep->delta[i]; 
     }
-    for (int j = 360 - RPLIDAR_APERTURE; j < 360; j++) 
-    {
-        mean += sweep->delta[j]; 
-    }
     mean /= RPLIDAR_APERTURE * 2 + 1;
+
     return mean;
 }
 
