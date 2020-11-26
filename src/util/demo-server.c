@@ -74,6 +74,7 @@ static char* strndup(const char* s1, size_t n)
 #include <coap2/coap.h>
 
 #include "nanocbor/nanocbor.h"
+#include "project-conf.h"
 
 // URI queries allowed.
 static char * query_crc32 = "crc32";
@@ -236,7 +237,7 @@ hnd_put_sensor(coap_context_t *ctx UNUSED_PARAM,
   unsigned char *data;
   int decoder_error = 0;
   int ret = 0;
-  int mean, max;
+  int mean, hits;
 
   /* coap_get_data() sets size to 0 on error */
   (void)coap_get_data(request, &size, &data);
@@ -254,11 +255,17 @@ hnd_put_sensor(coap_context_t *ctx UNUSED_PARAM,
       decoder_error = 1;
     } else {
       ret = nanocbor_get_int32(&arr, &mean);
-      ret = nanocbor_get_int32(&arr, &max);
+      ret = nanocbor_get_int32(&arr, &hits);
       if(ret < 0) {
         decoder_error = 1;
       } else {
-        printf("%d %d", mean, max);
+#if PRINT_SENSOR_MEAN
+        printf("%s%d%s", SENSOR_MEAN_HEADER, mean, SENSOR_MEAN_FOOTER);
+#endif
+#if PRINT_SENSOR_HITS
+        printf("%s%d%s", SENSOR_HITS_HEADER, hits, SENSOR_HITS_FOOTER);
+#endif
+        printf("%s", SENSOR_DATA_SEPARATOR);
       }
     }
 

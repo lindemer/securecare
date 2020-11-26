@@ -47,3 +47,13 @@ This example uses the OpenThread border router as the demo server machine.
   8. Reset the device to initiate the DFU process.
 
 *For CoAP(s)* set the firmware URI to `coaps://[fd00::1]/app.bin` in step 4 and run `./build/demo-server -k secret` in step 6 to run the demo server with the hard-coded PSK.
+
+## Settings for using the demo server as a sensor data endpoint
+
+  1. Run `make mapp S=1` from the `src/demo` directory. Please see corresponding README for details on node settings
+  2. Configure the `defines` in `project-conf.h` to format the sensor data printouts as desired
+  3. Make the demo-server
+  4. Start with:  
+  4a. `./build/demo-server -c ../../certs/nexus_enrolled_cert.pem -R ../../certs/nexus/ts/`    to receive data from a node with Nexus certificates. Or  
+  4b. `./build/demo-server -c ../../certs/rfc-test-root.pem -C ../../certs/rfc-test-root.pem`  to receive data from a node with RISE test EST certificates. 
+    
