@@ -90,14 +90,6 @@
 NRF_LOG_MODULE_REGISTER();
 
 
-// Remote firmware manifest server paramters.
-static const uint8_t suit_remote_addr[16] =
-//{ 0xfd, 0x11, 0x00, 0x22, 0x00, 0x00, 0x00, 0x00,
-//  0x7e, 0x0f, 0xc5, 0x76, 0xa6, 0x79, 0x78, 0x52 };
-        { 0xfd, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-          0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01 };
-
-
 #if COAPS_DFU_DTLS_ENABLE
 static void coaps_connect(const uint8_t addr[16], const uint16_t port);
 #endif
@@ -1235,8 +1227,8 @@ static void coaps_connect(const uint8_t addr[16], const uint16_t port)
     uint32_t factory_len;
     uint32_t key_len;
 
+    if (*(uint32_t *)EST_FLASH_START_ADDRESS != EST_DONE_SYMBOL) {
 
-  if(m_dfu_ctx.dfu_state != BACKGROUND_DFU_IDLE) {
     //Do not load from flash
 #ifdef INITIAL_TRUSTSTORE
     /*
@@ -1254,7 +1246,7 @@ static void coaps_connect(const uint8_t addr[16], const uint16_t port)
     key_len = sizeof(FACTORY_KEY);
 
     uint32_t ret_val = nrf_dfu_flash_erase(EST_FLASH_START_ADDRESS, 1, NULL); //No callback
-    ASSERT(ret_val == NRF_SUCCESS); //TODO
+    ASSERT(ret_val == NRF_SUCCESS); //Check callback, TODO?
 
 #else
 #error "Need to define an initial truststore to do EST"
@@ -1372,17 +1364,39 @@ uint32_t coaps_dfu_start()
 uint32_t coaps_dfu_init(const void * p_context, background_dfu_state_t initial_state)
 {
 
-  //START TEST AREA
+  //START INIT TEST AREA
 
-  //END TEST AREA
+  //END INIT TEST AREA
+
+  char * urn;
+  size_t urn_len;
+  bool use_dtls;
+  uint32_t err = 0;
 
   if(BACKGROUND_EST_IDLE == initial_state) {
-    memcpy(static_m_coaps_dfu_ctx.remote_addr, est_remote_addr, 16);
+    //memcpy(static_m_coaps_dfu_ctx.remote_addr, est_remote_addr, 16);
+
+    err = addr_parse_uri((uint8_t *)&static_m_coaps_dfu_ctx.remote_addr,
+                                &static_m_coaps_dfu_ctx.remote_port,
+                                &urn, &urn_len, &use_dtls,
+                                est_remote_addr, sizeof(est_remote_addr));
+                                //"coaps://[fd11:22::680f:b684:84c3:a244]", sizeof("coaps://[fd11:22::680f:b684:84c3:a244]"));
+
     static_m_coaps_dfu_ctx.remote_port = est_remote_port;
   }
   else {
-    memcpy(static_m_coaps_dfu_ctx.remote_addr, suit_remote_addr, 16);
+    //memcpy(static_m_coaps_dfu_ctx.remote_addr, suit_remote_addr, 16);
+    err = addr_parse_uri((uint8_t *)&static_m_coaps_dfu_ctx.remote_addr,
+                                &static_m_coaps_dfu_ctx.remote_port,
+                                &urn, &urn_len, &use_dtls,
+                                suit_remote_addr, 17);
+
     static_m_coaps_dfu_ctx.remote_port = suit_remote_port;
+  }
+  if(err) {
+    NRF_LOG_WARNING("Address parse error");
+  } else {
+    NRF_LOG_INFO("Successful address parse");
   }
 
   nrf_dfu_settings_init(false);

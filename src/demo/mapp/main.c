@@ -288,6 +288,17 @@ int main(int argc, char *argv[])
 
     if (*(uint32_t *)EST_FLASH_START_ADDRESS == EST_DONE_SYMBOL) {
       initial_state = CONFIG_STATE_AFTER_EST;
+      //Will check also in coaps_dfu
+    }
+
+    if(BACKGROUND_PERIODIC_IDLE == initial_state) {
+      NRF_LOG_INFO("Initiate sensing");
+    }
+    else if(BACKGROUND_EST_IDLE == initial_state) {
+      NRF_LOG_INFO("Initiate enrollment");
+    }
+    else if(BACKGROUND_DFU_IDLE == initial_state) {
+      NRF_LOG_INFO("Initiate DFU");
     }
 
     err_code = coaps_dfu_init(thread_ot_instance_get(), initial_state);

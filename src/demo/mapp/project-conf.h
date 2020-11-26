@@ -39,10 +39,8 @@
 
 #define COAPS_DFU_DTLS_ENABLE 1
 
-// Remote EST server parameters.
-//static const uint8_t est_remote_addr[16] =
-//        { 0xfd, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-//          0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01 };
+// Remote DFU/SUIT server parameters
+#define suit_remote_addr  "coaps://[fd00::1]"
 
 /*
  * EST address + path info
@@ -52,9 +50,11 @@
 #define SEN_PATH ".well-known/est/coap/sen"
 #define SKG_PATH ".well-known/est/coap/skg"
 
-static const uint8_t est_remote_addr[16] =
-        { 0x00, 0x64, 0xff, 0x9b, 0x00, 0x00, 0x00, 0x00,
-          0x00, 0x00, 0x00, 0x00, 0x33, 0x7c, 0x15, 0x51 };
+#define est_remote_addr   "coaps://[64:ff9b::337c:1551]"
+
+//static const uint8_t est_remote_addr[16] =
+//        { 0x00, 0x64, 0xff, 0x9b, 0x00, 0x00, 0x00, 0x00,
+//          0x00, 0x00, 0x00, 0x00, 0x33, 0x7c, 0x15, 0x51 };
 //NEXUS 51.124.21.81 --> 64:ff9b::33:7c:15:51
 
 #else
@@ -63,18 +63,9 @@ static const uint8_t est_remote_addr[16] =
 #define SKG_PATH "skg"
 
 /*
- * Warning: this needs to be updated for the target deployment!
+ * WARNING: this needs to be updated for the target deployment!
  */
-static const uint8_t est_remote_addr[16] =
-{ 0xfd, 0x11, 0x00, 0x22, 0x00, 0x00, 0x00, 0x00,
-    0x2d, 0x25, 0x6a, 0x17, 0xd4, 0xed, 0xc0, 0x10 };
-//fd11:22::2d25:6a17:d4ed:c010
-    //fd11:22::544e:29ef:3785:60a8
-//{ 0xfd, 0x11, 0x00, 0x22, 0x00, 0x00, 0x00, 0x00,
-//    0x82, 0xe6, 0x03, 0x3b, 0xe7, 0x2b, 0xf8, 0x9e };
-//fd11:22::82e6:33b:e72b:f89e
-//{ 0xfd, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-//  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01 };
+#define est_remote_addr   "coaps://[fd11:22::74de:b93:640c:5af2]"
 
 #endif
 
@@ -246,7 +237,10 @@ __ALIGN(4) static const uint8_t demo_node_key_priv[32] =
  */
 #define TRUSTSTORE_PARSE_BUFFER_SIZE 1024
 
-#define SENSOR_PERIOD    1000 //ms
+#define SENSOR_PERIOD    2000 //ms
+/*
+ * This path for putting sensor data needs to exist on the target demo server
+ */
 #define SENSOR_DATA_PATH "sensor"
 
 //With SENSOR_PRESENT set to 0 the lidar sensor will not be started, the periodic process will send dummy data
@@ -267,7 +261,7 @@ static const uint32_t EST_DONE_SYMBOL = 2147483647;
 /*
  * State settings
  */
-#define CONFIG_INITIAL_STATE BACKGROUND_PERIODIC_IDLE //BACKGROUND_EST_IDLE        //Alt. BACKGROUND_PERIODIC_IDLE || BACKGROUND_DFU_IDLE
+#define CONFIG_INITIAL_STATE BACKGROUND_EST_IDLE        //BACKGROUND_EST_IDLE        //Alt. BACKGROUND_PERIODIC_IDLE || BACKGROUND_DFU_IDLE
 #define CONFIG_STATE_AFTER_EST BACKGROUND_PERIODIC_IDLE //Normally: BACKGROUND_PERIODIC_IDLE || BACKGROUND_DFU_IDLE
 
 //CACERTS setting, blockwise = 9
