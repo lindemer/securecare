@@ -85,7 +85,6 @@ static char* strndup(const char* s1, size_t n)
 #include <coap2/coap.h>
 
 #include "nanocbor/nanocbor.h"
-#include "project-conf.h"
 
 // URI queries allowed.
 static char * query_crc32 = "crc32";

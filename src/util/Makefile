@@ -55,7 +55,7 @@ suit-cli: $(OBJS)
 $(BUILD)/demo-server.o: $(CURDIR)/demo-server.c
 	$(CC) -c -o $@ $< $(CLFAGS) $(INCLUDES)
 
-demo-server: $(BUILD)/demo-server.o $(BUILD)/encoder.o
+demo-server: $(BUILD)/demo-server.o $(BUILD)/encoder.o $(BUILD)/decoder.o
 	$(CC) -o $(BUILD)/$@ $^ $(CFLAGS) $(LIBS)
 
 .PHONY: clean
