@@ -29,6 +29,9 @@
  * POSSIBILITY OF SUCH DAMAGE.
  **/
 
+#ifndef RPLIDAR_H
+#define RPLIDAR_H
+
 #include <stdbool.h>
 
 #define RPLIDAR_SUCCESS                 0x0
@@ -60,15 +63,16 @@
 
 /* Range (in degrees) in which statistics will be computed on the scan data.
  *
- *                359   1
- *    |-------------| 0 |-------------|
- *    ^                               ^
- *    360 - RPLIDAR_APERTURE          RPLIDAR_APERTURE
+ *                
+ *    |-------------| 180 |-------------|
+ *    ^                                 ^
+ *    180 - RPLIDAR_APERTURE            180 + RPLIDAR_APERTURE
  *
  * The effective width of this range is 1 + RPLIDAR_APERTURE * 2.
  */
-#define RPLIDAR_APERTURE                15
-#define RPLIDAR_HIT_THRESHOLD           30 // [mm]    
+#define RPLIDAR_APERTURE                5
+#define RPLIDAR_HIT_MIN                 100  // [mm]
+#define RPLIDAR_HIT_MAX                 1000 // [mm]
 
 typedef struct rplidar_point_t
 {
@@ -139,3 +143,5 @@ uint16_t rplidar_push_sweep(rplidar_sweep_t * sweep,
          rplidar_point_t * point, bool accummulate);
 
 uint32_t rplidar_get_mean(rplidar_sweep_t * sweep);
+
+#endif

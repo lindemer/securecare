@@ -34,6 +34,11 @@
 #include "rplidar.h"
 #include "nrf_delay.h"
 
+#include "nrf_log.h"
+#include "nrf_log_ctrl.h"
+#include "nrf_log_default_backends.h"
+
+
 #ifdef UART_PRESENT
 #include "nrf_uart.h"
 #endif
@@ -187,9 +192,14 @@ uint32_t rplidar_get_point(rplidar_point_t * point)
             point->sync = measurement.sync;
             point->deg = (measurement.angle >> 1) / 64;
             point->mm = measurement.dist / 4;
+
+//            if(359==point->deg) {
+//              NRF_LOG_INFO("%d", point->mm);
+//            }
             return RPLIDAR_SUCCESS;       
         }
     } 
+
 
     return RPLIDAR_OPERATION_TIMEOUT;
 }
@@ -228,33 +238,37 @@ uint16_t rplidar_push_sweep(rplidar_sweep_t * sweep,
          rplidar_point_t * point, bool accumulate)
 {
     int delta = 0;
-    if (point->deg < 360 && point->deg >= 0)
+    if (point->deg < 360 && point->deg > 0)
     {
         if (sweep->swap)
         {
             delta = abs(sweep->swap0[point->deg] - (int)(point->mm));
-            if (delta > sweep->delta[point->deg])
+            if (point->deg >= 180 - RPLIDAR_APERTURE || 
+                point->deg <= 180 + RPLIDAR_APERTURE)
             {
-                sweep->swap1[point->deg] = (int)point->mm;
-                if (!accumulate) sweep->delta[point->deg] = delta;
+                if (delta > RPLIDAR_HIT_MIN && delta < RPLIDAR_HIT_MAX) sweep->hits++;
+                if (delta > sweep->delta[point->deg])
+                {
+                    sweep->swap1[point->deg] = (int)point->mm;
+                    if (!accumulate) sweep->delta[point->deg] = delta;
+                }
             }
             if (accumulate) sweep->delta[point->deg] += delta;
         }
         else
         {
             delta = abs(sweep->swap1[point->deg] - (int)(point->mm));
-            if (delta > sweep->delta[point->deg])
+            if (point->deg >= 180 - RPLIDAR_APERTURE || 
+                point->deg <= 180 + RPLIDAR_APERTURE)
             {
-                sweep->swap0[point->deg] = (int)point->mm;
-                if (!accumulate) sweep->delta[point->deg] = delta;
+                if (delta > RPLIDAR_HIT_MIN && delta < RPLIDAR_HIT_MAX) sweep->hits++;
+                if (delta > sweep->delta[point->deg])
+                {
+                    sweep->swap0[point->deg] = (int)point->mm;
+                    if (!accumulate) sweep->delta[point->deg] = delta;
+                }
             }
             if (accumulate) sweep->delta[point->deg] += delta;
-        }
-        if (delta > RPLIDAR_HIT_THRESHOLD &&
-            (point->deg >= (360 - RPLIDAR_APERTURE) || 
-            (point->deg <= RPLIDAR_APERTURE)))
-        {
-            sweep->hits++;
         }
     }
     return delta;
@@ -264,15 +278,12 @@ uint32_t rplidar_get_mean(rplidar_sweep_t * sweep)
 {
     uint32_t mean = 0;
 
-    for (int i = 0; i <= RPLIDAR_APERTURE; i++)
+    for (int i = 180 - RPLIDAR_APERTURE; i <= 180 + RPLIDAR_APERTURE; i++)
     {
         mean += sweep->delta[i]; 
     }
-    for (int j = 360 - RPLIDAR_APERTURE; j < 360; j++) 
-    {
-        mean += sweep->delta[j]; 
-    }
     mean /= RPLIDAR_APERTURE * 2 + 1;
+
     return mean;
 }
 

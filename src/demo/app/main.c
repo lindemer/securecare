@@ -287,7 +287,6 @@ int main(int argc, char *argv[])
     nrf_gpio_cfg_output(SPARE2);
     nrf_gpio_pin_set(SPARE2);
     nrf_delay_ms(100);
-
 #endif // ENABLE_RPLIDAR
 
     while (true)
