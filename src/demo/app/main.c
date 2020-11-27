@@ -51,14 +51,7 @@
 #include "coaps_dfu.h"
 #include "background_dfu_state.h"
 #include "thread_utils.h"
-#include "rplidar.h"
-#ifdef UART_PRESENT
-#include "nrf_uart.h"
-#endif
-#ifdef UARTE_PRESENT
-#include "nrf_uarte.h"
-#endif
-#include "nrf_gpio.h"
+#include "lidar_wrapper.h"
 
 #include <openthread/thread.h>
 #include <openthread/thread_ftd.h>
@@ -66,35 +59,11 @@
 #include <openthread/platform/alarm-micro.h>
 #include <openthread/platform/alarm-milli.h>
 
-#define ENABLE_COAPS_DFU 
-//#define ENABLE_RPLIDAR
-
-// Thingy:91 GPIO pins
-#define SPARE1 NRF_GPIO_PIN_MAP(0, 6)
-#define SPARE2 NRF_GPIO_PIN_MAP(0, 5)
-#define SPARE3 NRF_GPIO_PIN_MAP(0, 26)
-#define SPARE4 NRF_GPIO_PIN_MAP(0, 27)
-
 // Maximum number of events in the scheduler queue.
 #define SCHED_QUEUE_SIZE 32
 
 // Maximum app_scheduler event size.
 #define SCHED_EVENT_DATA_SIZE APP_TIMER_SCHED_EVENT_DATA_SIZE
-
-#define UART_TX_BUF_SIZE 256
-#define UART_RX_BUF_SIZE 256
-
-void uart_error_handle(app_uart_evt_t * p_event)
-{
-    if (p_event->evt_type == APP_UART_COMMUNICATION_ERROR)
-    {
-        APP_ERROR_HANDLER(p_event->data.error_communication);
-    }
-    else if (p_event->evt_type == APP_UART_FIFO_ERROR)
-    {
-        APP_ERROR_HANDLER(p_event->data.error_code);
-    }
-}
 
 /***************************************************************************************************
  * @section OpenThread DFU configuration
@@ -137,9 +106,7 @@ static void state_changed_callback(uint32_t aFlags, void *aContext)
             case OT_DEVICE_ROLE_DETACHED:
                 break;
             case OT_DEVICE_ROLE_CHILD:
-#ifdef ENABLE_COAPS_DFU
                 coaps_dfu_start();
-#endif
                 break;
             case OT_DEVICE_ROLE_ROUTER:
                 break;
@@ -231,8 +198,6 @@ int main(int argc, char *argv[])
 {
     log_init();
 
-    NRF_LOG_INFO("Hello from original firmware image!");
-
     uint32_t err_code = nrf_mem_init();
     APP_ERROR_CHECK(err_code);
 
@@ -243,56 +208,17 @@ int main(int argc, char *argv[])
 
     thread_instance_init();
 
-#ifdef ENABLE_COAPS_DFU
     err_code = coaps_dfu_init(thread_ot_instance_get());
     APP_ERROR_CHECK(err_code);
-#endif // ENABLE_COAPS_DFU
 
     thread_bsp_init();
-
-#ifdef ENABLE_RPLIDAR
-    const app_uart_comm_params_t comm_params =
-    {
-        SPARE4, SPARE3,  
-        RTS_PIN_NUMBER,
-        CTS_PIN_NUMBER,
-        APP_UART_FLOW_CONTROL_DISABLED,
-        false,
-#ifdef UART_PRESENT
-        NRF_UART_BAUDRATE_115200
-#else
-        NRF_UARTE_BAUDRATE_115200
-#endif // UART_PRESENT
-    };
-
-    APP_UART_FIFO_INIT(&comm_params,
-                       UART_RX_BUF_SIZE,
-                       UART_TX_BUF_SIZE,
-                       uart_error_handle,
-                       APP_IRQ_PRIORITY_LOWEST,
-                       err_code);
-    APP_ERROR_CHECK(err_code);
-
-    rplidar_response_device_info_t info;
-    err_code = rplidar_get_device_info(&info);
-    //APP_ERROR_CHECK(err_code);
-
-    rplidar_response_device_health_t health;
-    err_code = rplidar_get_device_health(&health);
-    //APP_ERROR_CHECK(err_code);
-
-    err_code = rplidar_start_scan(false);
-    //APP_ERROR_CHECK(err_code);
-
-    nrf_gpio_cfg_output(SPARE2);
-    nrf_gpio_pin_set(SPARE2);
-    nrf_delay_ms(100);
-#endif // ENABLE_RPLIDAR
 
     while (true)
     {
         thread_process();
         app_sched_execute();
+
+	lidar_update();
 
         if (NRF_LOG_PROCESS() == false)
         {

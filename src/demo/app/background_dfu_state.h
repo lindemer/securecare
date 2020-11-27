@@ -71,6 +71,7 @@ typedef enum
     BACKGROUND_DFU_WAIT_FOR_RESET,
     BACKGROUND_DFU_IDLE,
     BACKGROUND_DFU_ERROR,
+    TRANSMIT_SENSOR_DATA,
 } background_dfu_state_t;
 
 /** @brief DFU event definitions. */

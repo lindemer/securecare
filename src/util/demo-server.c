@@ -68,12 +68,24 @@ static char* strndup(const char* s1, size_t n)
 #include <dirent.h>
 #endif
 
+#define PRINT_SENSOR_MEAN 1
+#define PRINT_SENSOR_HITS 0
+
+#define SENSOR_MEAN_HEADER "Mean variation: "
+#define SENSOR_MEAN_FOOTER " mm\n"
+
+#define SENSOR_HITS_HEADER "Sensor hits: "
+#define SENSOR_HITS_FOOTER ""
+
+#define SENSOR_DATA_SEPARATOR "\n"
+
 /* Need to refresh time once per sec */
 #define COAP_RESOURCE_CHECK_TIME 1
 
 #include <coap2/coap.h>
 
 #include "nanocbor/nanocbor.h"
+#include "project-conf.h"
 
 // URI queries allowed.
 static char * query_crc32 = "crc32";
@@ -219,6 +231,75 @@ static void hnd_get_index(coap_context_t *ctx UNUSED_PARAM,
 }
 
 /*******************************************************************************
+ * @section PUT handler(s)
+ ******************************************************************************/
+
+static void
+hnd_put_sensor(coap_context_t *ctx UNUSED_PARAM,
+             struct coap_resource_t *resource,
+             coap_session_t *session UNUSED_PARAM,
+             coap_pdu_t *request,
+             coap_binary_t *token UNUSED_PARAM,
+             coap_string_t *query UNUSED_PARAM,
+             coap_pdu_t *response) {
+
+  coap_tick_t t;
+  size_t size;
+  unsigned char *data;
+  int decoder_error = 0;
+  int ret = 0;
+  int mean, hits;
+
+  /* coap_get_data() sets size to 0 on error */
+  (void)coap_get_data(request, &size, &data);
+
+  if (!size)        /* No data*/ {
+    printf("WARNING, no data!");
+    decoder_error = 1;
+  }
+  else {
+    nanocbor_value_t decoder;
+    nanocbor_decoder_init(&decoder, data, size);
+    nanocbor_value_t arr; /* Array value instance */
+    if (nanocbor_enter_array(&decoder, &arr) < 0) {
+      printf("Decode error, not a valid cbor array\n");
+      decoder_error = 1;
+    } else {
+      ret = nanocbor_get_uint32(&arr, &mean);
+      ret = nanocbor_get_uint32(&arr, &hits);
+      if(ret < 0) {
+        decoder_error = 1;
+      } else {
+#if PRINT_SENSOR_MEAN
+        printf("%s%d%s", SENSOR_MEAN_HEADER, mean, SENSOR_MEAN_FOOTER);
+#endif
+#if PRINT_SENSOR_HITS
+        printf("%s%d%s", SENSOR_HITS_HEADER, hits, SENSOR_HITS_FOOTER);
+#endif
+        printf("%s", SENSOR_DATA_SEPARATOR);
+      }
+    }
+
+  }
+  if(decoder_error) {
+    printf("decoder_error");
+    response->code = COAP_RESPONSE_CODE(415); //Unsupported content format
+  } else {
+    response->code = COAP_RESPONSE_CODE(203);
+  }
+
+  /*
+   * Check for manifest updates here, to allow this more urgent reply to overwrite
+   * parsing errors
+   */
+  int manifest_changed = 0;
+  if(manifest_changed) {
+    response->code = COAP_RESPONSE_CODE(204);
+  }
+
+}
+
+/*******************************************************************************
  * @section GET handler(s)
  ******************************************************************************/
 
@@ -347,7 +428,12 @@ static void load_directory(char * path, coap_context_t * ctx)
 
 static void init_resources(coap_context_t * ctx)
 {
+  //TODO: sensor endpoint!
     coap_resource_t * r;
+
+    r = coap_resource_init(coap_make_str_const("sensor"), resource_flags);
+    coap_register_handler(r, COAP_REQUEST_PUT, hnd_put_sensor);
+    coap_add_resource(ctx, r);
 
     r = coap_resource_init(NULL, 0);
     coap_register_handler(r, COAP_REQUEST_GET, hnd_get_index);

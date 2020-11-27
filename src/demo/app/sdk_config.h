@@ -50,6 +50,8 @@
 
 //==========================================================
 
+//#define ENABLE_SENSOR
+
 // Unique device identifiers for the CoAP(s) SUIT DFU.
 
 #ifndef SUIT_CLASS_ID

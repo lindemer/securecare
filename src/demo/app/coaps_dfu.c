@@ -55,6 +55,7 @@
 #include "coap_block.h"
 
 #include "thread_utils.h"
+#include "lidar_wrapper.h"
 
 #include <openthread/coap.h>
 #include <openthread/coap_secure.h>
@@ -94,12 +95,15 @@ static const uint16_t suit_remote_port = OT_DEFAULT_COAP_PORT;
 #define SCHED_EVENT_DATA_SIZE MAX(sizeof(nrf_dfu_request_t), APP_TIMER_SCHED_EVENT_DATA_SIZE)
 
 // CoAP temporary buffer size
-#define BUFFER_LENGTH            512
+#define RX_BUFF_LEN             512
+#define TX_BUFF_LEN 		512
 
 typedef struct
 {
-    uint8_t                  buffer[BUFFER_LENGTH]; // Last received CoAP payload.
+    uint8_t                  buffer[RX_BUFF_LEN];   // Last received CoAP payload.
     uint32_t                 buffer_length;         // Length of the last received CoAP payload.
+    uint8_t                  payload[TX_BUFF_LEN];  // Send buffer.
+    uint32_t                 payload_length;
     const char             * resource_path;         // Downloaded resource path on the remote host.
     uint8_t                  remote_addr[16];       // Remote address from which the resource is being downloaded.
     uint16_t                 remote_port;           // Remote port from which the resource is being downloaded.
@@ -113,9 +117,12 @@ static uint16_t m_coap_token;
 static background_dfu_context_t m_dfu_ctx;
 static coaps_dfu_context_t       m_coaps_dfu_ctx;
 
-// Remote SUIT resource URNs
+// Remote resource URNs
 static char * manifest_resource_name = "manifest.cbor";
 static char image_resource_name[256];
+#ifdef ENABLE_SENSOR
+static char * sensor_resource_name = "sensor";
+#endif
 
 static void reset_application(void)
 {
@@ -124,6 +131,10 @@ static void reset_application(void)
 #if NRF_MODULE_ENABLED(NRF_LOG_BACKEND_RTT)
     // To allow the buffer to be flushed by the host.
     nrf_delay_ms(100);
+#endif
+#if COAPS_DFU_DTLS_ENABLE
+    otCoapSecureStop(thread_ot_instance_get());
+    otCoapSecureDisconnect(thread_ot_instance_get());
 #endif
 
     NVIC_SystemReset();
@@ -151,6 +162,27 @@ static void dfu_observer(nrf_dfu_evt_type_t evt_type)
             break;
     }
 }
+
+/***************************************************************************************************
+ * @section Sensor handler
+ **************************************************************************************************/
+
+#ifdef ENABLE_SENSOR
+int16_t read_sensor_data(uint8_t *buffer, uint16_t buf_len)
+{
+    uint32_t mean, hits;
+    
+    int ret = lidar_get_data(&mean, &hits);
+    NRF_LOG_INFO("%d hits, %d mean %d ret", hits, mean, ret);
+    
+    nanocbor_encoder_t encoder;
+    nanocbor_encoder_init(&encoder, buffer, buf_len);
+    nanocbor_fmt_array(&encoder, 2);
+    nanocbor_fmt_uint(&encoder, mean);
+    nanocbor_fmt_uint(&encoder, hits);
+    return nanocbor_encoded_len(&encoder);
+}
+#endif
 
 /***************************************************************************************************
  * @section Block processing
@@ -394,6 +426,19 @@ static void handle_block_response(void *aContext,
     } while (0);
 }
 
+#ifdef ENABLE_SENSOR
+static void handle_sensor_ack(void *aContext,
+                              otMessage *aMessage,
+                              const otMessageInfo *aMessageInfo,
+                              otError aResult)
+
+{
+    if (otCoapMessageGetCode(aMessage) == OT_COAP_CODE_VALID) {
+        return;
+    } 
+}
+#endif
+
 /***************************************************************************************************
  * @section Message helpers
  **************************************************************************************************/
@@ -447,12 +492,13 @@ static uint32_t parse_uri_string(background_dfu_context_t * p_dfu_ctx, char * re
 
 /**@brief Create a CoAP message with specific payload and remote.
  *
- * @param[in]  p_resource  A pointer to a string with resource name.
- * @param[in]  p_query     A pointer to a string with query string or NULL.
- * @param[in]  p_payload   A pointer to the message payload. NULL if message shall not contain any payload.
- * @param[in]  payload_len Payload length in bytes, ignored if p_payload is NULL.
- * @param[in]  aCode       CoAP message code.
- * @param[in]  aType       CoAP message type.
+ * @param[in]  p_resource     A pointer to a string with resource name.
+ * @param[in]  p_query        A pointer to a string with query string or NULL.
+ * @param[in]  p_payload      A pointer to the message payload. NULL if message shall not contain any payload.
+ * @param[in]  payload_len    Payload length in bytes, ignored if p_payload is NULL.
+ * @param[in]  aCode          CoAP message code.
+ * @param[in]  aType          CoAP message type.
+ * @param[in]  aContentFormat CoAP content format.
  *
  * @return A pointer to the message created or NULL if could not be created.
  */
@@ -461,7 +507,8 @@ static otMessage * message_create(const char    * p_resource,
                                   const uint8_t * p_payload,
                                   uint16_t        payload_len,
 				  otCoapCode      aCode,
-				  otCoapType      aType)
+				  otCoapType      aType,
+				  otCoapOptionContentFormat aContentFormat)
 {
     otError     error;   
     otMessage * aMessage = otCoapNewMessage(thread_ot_instance_get(), NULL);
@@ -480,8 +527,17 @@ static otMessage * message_create(const char    * p_resource,
 
    if (p_payload != NULL)
    {
+      error = otCoapMessageAppendContentFormatOption(aMessage, aContentFormat);
+      ASSERT(error == OT_ERROR_NONE);
+
+      error = otCoapMessageSetPayloadMarker(aMessage);
+      ASSERT(error == OT_ERROR_NONE);
+
        error = otMessageAppend(aMessage, p_payload, payload_len);
        ASSERT(error == OT_ERROR_NONE);
+       NRF_LOG_INFO("attach pload: %lu", payload_len);
+   } else {
+     NRF_LOG_DEBUG("No req pload");
    }
 
    if (p_query != NULL)
@@ -544,24 +600,35 @@ static void coaps_dfu_message_send(otMessage * aMessage)
  * @section Private API
  **************************************************************************************************/
 
-/**@brief Create a CoAP GET request.
+/**@brief Create a CoAP GET/POST request.
  *
  * @param[in] resource_path   The URI of the resource which should be requested.
  * @param[in] p_query         A pointer to a string with query string or NULL.
+ * @param[in] req_payload     byte array pointer
+ * @param[in] req_payload_len length of request payload
  * @param[in] block_size      Requested block size.
  * @param[in] block_num       Requested block number.
+ * @param[in] aCode           GET or POST
+ * @param[in] aContentFormat  CoAP content format.
  *
  * @return A pointer to CoAP message or NULL on error.
  */
+
 static otMessage * coaps_dfu_create_request(const char * resource_path,
                                            const char * p_query,
+                                           uint8_t * req_payload,
+                                           uint16_t   payload_len,
                                            uint16_t     block_size,
-                                           uint32_t     block_num)
+                                           uint32_t     block_num,
+                                           otCoapCode      aCode,
+                                           otCoapOptionContentFormat aContentFormat
+                                           )
+
 {
     otMessage * aMessage;
-    aMessage = message_create(resource_path, p_query, NULL, 0,
-    		OT_COAP_CODE_GET, OT_COAP_TYPE_CONFIRMABLE);
-    
+    aMessage = message_create(resource_path, p_query, req_payload, payload_len,
+        aCode, OT_COAP_TYPE_CONFIRMABLE, aContentFormat);
+
     if (block_size > 0)
     {
         if (set_block2_opt(aMessage, block_size, block_num) != NRF_SUCCESS)
@@ -625,7 +692,7 @@ void background_dfu_transport_block_request_send(background_dfu_context_t       
                                            (uint8_t *)(&p_req_bmp->offset),
                                            sizeof(p_req_bmp->bitmap) + sizeof(uint16_t),
                                            OT_COAP_CODE_PUT,
-                                           OT_COAP_TYPE_NON_CONFIRMABLE);
+                                           OT_COAP_TYPE_NON_CONFIRMABLE, 0);
 
     coaps_dfu_message_send(aMessage);
 }
@@ -670,6 +737,15 @@ void background_dfu_transport_state_update(background_dfu_context_t * p_dfu_ctx)
         case BACKGROUND_DFU_IDLE:
             break;
 
+        case TRANSMIT_SENSOR_DATA:
+#ifdef ENABLE_SENSOR
+  	    m_coaps_dfu_ctx.resource_path = sensor_resource_name;
+   	    int len = read_sensor_data(m_coaps_dfu_ctx.payload, TX_BUFF_LEN);
+    	    m_coaps_dfu_ctx.payload_length = len;
+    	    m_coaps_dfu_ctx.handler = (otCoapResponseHandler)handle_sensor_ack;
+#endif
+            break;
+
         default:
             NRF_LOG_WARNING("Unhandled state in background_dfu_transport_state_update (s: %s).",
                     (uint32_t)background_dfu_state_to_string(p_dfu_ctx->dfu_state));
@@ -680,6 +756,11 @@ void background_dfu_transport_send_request(background_dfu_context_t * p_dfu_ctx)
 {
     uint16_t block_size;
     char * query;
+    uint16_t payload_len = 0;
+    uint8_t * payload = NULL;
+
+    otCoapCode aCode = OT_COAP_CODE_GET;
+    otCoapOptionContentFormat aContentFormat = 0;
 
     switch (p_dfu_ctx->dfu_state)
     {
@@ -688,15 +769,28 @@ void background_dfu_transport_send_request(background_dfu_context_t * p_dfu_ctx)
             query = "meta";
             break;
 
+	case TRANSMIT_SENSOR_DATA:
+	    block_size = 0;
+	    payload = m_coaps_dfu_ctx.payload;
+	    payload_len = m_coaps_dfu_ctx.payload_length;
+	    query = NULL;
+	    aCode = OT_COAP_CODE_PUT;
+
         default:
             block_size = DEFAULT_BLOCK_SIZE;
             query = NULL;
     }
 
-    otMessage * aMessage = coaps_dfu_create_request(m_coaps_dfu_ctx.resource_path,
-                                                   query,
-                                                   block_size,
-                                                   p_dfu_ctx->block_num);
+    otMessage * aMessage = coaps_dfu_create_request(
+		    m_coaps_dfu_ctx.resource_path,
+                    query,
+                    payload,
+                    payload_len,
+                    block_size,
+                    p_dfu_ctx->block_num,
+                    aCode,
+                    aContentFormat
+    );
 
     NRF_LOG_INFO("Requesting [%s] (block:%u)",
                     (uint32_t)m_coaps_dfu_ctx.resource_path,
@@ -829,6 +923,8 @@ uint32_t coaps_dfu_start()
     /* If DTLS is not enabled, we can transition from DFU_IDLE to DFU_GET_MANIFEST_METADATA
      * immediately. Otherwise, this transition is triggered by the CoAPs connection callback upon
      * completion of the handshake with the remote server.
+     *
+     * If ENABLE_SENSOR is defined, the next state will be TRANSMIT_SENSOR_DATA instead.
      */
 
 #if COAPS_DFU_DTLS_ENABLE

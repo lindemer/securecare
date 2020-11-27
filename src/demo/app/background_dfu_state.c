@@ -62,6 +62,7 @@
 #include "background_dfu_transport.h"
 #include "background_dfu_operation.h"
 #include "nanocbor/nanocbor.h"
+#include "lidar_wrapper.h"
 
 #define NRF_LOG_MODULE_NAME background_dfu
 
@@ -80,6 +81,7 @@ NRF_LOG_MODULE_REGISTER();
 
 APP_TIMER_DEF(m_missing_block_timer);
 APP_TIMER_DEF(m_block_timeout_timer);
+APP_TIMER_DEF(m_periodic_timer);
 
 /**@brief Defines how many retries are performed in case no response is received. */
 #define DEFAULT_RETRIES         3
@@ -465,6 +467,13 @@ static void block_timeout_handler(void * p_context)
     }
 }
 
+static void periodic_sensor_handler(void * p_context)
+{
+  NRF_LOG_INFO("Sensor timer triggered.");
+  background_dfu_handle_event((background_dfu_context_t *)p_context,
+		  BACKGROUND_DFU_EVENT_TRANSFER_COMPLETE);
+}
+
 /***************************************************************************************************
  * @section API functions
  **************************************************************************************************/
@@ -486,6 +495,7 @@ const char * background_dfu_state_to_string(const background_dfu_state_t state)
         "DFU_WAIT_FOR_RESET",
         "DFU_IDLE",
         "DFU_ERROR",
+	"TRANSMIT_SENSOR_DATA"
     };
 
     return names[(uint32_t)state - BACKGROUND_DFU_GET_MANIFEST_BLOCKWISE];
@@ -526,7 +536,13 @@ uint32_t background_dfu_handle_event(background_dfu_context_t * p_dfu_ctx,
             {
                 p_dfu_ctx->dfu_diag.prev_state = BACKGROUND_DFU_IDLE;
 
+#ifdef ENABLE_SENSOR
+		init_lidar();
+                p_dfu_ctx->dfu_state     = TRANSMIT_SENSOR_DATA;
+		app_timer_start(m_periodic_timer, APP_TIMER_TICKS(2000), p_dfu_ctx);
+#else
                 p_dfu_ctx->dfu_state     = BACKGROUND_DFU_GET_MANIFEST_METADATA;
+#endif
                 p_dfu_ctx->block_num     = 0;
                 p_dfu_ctx->retry_count   = DEFAULT_RETRIES;
 
@@ -656,6 +672,14 @@ uint32_t background_dfu_handle_event(background_dfu_context_t * p_dfu_ctx,
             NRF_LOG_WARNING("An event received in wait for reset state. This should not happen.");
             break;
 
+
+	case TRANSMIT_SENSOR_DATA:
+            p_dfu_ctx->p_resource_size = 0;
+            p_dfu_ctx->retry_count     = DEFAULT_RETRIES;
+            p_dfu_ctx->block_num       = 0;
+    	    background_dfu_transport_state_update(p_dfu_ctx);
+   	    break;
+
         default:
             NRF_LOG_ERROR("Unhandled state");
             break;
@@ -753,6 +777,15 @@ void background_dfu_state_init(background_dfu_context_t * p_dfu_ctx)
     if (err_code != NRF_SUCCESS)
     {
         NRF_LOG_ERROR("Error in app_timer_create (%d)", err_code);
+    }
+
+    err_code = app_timer_create(&m_periodic_timer,
+                                APP_TIMER_MODE_REPEATED,
+                                periodic_sensor_handler);
+
+    if (err_code != NRF_SUCCESS)
+    {
+        NRF_LOG_ERROR("Error in periodic app_timer_create (%d)", err_code);
     }
 
     background_dfu_reset_state(p_dfu_ctx);
