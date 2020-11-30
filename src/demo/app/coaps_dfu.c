@@ -76,7 +76,7 @@ static const uint8_t suit_remote_addr[16] =
           0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01 };
 
 #ifndef COAPS_DFU_DTLS_ENABLE
-#define COAPS_DFU_DTLS_ENABLE 1
+#define COAPS_DFU_DTLS_ENABLE 1 
 #endif
 
 #if COAPS_DFU_DTLS_ENABLE
@@ -135,6 +135,7 @@ static void reset_application(void)
 #if COAPS_DFU_DTLS_ENABLE
     otCoapSecureStop(thread_ot_instance_get());
     otCoapSecureDisconnect(thread_ot_instance_get());
+    nrf_delay_ms(1000);
 #endif
 
     NVIC_SystemReset();

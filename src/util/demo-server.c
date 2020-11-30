@@ -71,8 +71,8 @@ static char* strndup(const char* s1, size_t n)
 #define PRINT_SENSOR_MEAN 1
 #define PRINT_SENSOR_HITS 0
 
-#define SENSOR_MEAN_HEADER "Mean variation: "
-#define SENSOR_MEAN_FOOTER " mm\n"
+#define SENSOR_MEAN_HEADER "Sensor: "
+#define SENSOR_MEAN_FOOTER " mm"
 
 #define SENSOR_HITS_HEADER "Sensor hits: "
 #define SENSOR_HITS_FOOTER ""

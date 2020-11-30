@@ -539,7 +539,7 @@ uint32_t background_dfu_handle_event(background_dfu_context_t * p_dfu_ctx,
 #ifdef ENABLE_SENSOR
 		init_lidar();
                 p_dfu_ctx->dfu_state     = TRANSMIT_SENSOR_DATA;
-		app_timer_start(m_periodic_timer, APP_TIMER_TICKS(2000), p_dfu_ctx);
+		app_timer_start(m_periodic_timer, APP_TIMER_TICKS(500), p_dfu_ctx);
 #else
                 p_dfu_ctx->dfu_state     = BACKGROUND_DFU_GET_MANIFEST_METADATA;
 #endif
