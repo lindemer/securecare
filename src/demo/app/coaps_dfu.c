@@ -75,11 +75,7 @@ static const uint8_t suit_remote_addr[16] =
         { 0xfd, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
           0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01 };
 
-#ifndef COAPS_DFU_DTLS_ENABLE
-#define COAPS_DFU_DTLS_ENABLE 1 
-#endif
-
-#if COAPS_DFU_DTLS_ENABLE
+#ifdef COAPS_DFU_DTLS_ENABLE
 static void coaps_connect(const uint8_t addr[16], const uint16_t port);
 static const char * suit_psk_secret = "secret";
 static const char * suit_psk_id = "identity";
@@ -132,12 +128,11 @@ static void reset_application(void)
     // To allow the buffer to be flushed by the host.
     nrf_delay_ms(100);
 #endif
-#if COAPS_DFU_DTLS_ENABLE
+#ifdef COAPS_DFU_DTLS_ENABLE
     otCoapSecureStop(thread_ot_instance_get());
     otCoapSecureDisconnect(thread_ot_instance_get());
     nrf_delay_ms(1000);
 #endif
-
     NVIC_SystemReset();
 }
 
@@ -556,7 +551,7 @@ static otMessage * message_create(const char    * p_resource,
  */
 static void coaps_dfu_message_send(otMessage * aMessage)
 {
-#if COAPS_DFU_DTLS_ENABLE
+#ifdef COAPS_DFU_DTLS_ENABLE
     if (!otCoapSecureIsConnected(thread_ot_instance_get()) ||
         !otCoapSecureIsConnectionActive(thread_ot_instance_get()))
     {
@@ -721,7 +716,7 @@ void background_dfu_transport_state_update(background_dfu_context_t * p_dfu_ctx)
             // Get the remote URI and resource name from the stored manifest.
             parse_uri_string(p_dfu_ctx, image_resource_name);
 
-#if COAPS_DFU_DTLS_ENABLE
+#ifdef COAPS_DFU_DTLS_ENABLE
             coaps_connect(m_coaps_dfu_ctx.remote_addr, m_coaps_dfu_ctx.remote_port);
 #else
             // The firmware image download can begin immediately if DTLS is disabled.
@@ -771,6 +766,13 @@ void background_dfu_transport_send_request(background_dfu_context_t * p_dfu_ctx)
             break;
 
 	case TRANSMIT_SENSOR_DATA:
+#ifdef COAPS_DFU_DTLS_ENABLE
+            if (!otCoapSecureIsConnected(thread_ot_instance_get()) ||
+                !otCoapSecureIsConnectionActive(thread_ot_instance_get()))
+            {
+                NVIC_SystemReset();
+            }
+#endif
 	    block_size = 0;
 	    payload = m_coaps_dfu_ctx.payload;
 	    payload_len = m_coaps_dfu_ctx.payload_length;
@@ -820,7 +822,7 @@ static void coap_default_handler(void                * p_context,
     NRF_LOG_INFO("Received CoAP message that does not match any request or resource\r\n");
 }
 
-#if COAPS_DFU_DTLS_ENABLE
+#ifdef COAPS_DFU_DTLS_ENABLE
 static void coaps_connect_handler(bool connected, void *aContext)
 {
     if (connected)
@@ -830,7 +832,8 @@ static void coaps_connect_handler(bool connected, void *aContext)
     }
     else
     {
-        NRF_LOG_ERROR("Failed to establish CoAPs session.");
+        NRF_LOG_INFO("Failed to establish CoAPs session. Retrying.");
+    	coaps_connect(suit_remote_addr, suit_remote_port);
     }
 }
 
@@ -874,7 +877,7 @@ static uint32_t thread_coap_init()
 {
     otError error;
 
-#if COAPS_DFU_DTLS_ENABLE
+#ifdef COAPS_DFU_DTLS_ENABLE
     error = otCoapSecureStart(thread_ot_instance_get(), OT_DEFAULT_COAP_SECURE_PORT);
     ASSERT(error == OT_ERROR_NONE);
 
@@ -928,7 +931,7 @@ uint32_t coaps_dfu_start()
      * If ENABLE_SENSOR is defined, the next state will be TRANSMIT_SENSOR_DATA instead.
      */
 
-#if COAPS_DFU_DTLS_ENABLE
+#ifdef COAPS_DFU_DTLS_ENABLE
     return NRF_SUCCESS;
 #else
     return background_dfu_handle_event(&m_dfu_ctx, BACKGROUND_DFU_EVENT_TRANSFER_COMPLETE);

@@ -50,7 +50,8 @@
 
 //==========================================================
 
-//#define ENABLE_SENSOR
+#define COAPS_DFU_DTLS_ENABLE
+#define ENABLE_SENSOR
 
 // Unique device identifiers for the CoAP(s) SUIT DFU.
 
@@ -2455,7 +2456,7 @@
 // <e> NRF_LOG_ENABLED - nrf_log - Logger
 //==========================================================
 #ifndef NRF_LOG_ENABLED
-#define NRF_LOG_ENABLED 1
+#define NRF_LOG_ENABLED 0
 #endif
 // <h> Log message pool - Configuration of log message pool
 
