@@ -153,6 +153,13 @@ static valid_pki_snis_t valid_pki_snis = {0, NULL};
 static void handle_sigint(int signum UNUSED_PARAM) { quit = 1; }
 
 /*
+ * Timestamp for manifest.cbor and helper function headers
+ */
+time_t get_file_modified_time(const char *path);
+int file_is_modified(const char *path);
+static time_t last_update_time;
+
+/*
  * SENSOR_THRESHOLD from project-conf.h
  */
 bool get_alarm(int mean) {
@@ -290,7 +297,7 @@ hnd_put_sensor(coap_context_t *ctx UNUSED_PARAM,
 
   }
   if(decoder_error) {
-    fprintf(stderr, "decoder_error");
+    fprintf(stderr, "decoder_error\n");
     response->code = COAP_RESPONSE_CODE(415); //Unsupported content format
   } else {
     response->code = COAP_RESPONSE_CODE(203);
@@ -300,8 +307,9 @@ hnd_put_sensor(coap_context_t *ctx UNUSED_PARAM,
    * Check for manifest updates here, to allow this more urgent reply to overwrite
    * parsing errors
    */
-  int manifest_changed = 0;
+  int manifest_changed = file_is_modified(MANIFEST_PATH);
   if(manifest_changed) {
+    fprintf(stderr, "manifest updated\n");
     response->code = COAP_RESPONSE_CODE(204);
   }
 
@@ -450,6 +458,33 @@ static void init_resources(coap_context_t * ctx)
     coap_add_resource(ctx, r);
 
     load_directory(fsdir, ctx);
+    //initialize last known update time:
+    last_update_time = get_file_modified_time(MANIFEST_PATH);
+
+}
+
+/*
+ * Check for file changes
+ */
+
+time_t get_file_modified_time(const char *path) {
+
+  struct stat file_stat;
+  int err = stat(path, &file_stat);
+  if (err != 0) {
+      perror(" [file_is_modified] stat");
+      exit(errno);
+  }
+  return file_stat.st_mtime;
+
+}
+int file_is_modified(const char *path) {
+  time_t new_time = get_file_modified_time(path);
+  if(new_time > last_update_time) {
+    last_update_time = new_time;
+    return 1;
+  }
+  return 0;
 }
 
 /*******************************************************************************
