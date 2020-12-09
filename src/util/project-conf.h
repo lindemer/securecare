@@ -39,6 +39,9 @@
 #define SENSOR_MEAN_HEADER ""
 #define SENSOR_MEAN_FOOTER ","
 
+#define SENSOR_ALARM_HEADER ""
+#define SENSOR_ALARM_FOOTER ""
+
 #define SENSOR_HITS_HEADER ""
 #define SENSOR_HITS_FOOTER ""
 
