@@ -186,29 +186,6 @@ metadata_fail:
   return false;
 }
 
-bool background_dfu_process_manifest_metadata(background_dfu_context_t * p_dfu_ctx,
-    const uint8_t            * p_payload,
-    uint32_t                   payload_len)
-{
-  /* This function is called from coaps_dfu.c upon validating a manifest
-   * metadata reply. If the manifest found on the server has the same CRC32 as
-   * the one in flash, we do not proceed with the update.
-   */
-  if (p_dfu_ctx->suit_manifest_crc == nrf_dfu_validation_get_manifest_crc())
-  {
-    background_dfu_handle_event(p_dfu_ctx, BACKGROUND_DFU_EVENT_PROCESSING_ERROR);
-    return false;
-  }
-
-  background_dfu_handle_event(p_dfu_ctx, BACKGROUND_DFU_EVENT_TRANSFER_COMPLETE);
-
-  NRF_LOG_INFO("SUIT DFU: manifest (sz=%d, crc=%0X)",
-      p_dfu_ctx->suit_manifest_size,
-      p_dfu_ctx->suit_manifest_crc);
-
-  return true;
-}
-
 /***************************************************************************************************
  * @section DFU checks
  **************************************************************************************************/

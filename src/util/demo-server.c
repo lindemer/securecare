@@ -303,16 +303,6 @@ hnd_put_sensor(coap_context_t *ctx UNUSED_PARAM,
     response->code = COAP_RESPONSE_CODE(203);
   }
 
-  /*
-   * Check for manifest updates here, to allow this more urgent reply to overwrite
-   * parsing errors
-   */
-  int manifest_changed = file_is_modified(MANIFEST_PATH);
-  if(manifest_changed) {
-    fprintf(stderr, "manifest updated\n");
-    response->code = COAP_RESPONSE_CODE(204);
-  }
-
 }
 
 /*******************************************************************************
@@ -336,12 +326,19 @@ static void hnd_get(coap_context_t *ctx UNUSED_PARAM,
         response->code = COAP_RESPONSE_CODE(404);
         return;
     }
+
     
     // Parse requested file.
     size_t flen;
     char * full_path = malloc(strlen(uri_path->s) + strlen(fsdir));
     sprintf(full_path, "%s/%s", fsdir, uri_path->s);
     uint8_t * buf = read_file_mem(full_path, &flen);
+
+  if (!file_is_modified(full_path)) {
+    fprintf(stderr, "manifest updated\n");
+    response->code = COAP_RESPONSE_CODE(404);
+    return;
+  }
 
     // File contents returned if no query is present.
     reply = buf;

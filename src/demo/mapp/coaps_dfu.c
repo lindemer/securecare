@@ -340,18 +340,22 @@ static void handle_manifest_metadata_response(void *aContext,
         background_dfu_handle_event(&m_dfu_ctx, BACKGROUND_DFU_EVENT_TRANSFER_ERROR);
         return;
     }
+    	
+    int resp_code = otCoapMessageGetCode(aMessage);
+    if (resp_code == OT_COAP_CODE_NOT_FOUND)
+    {
+        background_dfu_handle_event(p_dfu_ctx, BACKGROUND_DFU_EVENT_PROCESSING_ERROR);
+    }
 
     static_m_coaps_dfu_ctx.buffer_length = otMessageRead(aMessage,
                                                  otMessageGetOffset(aMessage),
                                                  static_m_coaps_dfu_ctx.buffer,
                                                  otMessageGetLength(aMessage));
 
-      if (background_dfu_validate_manifest_metadata(&m_dfu_ctx,
-                              static_m_coaps_dfu_ctx.buffer, static_m_coaps_dfu_ctx.buffer_length))
+    if (background_dfu_validate_manifest_metadata(&m_dfu_ctx,
+        static_m_coaps_dfu_ctx.buffer, static_m_coaps_dfu_ctx.buffer_length))
     {
-        NRF_LOG_INFO("Manifest metadata received.");
-        background_dfu_process_manifest_metadata(&m_dfu_ctx,
-                                  static_m_coaps_dfu_ctx.buffer, static_m_coaps_dfu_ctx.buffer_length);
+        background_dfu_handle_event(p_dfu_ctx, BACKGROUND_DFU_EVENT_TRANSFER_COMPLETE);
     }
 }
 
