@@ -284,6 +284,7 @@ hnd_put_sensor(coap_context_t *ctx UNUSED_PARAM,
         printf("%s%d%s", SENSOR_HITS_HEADER, hits, SENSOR_HITS_FOOTER);
 #endif
         printf("%s", SENSOR_DATA_SEPARATOR);
+	fflush(stdout);
       }
     }
 
@@ -435,7 +436,6 @@ static void load_directory(char * path, coap_context_t * ctx)
 
 static void init_resources(coap_context_t * ctx)
 {
-  //TODO: sensor endpoint!
     coap_resource_t * r;
 
     r = coap_resource_init(coap_make_str_const("sensor"), resource_flags);

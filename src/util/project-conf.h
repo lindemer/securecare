@@ -31,7 +31,7 @@
 #ifndef PROJECT_CONF_H
 #define PROJECT_CONF_H
 
-#define SENSOR_THRESHOLD 100 // [mm]
+#define SENSOR_THRESHOLD 150 // [mm]
 
 #define PRINT_SENSOR_MEAN 1
 #define PRINT_SENSOR_HITS 0
