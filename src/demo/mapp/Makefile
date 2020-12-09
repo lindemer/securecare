@@ -182,6 +182,7 @@ INC_FOLDERS += \
   $(PROJ_DIR)/../../est/util \
   $(SDK_ROOT)/components/libraries/crypto/backend/cc310 \
   $(SDK_ROOT)/components/libraries/fifo \
+  $(SDK_ROOT)/components/libraries/util \
   $(SDK_ROOT)/external/nrf_cc310/include \
   $(SDK_ROOT)/external/nrf_security/include \
   $(SDK_ROOT)/components/libraries/crypto/backend/cifra \

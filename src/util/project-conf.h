@@ -31,15 +31,21 @@
 #ifndef PROJECT_CONF_H
 #define PROJECT_CONF_H
 
+#define SENSOR_THRESHOLD 100 // [mm]
+
 #define PRINT_SENSOR_MEAN 1
-#define PRINT_SENSOR_HITS 1
+#define PRINT_SENSOR_HITS 0
 
-#define SENSOR_MEAN_HEADER "Sensor mean: "
-#define SENSOR_MEAN_FOOTER "\n"
+#define SENSOR_MEAN_HEADER ""
+#define SENSOR_MEAN_FOOTER ","
 
-#define SENSOR_HITS_HEADER "Sensor hits: "
+#define SENSOR_HITS_HEADER ""
 #define SENSOR_HITS_FOOTER ""
 
-#define SENSOR_DATA_SEPARATOR "\n"
+#define SENSOR_DATA_SEPARATOR "\n" //between different (pairs of) readings
+
+#define SENSOR_ALARM_VALUE 255
+#define SENSOR_NULL_VALUE 0
+
 
 #endif

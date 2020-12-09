@@ -152,6 +152,13 @@ static valid_pki_snis_t valid_pki_snis = {0, NULL};
 
 static void handle_sigint(int signum UNUSED_PARAM) { quit = 1; }
 
+/*
+ * SENSOR_THRESHOLD from project-conf.h
+ */
+bool get_alarm(int mean) {
+  return mean > SENSOR_THRESHOLD;
+}
+
 static uint8_t * read_file_mem(const char * file, size_t * length)
 {
     FILE * f;
@@ -243,7 +250,7 @@ hnd_put_sensor(coap_context_t *ctx UNUSED_PARAM,
   (void)coap_get_data(request, &size, &data);
 
   if (!size)        /* No data*/ {
-    printf("WARNING, no data!");
+    fprintf(stderr, "WARNING, no data!");
     decoder_error = 1;
   }
   else {
@@ -251,7 +258,7 @@ hnd_put_sensor(coap_context_t *ctx UNUSED_PARAM,
     nanocbor_decoder_init(&decoder, data, size);
     nanocbor_value_t arr; /* Array value instance */
     if (nanocbor_enter_array(&decoder, &arr) < 0) {
-      printf("Decode error, not a valid cbor array\n");
+      fprintf(stderr, "Decode error, not a valid cbor array\n");
       decoder_error = 1;
     } else {
       ret = nanocbor_get_int32(&arr, &mean);
@@ -260,7 +267,15 @@ hnd_put_sensor(coap_context_t *ctx UNUSED_PARAM,
         decoder_error = 1;
       } else {
 #if PRINT_SENSOR_MEAN
-        printf("%s%d%s", SENSOR_MEAN_HEADER, mean, SENSOR_MEAN_FOOTER);
+        if (get_alarm(mean)) {
+          printf("%s%d%s", SENSOR_MEAN_HEADER, SENSOR_ALARM_VALUE, SENSOR_MEAN_FOOTER);
+        }
+        else
+        {
+          printf("%s%d%s", SENSOR_MEAN_HEADER, SENSOR_NULL_VALUE, SENSOR_MEAN_FOOTER);
+
+        }
+
 #endif
 #if PRINT_SENSOR_HITS
         printf("%s%d%s", SENSOR_HITS_HEADER, hits, SENSOR_HITS_FOOTER);
@@ -271,7 +286,7 @@ hnd_put_sensor(coap_context_t *ctx UNUSED_PARAM,
 
   }
   if(decoder_error) {
-    printf("decoder_error");
+    fprintf(stderr, "decoder_error");
     response->code = COAP_RESPONSE_CODE(415); //Unsupported content format
   } else {
     response->code = COAP_RESPONSE_CODE(203);
@@ -323,7 +338,7 @@ static void hnd_get(coap_context_t *ctx UNUSED_PARAM,
     // Get requester's IP address.
     struct sockaddr_in * remote = &session->addr_info.remote.addr.sin;
     char * ip = inet_ntoa(remote->sin_addr);
-    printf("/%s requested by remote %s", uri_path->s, ip);
+   fprintf(stderr, "/%s requested by remote %s", uri_path->s, ip);
 
     // Check for block option.
     coap_block_t block2 = { 0, 0, 0 };
@@ -332,7 +347,7 @@ static void hnd_get(coap_context_t *ctx UNUSED_PARAM,
         int total_blocks = (flen / block_size) +
                 ((flen % block_size) == 0 ? 0 : 1);
 	if (block2.num == (total_blocks - 1)) block_size = flen % block_size;
-        printf(" - block [%d/%d], size %d ",
+       fprintf(stderr, " - block [%d/%d], size %d ",
                      block2.num, total_blocks - 1, block_size);
     }
 
@@ -351,7 +366,7 @@ static void hnd_get(coap_context_t *ctx UNUSED_PARAM,
 
             // [meta] Return the size and the CRC32 of the requested resource.
             if (!memcmp(option.value, query_meta, option.length)) {
-                printf(" - resource metadata queried");
+               fprintf(stderr, " - resource metadata queried");
                 nanocbor_fmt_array(&nc, 2);
                 nanocbor_fmt_uint(&nc, flen);
                 nanocbor_fmt_uint(&nc, crc);
@@ -360,14 +375,14 @@ static void hnd_get(coap_context_t *ctx UNUSED_PARAM,
 
             // [crc] Return the CRC32 of the requested resource.
 	    else if (!memcmp(option.value, query_crc32, option.length)) {
-                printf(" - resource CRC32 queried");
+                fprintf(stderr, " - resource CRC32 queried");
                 nanocbor_fmt_uint(&nc, crc);
                 len_reply = nanocbor_encoded_len(&nc);
 	    }
 
             // [size] Return the size of the requested resource.
             else if (!memcmp(option.value, query_size, option.length)) {
-                printf(" - resource size queried");
+                fprintf(stderr, " - resource size queried");
                 nanocbor_fmt_uint(&nc, flen);
                 len_reply = nanocbor_encoded_len(&nc);
             }
@@ -375,7 +390,7 @@ static void hnd_get(coap_context_t *ctx UNUSED_PARAM,
         }
     }
 
-    printf("\n");
+    fprintf(stderr, "\n");
 
     coap_add_data_blocked_response(resource, session, request, response, token,
             COAP_MEDIATYPE_ANY, -1, len_reply, reply);
@@ -405,7 +420,7 @@ static void load_directory(char * path, coap_context_t * ctx)
                 coap_register_handler(r, COAP_REQUEST_GET, hnd_get);
                 coap_resource_set_get_observable(r, 0);
                 coap_add_resource(ctx, r);
-                if (r != NULL) printf("Resource added: /%s\n", ent->d_name);
+                if (r != NULL) fprintf(stderr, "Resource added: /%s\n", ent->d_name);
             }
         }
         closedir(dir);

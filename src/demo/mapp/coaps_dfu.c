@@ -90,7 +90,7 @@
 NRF_LOG_MODULE_REGISTER();
 
 
-#if COAPS_DFU_DTLS_ENABLE
+#ifdef COAPS_DFU_DTLS_ENABLE
 static void coaps_connect(const uint8_t addr[16], const uint16_t port);
 #endif
 
@@ -841,7 +841,7 @@ static otMessage * message_create(const char    * p_resource,
  */
 static void coaps_dfu_message_send(otMessage * aMessage)
 {
-#if COAPS_DFU_DTLS_ENABLE
+#ifdef COAPS_DFU_DTLS_ENABLE
     if (!otCoapSecureIsConnected(thread_ot_instance_get()) ||
         !otCoapSecureIsConnectionActive(thread_ot_instance_get()))
     {
@@ -1067,7 +1067,7 @@ void background_dfu_transport_state_update(background_dfu_context_t * p_dfu_ctx)
     // Get the remote URI and resource name from the stored manifest.
     parse_uri_string(p_dfu_ctx, image_resource_name);
 
-#if COAPS_DFU_DTLS_ENABLE
+#ifdef COAPS_DFU_DTLS_ENABLE
     coaps_connect(static_m_coaps_dfu_ctx.remote_addr, static_m_coaps_dfu_ctx.remote_port);
 #else
     // The firmware image download can begin immediately if DTLS is disabled.
@@ -1104,6 +1104,17 @@ void background_dfu_transport_send_request(background_dfu_context_t * p_dfu_ctx)
   switch (p_dfu_ctx->dfu_state)
   {
   case BACKGROUND_PERIODIC_REPORTING:
+    /*
+     * To prevent dead ends, check if connected
+     */
+#ifdef COAPS_DFU_DTLS_ENABLE
+  if (!otCoapSecureIsConnected(thread_ot_instance_get()) ||
+      !otCoapSecureIsConnectionActive(thread_ot_instance_get()))
+    {
+    NVIC_SystemReset();
+    }
+#endif
+
     block_size = 0;
     payload = static_m_coaps_dfu_ctx.payload;
     payload_len = static_m_coaps_dfu_ctx.payload_len;
@@ -1172,7 +1183,7 @@ static void coap_default_handler(void                * p_context,
     NRF_LOG_INFO("Received CoAP message that does not match any request or resource\r\n");
 }
 
-#if COAPS_DFU_DTLS_ENABLE
+#ifdef COAPS_DFU_DTLS_ENABLE
 static void coaps_connect_handler(bool connected, void *aContext)
 {
     if (connected)
@@ -1182,7 +1193,12 @@ static void coaps_connect_handler(bool connected, void *aContext)
     }
     else
     {
-        NRF_LOG_ERROR("Failed to establish CoAPs session.");
+        NRF_LOG_ERROR("Failed to establish CoAPs session. Retrying");
+        /*
+         * Currently: retry with the same address as given earlier
+         */
+        coaps_connect(static_m_coaps_dfu_ctx.remote_addr, static_m_coaps_dfu_ctx.remote_port);
+
     }
 }
 
@@ -1297,7 +1313,7 @@ static uint32_t thread_coap_init()
 {
     otError error;
 
-#if COAPS_DFU_DTLS_ENABLE
+#ifdef COAPS_DFU_DTLS_ENABLE
     error = otCoapSecureStart(thread_ot_instance_get(), OT_DEFAULT_COAP_SECURE_PORT);
     ASSERT(error == OT_ERROR_NONE);
 
@@ -1354,7 +1370,7 @@ uint32_t coaps_dfu_start()
      * completion of the handshake with the remote server.
      */
 
-#if COAPS_DFU_DTLS_ENABLE
+#ifdef COAPS_DFU_DTLS_ENABLE
     return NRF_SUCCESS;
 #else
     return background_dfu_handle_event(&m_dfu_ctx, BACKGROUND_DFU_EVENT_TRANSFER_COMPLETE);
