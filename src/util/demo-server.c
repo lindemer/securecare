@@ -332,13 +332,11 @@ static void hnd_get(coap_context_t *ctx UNUSED_PARAM,
     size_t flen;
     char * full_path = malloc(strlen(uri_path->s) + strlen(fsdir));
     sprintf(full_path, "%s/%s", fsdir, uri_path->s);
+    if (!access( full_path, F_OK ) == 0) {
+      response->code = COAP_RESPONSE_CODE(404);
+      return;
+    }
     uint8_t * buf = read_file_mem(full_path, &flen);
-
-  if (!file_is_modified(full_path)) {
-    fprintf(stderr, "manifest updated\n");
-    response->code = COAP_RESPONSE_CODE(404);
-    return;
-  }
 
     // File contents returned if no query is present.
     reply = buf;
