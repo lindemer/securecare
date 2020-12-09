@@ -181,9 +181,8 @@ bool background_dfu_validate_manifest_metadata(background_dfu_context_t * p_dfu_
 
   return true;
 
-  metadata_fail:
+metadata_fail:
 
-  NRF_LOG_ERROR("Failed to decode SUIT manifest metadata.");
   return false;
 }
 
@@ -191,13 +190,20 @@ bool background_dfu_process_manifest_metadata(background_dfu_context_t * p_dfu_c
     const uint8_t            * p_payload,
     uint32_t                   payload_len)
 {
-  p_dfu_ctx->dfu_state = BACKGROUND_DFU_GET_MANIFEST_METADATA;
+  uint32_t p_offset, p_crc, p_max_size;
+  nrf_dfu_validation_suit_manifest_status_get(&p_offset, &p_crc, &p_max_size);
 
-  uint32_t err;
-  if ((err = background_dfu_handle_event(p_dfu_ctx, BACKGROUND_DFU_EVENT_TRANSFER_COMPLETE)))
+  /* This function is called from coaps_dfu.c upon validating a manifest
+   * metadata reply. If the manifest found on the server has the same CRC32 as
+   * the one in flash, we do not proceed with the update.
+   */
+  if (p_dfu_ctx->suit_manifest_crc == p_crc)
   {
-    NRF_LOG_ERROR("Error in background_dfu_handle_event (0x%d)", err);
+    background_dfu_handle_event(p_dfu_ctx, BACKGROUND_DFU_EVENT_PROCESSING_ERROR);
+    return false;
   }
+
+  background_dfu_handle_event(p_dfu_ctx, BACKGROUND_DFU_EVENT_TRANSFER_COMPLETE);
 
   NRF_LOG_INFO("SUIT DFU: manifest (sz=%d, crc=%0X)",
       p_dfu_ctx->suit_manifest_size,
@@ -782,6 +788,12 @@ uint32_t background_dfu_handle_event(background_dfu_context_t * p_dfu_ctx,
         // We wait for dfu request to finish - do not send anything.
         return NRF_SUCCESS;
       }
+    }
+    else if (event == BACKGROUND_DFU_EVENT_PROCESSING_ERROR)
+    {
+      p_dfu_ctx->dfu_diag.prev_state = BACKGROUND_DFU_GET_MANIFEST_METADATA;
+      p_dfu_ctx->dfu_state = BACKGROUND_PERIODIC_IDLE;
+      background_dfu_transport_state_update(p_dfu_ctx);
     }
 
     break;
