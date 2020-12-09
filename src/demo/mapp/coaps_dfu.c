@@ -847,7 +847,8 @@ static void coaps_dfu_message_send(otMessage * aMessage)
     if (!otCoapSecureIsConnected(thread_ot_instance_get()) ||
         !otCoapSecureIsConnectionActive(thread_ot_instance_get()))
     {
-        NRF_LOG_ERROR("DTLS connection not established.");
+        nrf_delay_ms(COAPS_DFU_RESET_DELAY);
+        NVIC_SystemReset();
     }
 
     otError error = otCoapSecureSendRequest(thread_ot_instance_get(),
@@ -1109,14 +1110,6 @@ void background_dfu_transport_send_request(background_dfu_context_t * p_dfu_ctx)
     /*
      * To prevent dead ends, check if connected
      */
-#ifdef COAPS_DFU_DTLS_ENABLE
-    if (!otCoapSecureIsConnected(thread_ot_instance_get()) ||
-        !otCoapSecureIsConnectionActive(thread_ot_instance_get()))
-    {
-        nrf_delay_ms(COAPS_DFU_RESET_DELAY);
-        NVIC_SystemReset();
-    }
-#endif
 
     block_size = 0;
     payload = static_m_coaps_dfu_ctx.payload;

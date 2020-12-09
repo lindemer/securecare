@@ -52,6 +52,8 @@
 #include "sdk_errors.h"
 #include "nrf_dfu_handling_error.h"
 
+uint32_t nrf_dfu_validation_get_manifest_crc();
+
 /**
  * @brief Function for module initialization.
  *

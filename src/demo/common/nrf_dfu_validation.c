@@ -114,6 +114,13 @@ static void crypto_init(void)
     m_crypto_initialized = true;
 }
 
+uint32_t nrf_dfu_validation_get_manifest_crc()
+{
+    const uint8_t * env = s_dfu_settings.suit_manifest;
+    uint32_t len = s_dfu_settings.progress.manifest_size;
+    return crc32_compute(env, len, NULL);
+}
+
 bool nrf_dfu_validation_manifest_decode()
 {
     crypto_init();

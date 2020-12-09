@@ -190,14 +190,11 @@ bool background_dfu_process_manifest_metadata(background_dfu_context_t * p_dfu_c
     const uint8_t            * p_payload,
     uint32_t                   payload_len)
 {
-  uint32_t p_offset, p_crc, p_max_size;
-  nrf_dfu_validation_suit_manifest_status_get(&p_offset, &p_crc, &p_max_size);
-
   /* This function is called from coaps_dfu.c upon validating a manifest
    * metadata reply. If the manifest found on the server has the same CRC32 as
    * the one in flash, we do not proceed with the update.
    */
-  if (p_dfu_ctx->suit_manifest_crc == p_crc)
+  if (p_dfu_ctx->suit_manifest_crc == nrf_dfu_validation_get_manifest_crc())
   {
     background_dfu_handle_event(p_dfu_ctx, BACKGROUND_DFU_EVENT_PROCESSING_ERROR);
     return false;
