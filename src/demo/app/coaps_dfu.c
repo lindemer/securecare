@@ -129,9 +129,7 @@ static void reset_application(void)
     nrf_delay_ms(100);
 #endif
 #ifdef COAPS_DFU_DTLS_ENABLE
-    otCoapSecureStop(thread_ot_instance_get());
-    otCoapSecureDisconnect(thread_ot_instance_get());
-    nrf_delay_ms(1000);
+    nrf_delay_ms(30000);
 #endif
     NVIC_SystemReset();
 }
@@ -523,17 +521,19 @@ static otMessage * message_create(const char    * p_resource,
 
    if (p_payload != NULL)
    {
-      error = otCoapMessageAppendContentFormatOption(aMessage, aContentFormat);
-      ASSERT(error == OT_ERROR_NONE);
+       error = otCoapMessageAppendContentFormatOption(aMessage, aContentFormat);
+       ASSERT(error == OT_ERROR_NONE);
 
-      error = otCoapMessageSetPayloadMarker(aMessage);
-      ASSERT(error == OT_ERROR_NONE);
+       error = otCoapMessageSetPayloadMarker(aMessage);
+       ASSERT(error == OT_ERROR_NONE);
 
        error = otMessageAppend(aMessage, p_payload, payload_len);
        ASSERT(error == OT_ERROR_NONE);
        NRF_LOG_INFO("attach pload: %lu", payload_len);
-   } else {
-     NRF_LOG_DEBUG("No req pload");
+   }
+   else
+   {
+       NRF_LOG_DEBUG("No req pload");
    }
 
    if (p_query != NULL)
@@ -770,6 +770,7 @@ void background_dfu_transport_send_request(background_dfu_context_t * p_dfu_ctx)
             if (!otCoapSecureIsConnected(thread_ot_instance_get()) ||
                 !otCoapSecureIsConnectionActive(thread_ot_instance_get()))
             {
+                nrf_delay_ms(30000);
                 NVIC_SystemReset();
             }
 #endif

@@ -51,7 +51,7 @@
 //==========================================================
 
 #define COAPS_DFU_DTLS_ENABLE
-#define ENABLE_SENSOR
+//#define ENABLE_SENSOR
 
 // Unique device identifiers for the CoAP(s) SUIT DFU.
 
