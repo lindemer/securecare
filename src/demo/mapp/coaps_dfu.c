@@ -134,7 +134,9 @@ static void reset_application(void)
     // To allow the buffer to be flushed by the host.
     nrf_delay_ms(100);
 #endif
-
+#ifdef COAPS_DFU_DTLS_ENABLE
+    nrf_delay_ms(COAPS_DFU_RESET_DELAY);
+#endif
     NVIC_SystemReset();
 }
 
@@ -1108,10 +1110,11 @@ void background_dfu_transport_send_request(background_dfu_context_t * p_dfu_ctx)
      * To prevent dead ends, check if connected
      */
 #ifdef COAPS_DFU_DTLS_ENABLE
-  if (!otCoapSecureIsConnected(thread_ot_instance_get()) ||
-      !otCoapSecureIsConnectionActive(thread_ot_instance_get()))
+    if (!otCoapSecureIsConnected(thread_ot_instance_get()) ||
+        !otCoapSecureIsConnectionActive(thread_ot_instance_get()))
     {
-    NVIC_SystemReset();
+        nrf_delay_ms(COAPS_DFU_RESET_DELAY);
+        NVIC_SystemReset();
     }
 #endif
 

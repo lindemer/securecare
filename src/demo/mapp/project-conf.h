@@ -38,6 +38,7 @@
 #undef MBEDTLS_CHACHA20_C
 
 #define COAPS_DFU_DTLS_ENABLE 1
+#define COAPS_DFU_RESET_DELAY 30000
 
 // Remote DFU/SUIT server parameters
 #define suit_remote_addr  "coaps://[fd00::1]"
@@ -237,7 +238,7 @@ __ALIGN(4) static const uint8_t demo_node_key_priv[32] =
  */
 #define TRUSTSTORE_PARSE_BUFFER_SIZE 1024
 
-#define SENSOR_PERIOD    2000 //ms
+#define SENSOR_PERIOD    1000 //ms
 /*
  * This path for putting sensor data needs to exist on the target demo server
  */
@@ -253,8 +254,9 @@ __ALIGN(4) static const uint8_t demo_node_key_priv[32] =
 
 /*
  * EST flash settings
+ * 2 KiB region at end of application free space
  */
-static const uint32_t EST_FLASH_START_ADDRESS = 0x0007F000;
+static const uint32_t EST_FLASH_START_ADDRESS = 0xf3800;
 static const uint32_t EST_DONE_SYMBOL = 2147483647;
 //#define EST_DONE_SYMBOL 4294967295
 
