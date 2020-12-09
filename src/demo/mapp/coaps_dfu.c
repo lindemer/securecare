@@ -371,7 +371,9 @@ static void handle_sensor_reading_acc(void *aContext,
   if(OT_COAP_CODE_VALID == resp_code) {
     return;
   }
-  //TODO: change state, somehow!
+  //TODO: possible change state instead
+  NRF_LOG_DEBUG("Manifest has changed on server, reset");
+  reset_application(); //RESET TIME!
 
 }
 /*********************************************************************************************************/

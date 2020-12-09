@@ -50,5 +50,9 @@
 #define SENSOR_ALARM_VALUE 255
 #define SENSOR_NULL_VALUE 0
 
+#define COAP_DEFAULT_SESSION_TIMEOUT 60
+
+#define MANIFEST_PATH "manifest.cbor"
+
 
 #endif
