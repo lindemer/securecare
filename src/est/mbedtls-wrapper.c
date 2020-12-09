@@ -85,7 +85,7 @@
 
 #include "nrf_log_ctrl.h"
 #include "nrf_log.h"
-
+#include "app_error.h" //APP_ERROR_CHECK"
 #include "nrf_assert.h"
 #include "nrf_crypto_rng.h"
 #include <nrf_crypto_types.h>
@@ -207,10 +207,10 @@ uint8_t factory_key_pem_holder[] = {
 //__ALIGN(4) uint8_t  ek_priv_copy[sizeof(ek_priv)];
 //
 //#endif //test keys for running node without RNG
-
+#if !STANDALONE_VERSION
 __ALIGN(4) uint8_t static ek_pub_copy[sizeof(demo_node_key_pub)];
 __ALIGN(4) uint8_t  ek_priv_copy[sizeof(demo_node_key_priv)];
-
+#endif
 
 /*
  * Below is test enrollment data ...
