@@ -169,9 +169,9 @@ inline int lidar_active() {
 int lidar_update() {
   if(lidar_is_running) {
     rplidar_point_t point;
-    rplidar_get_point(&point);
+    uint32_t ret = rplidar_get_point(&point);
     //NRF_LOG_INFO("deg=%d, mm %d", point.deg, point.mm);
-    rplidar_push_sweep(&global_sweep, &point, false);
+    if (ret == RPLIDAR_SUCCESS) rplidar_push_sweep(&global_sweep, &point, false);
     return 0;
   }
   return -1;

@@ -256,7 +256,7 @@ INC_FOLDERS += \
 LIB_FILES += \
   $(OT_ROOT)/libopenthread-ftd.a \
   $(OT_ROOT)/libopenthread-nrf52840-transport-none.a \
-  $(OT_ROOT)/libopenthread-platform-utils.a \
+  $(SDK_ROOT)/external/openthread/lib/nrf52840/gcc/libopenthread-platform-utils.a \
   $(SDK_ROOT)/external/nrf_security/lib/libmbedcrypto_glue.a \
   $(SDK_ROOT)/external/nrf_security/lib/libmbedcrypto_glue_cc310.a \
   $(SDK_ROOT)/external/nrf_security/lib/libmbedcrypto_glue_vanilla.a \
@@ -271,7 +271,7 @@ LIB_FILES += \
   $(SDK_ROOT)/external/nrf_security/lib/libmbedcrypto_glue_cc310.a \
   $(SDK_ROOT)/external/nrf_security/lib/libmbedcrypto_glue_vanilla.a \
   $(SDK_ROOT)/external/nrf_security/lib/libmbedtls_base_vanilla.a \
-  $(OT_ROOT)/libnordicsemi-nrf52840-radio-driver.a \
+  $(SDK_ROOT)/external/openthread/lib/nrf52840/gcc/libnordicsemi-nrf52840-radio-driver.a \
   $(SDK_ROOT)/external/micro-ecc/nrf52hf_armgcc/armgcc/micro_ecc_lib_nrf52.a \
   $(SDK_ROOT)/external/nrf_oberon/lib/cortex-m4/hard-float/liboberon_3.0.3.a \
   $(SDK_ROOT)/external/nrf_security/lib/libmbedcrypto_cc310_backend.a \
