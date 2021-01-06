@@ -251,7 +251,7 @@ hnd_put_sensor(coap_context_t *ctx UNUSED_PARAM,
   unsigned char *data;
   int decoder_error = 0;
   int ret = 0;
-  int mean, hits;
+  int mean, hits, readings;
 
   /* coap_get_data() sets size to 0 on error */
   (void)coap_get_data(request, &size, &data);
@@ -270,6 +270,7 @@ hnd_put_sensor(coap_context_t *ctx UNUSED_PARAM,
     } else {
       ret = nanocbor_get_int32(&arr, &mean);
       ret = nanocbor_get_int32(&arr, &hits);
+      ret = nanocbor_get_int32(&arr, &readings);
       if(ret < 0) {
         decoder_error = 1;
       } else {

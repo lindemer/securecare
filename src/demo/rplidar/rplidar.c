@@ -208,6 +208,7 @@ void rplidar_init_sweep(rplidar_sweep_t * sweep)
 {
     sweep->swap = false;
     sweep->hits = 0;
+    sweep->readings = 0;
     for (int i = 0; i < 360; i++)
     {
         sweep->swap0[i] = 0;
@@ -232,6 +233,7 @@ void rplidar_clear_sweep(rplidar_sweep_t * sweep)
     }
     sweep->swap = !sweep->swap;
     sweep->hits = 0;
+    sweep->readings = 0;
 }
 
 uint16_t rplidar_push_sweep(rplidar_sweep_t * sweep,
@@ -246,6 +248,7 @@ uint16_t rplidar_push_sweep(rplidar_sweep_t * sweep,
             if (point->deg >= 180 - RPLIDAR_APERTURE || 
                 point->deg <= 180 + RPLIDAR_APERTURE)
             {
+                sweep->readings++;
                 if (delta > RPLIDAR_HIT_MIN && delta < RPLIDAR_HIT_MAX) sweep->hits++;
                 if (delta > sweep->delta[point->deg])
                 {
@@ -261,6 +264,7 @@ uint16_t rplidar_push_sweep(rplidar_sweep_t * sweep,
             if (point->deg >= 180 - RPLIDAR_APERTURE || 
                 point->deg <= 180 + RPLIDAR_APERTURE)
             {
+                sweep->readings++;
                 if (delta > RPLIDAR_HIT_MIN && delta < RPLIDAR_HIT_MAX) sweep->hits++;
                 if (delta > sweep->delta[point->deg])
                 {

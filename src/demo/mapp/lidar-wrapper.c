@@ -177,9 +177,10 @@ int lidar_update() {
   return -1;
 }
 
-int lidar_get_data(uint32_t *mean, uint32_t *hits) {
+int lidar_get_data(uint32_t *mean, uint32_t *hits, uint32_t *readings) {
   *mean = rplidar_get_mean(&global_sweep);
   *hits = global_sweep.hits;
+  *readings = global_sweep.readings;
   rplidar_clear_sweep(&global_sweep);
   return 0;
 }

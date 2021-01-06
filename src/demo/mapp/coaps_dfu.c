@@ -337,14 +337,8 @@ static void handle_manifest_metadata_response(void *aContext,
 
     if (!is_valid_response_received(aResult, aMessage))
     {
-        background_dfu_handle_event(&m_dfu_ctx, BACKGROUND_DFU_EVENT_TRANSFER_ERROR);
-        return;
-    }
-    	
-    int resp_code = otCoapMessageGetCode(aMessage);
-    if (resp_code == OT_COAP_CODE_NOT_FOUND)
-    {
         background_dfu_handle_event(p_dfu_ctx, BACKGROUND_DFU_EVENT_PROCESSING_ERROR);
+        return;
     }
 
     static_m_coaps_dfu_ctx.buffer_length = otMessageRead(aMessage,
@@ -376,8 +370,8 @@ static void handle_sensor_reading_acc(void *aContext,
     return;
   }
   //TODO: possible change state instead
-  NRF_LOG_DEBUG("Manifest has changed on server, reset");
-  reset_application(); //RESET TIME!
+  //NRF_LOG_DEBUG("Manifest has changed on server, reset");
+  //reset_application(); //RESET TIME!
 
 }
 /*********************************************************************************************************/
@@ -998,24 +992,21 @@ uint32_t background_dfu_random(void)
     return otRandomNonCryptoGetUint32();
 }
 
-/****************************************************************
- * Plug in sensor data readings here!
- */
-int16_t
-read_sensor_data(uint8_t *buffer, uint16_t buf_len)
+int16_t read_sensor_data(uint8_t *buffer, uint16_t buf_len)
 {
-  uint32_t  mean = 12, hits = 13;
+  uint32_t mean = 0xa, hits = 0xb, readings = 0xc;
 
 #if HAVE_LIDAR
-  int ret = lidar_get_data(&mean, &hits);
-  NRF_LOG_INFO("%d hits, %d mean %d ret", hits, mean, ret);
+  int ret = lidar_get_data(&mean, &hits, &readings);
+  NRF_LOG_INFO("%d hits, %d mean, %d readings, %d ret", hits, mean, readings, ret);
 #endif
 
   nanocbor_encoder_t encoder;
   nanocbor_encoder_init(&encoder, buffer, 50);
-  nanocbor_fmt_array(&encoder, 2); //only two items in array
+  nanocbor_fmt_array(&encoder, 3);
   nanocbor_fmt_uint(&encoder, hits);
   nanocbor_fmt_uint(&encoder, mean);
+  nanocbor_fmt_uint(&encoder, readings);
   return nanocbor_encoded_len(&encoder);
 }
 
