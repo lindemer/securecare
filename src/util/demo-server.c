@@ -243,7 +243,7 @@ hnd_put_sensor(coap_context_t *ctx UNUSED_PARAM,
   unsigned char *data;
   int decoder_error = 0;
   int ret = 0;
-  int mean, hits;
+  int mean, hits, readings;
 
   /* coap_get_data() sets size to 0 on error */
   (void)coap_get_data(request, &size, &data);
@@ -262,14 +262,12 @@ hnd_put_sensor(coap_context_t *ctx UNUSED_PARAM,
     } else {
       ret = nanocbor_get_uint32(&arr, &mean);
       ret = nanocbor_get_uint32(&arr, &hits);
+      ret = nanocbor_get_uint32(&arr, &readings);
       if(ret < 0) {
         decoder_error = 1;
       } else {
-        printf("obj/lidar/1/noise {\"timestamp\": %u, \"value\": %d}\n", (unsigned)time(NULL), mean);
-	if (get_alarm(mean))
-          printf("obj/lidar/1/alarm {\"timestamp\": %u, \"value\": 255}\n", (unsigned)time(NULL));
-        else
-          printf("obj/lidar/1/alarm {\"timestamp\": %u, \"value\": 0}\n", (unsigned)time(NULL));
+        int alarm = get_alarm(mean) ? 255 : 0;
+        printf("%d,%d,%d\n", mean, alarm, readings);
       }
     }
 
