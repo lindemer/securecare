@@ -347,20 +347,19 @@ static void handle_manifest_metadata_response(void *aContext,
 
     if (!is_valid_response_received(aResult, aMessage))
     {
-        background_dfu_handle_event(&m_dfu_ctx, BACKGROUND_DFU_EVENT_TRANSFER_ERROR);
+        background_dfu_handle_event(&m_dfu_ctx, BACKGROUND_DFU_EVENT_PROCESSING_ERROR);
         return;
     }
 
     m_coaps_dfu_ctx.buffer_length = otMessageRead(aMessage,
-                                                 otMessageGetOffset(aMessage),
-                                                 m_coaps_dfu_ctx.buffer,
-                                                 otMessageGetLength(aMessage));
+                                                  otMessageGetOffset(aMessage),
+                                                  m_coaps_dfu_ctx.buffer,
+                                                  otMessageGetLength(aMessage));
 
     if (background_dfu_validate_manifest_metadata(&m_dfu_ctx,
-                            m_coaps_dfu_ctx.buffer, m_coaps_dfu_ctx.buffer_length))
+        m_coaps_dfu_ctx.buffer, m_coaps_dfu_ctx.buffer_length))
     {
-        NRF_LOG_INFO("Manifest metadata received.");
-	background_dfu_process_manifest_metadata(&m_dfu_ctx,
+        background_dfu_process_manifest_metadata(&m_dfu_ctx,
                             m_coaps_dfu_ctx.buffer, m_coaps_dfu_ctx.buffer_length);
     }
 }
@@ -620,7 +619,6 @@ static otMessage * coaps_dfu_create_request(const char * resource_path,
                                            otCoapCode      aCode,
                                            otCoapOptionContentFormat aContentFormat
                                            )
-
 {
     otMessage * aMessage;
     aMessage = message_create(resource_path, p_query, req_payload, payload_len,
@@ -929,8 +927,6 @@ uint32_t coaps_dfu_start()
     /* If DTLS is not enabled, we can transition from DFU_IDLE to DFU_GET_MANIFEST_METADATA
      * immediately. Otherwise, this transition is triggered by the CoAPs connection callback upon
      * completion of the handshake with the remote server.
-     *
-     * If ENABLE_SENSOR is defined, the next state will be TRANSMIT_SENSOR_DATA instead.
      */
 
 #ifdef COAPS_DFU_DTLS_ENABLE

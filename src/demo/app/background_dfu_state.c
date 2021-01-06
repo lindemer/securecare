@@ -536,19 +536,12 @@ uint32_t background_dfu_handle_event(background_dfu_context_t * p_dfu_ctx,
             {
                 p_dfu_ctx->dfu_diag.prev_state = BACKGROUND_DFU_IDLE;
 
-#ifdef ENABLE_SENSOR
-		init_lidar();
-                p_dfu_ctx->dfu_state     = TRANSMIT_SENSOR_DATA;
-		app_timer_start(m_periodic_timer, APP_TIMER_TICKS(500), p_dfu_ctx);
-#else
                 p_dfu_ctx->dfu_state     = BACKGROUND_DFU_GET_MANIFEST_METADATA;
-#endif
                 p_dfu_ctx->block_num     = 0;
                 p_dfu_ctx->retry_count   = DEFAULT_RETRIES;
 
                 background_dfu_transport_state_update(p_dfu_ctx);
             }
-
             break;
         }
 
@@ -564,7 +557,7 @@ uint32_t background_dfu_handle_event(background_dfu_context_t * p_dfu_ctx,
                                              dfu_manifest_check_callback,
                                              p_dfu_ctx) != NRF_SUCCESS)
                 {
-                    NRF_LOG_ERROR("No valid init command - select error");
+                    NRF_LOG_ERROR("No valid SUIT manifest - select error");
                     setup_download_suit_manifest(p_dfu_ctx);
                 }
                 else
@@ -573,6 +566,20 @@ uint32_t background_dfu_handle_event(background_dfu_context_t * p_dfu_ctx,
                     return NRF_SUCCESS;
                 }
             }
+#ifdef ENABLE_SENSOR
+            else if (event == BACKGROUND_DFU_EVENT_PROCESSING_ERROR)
+            {
+                p_dfu_ctx->dfu_diag.prev_state = BACKGROUND_DFU_IDLE;
+
+		init_lidar();
+                p_dfu_ctx->dfu_state     = TRANSMIT_SENSOR_DATA;
+                p_dfu_ctx->block_num     = 0;
+                p_dfu_ctx->retry_count   = DEFAULT_RETRIES;
+		app_timer_start(m_periodic_timer, APP_TIMER_TICKS(500), p_dfu_ctx);
+
+                background_dfu_transport_state_update(p_dfu_ctx);
+            }
+#endif
 
             break;
         }
