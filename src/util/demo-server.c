@@ -274,24 +274,8 @@ hnd_put_sensor(coap_context_t *ctx UNUSED_PARAM,
       if(ret < 0) {
         decoder_error = 1;
       } else {
-
-#if PRINT_SENSOR_MEAN
-        printf("%s%d%s", SENSOR_MEAN_HEADER, mean, SENSOR_MEAN_FOOTER);
-#endif
-        //ALWAYS print alarm
-        if (get_alarm(mean)) {
-          printf("%s%d%s", SENSOR_ALARM_HEADER, SENSOR_ALARM_VALUE, SENSOR_ALARM_FOOTER);
-        }
-        else
-        {
-          printf("%s%d%s", SENSOR_ALARM_HEADER, SENSOR_NULL_VALUE, SENSOR_ALARM_FOOTER);
-
-        }
-
-#if PRINT_SENSOR_HITS
-        printf("%s%d%s", SENSOR_HITS_HEADER, hits, SENSOR_HITS_FOOTER);
-#endif
-        printf("%s", SENSOR_DATA_SEPARATOR);
+        int alarm = get_alarm(mean) ? 255 : 0;
+        printf("%d,%d,%d", mean, alarm, readings);
 	fflush(stdout);
       }
     }
