@@ -50,14 +50,13 @@
 #include "coaps_dfu.h"
 #include "background_dfu_state.h"
 #include "thread_utils.h"
-#include "sdk_config.h"
 /*
  * Lidar
  */
 #include "app_uart.h"
 #include "rplidar.h"
 
-#include "nrf_gpio.h"
+
 #if defined (UART_PRESENT)
 #include "nrf_uart.h"
 #elif defined (UARTE_PRESENT)
@@ -124,7 +123,7 @@ void init_lidar() {
                      uart_error_handle,
                      APP_IRQ_PRIORITY_LOWEST,
                      err_code);
-  APP_ERROR_CHECK(err_code);
+  //APP_ERROR_CHECK(err_code);
 
   rplidar_response_device_info_t info;
   err_code = rplidar_get_device_info(&info);
@@ -136,6 +135,7 @@ void init_lidar() {
 
   err_code = rplidar_start_scan(false);
   //APP_ERROR_CHECK(err_code);
+  NRF_LOG_INFO("err_code %d", err_code);
 
   nrf_gpio_cfg_output(SPARE2);
   nrf_gpio_pin_set(SPARE2);
@@ -169,15 +169,17 @@ int lidar_update() {
   if(lidar_is_running) {
     rplidar_point_t point;
     rplidar_get_point(&point);
+    //NRF_LOG_INFO("deg=%d, mm %d", point.deg, point.mm);
     rplidar_push_sweep(&global_sweep, &point, false);
     return 0;
   }
   return -1;
 }
 
-int lidar_get_data(uint32_t *mean, uint32_t *hits) {
+int lidar_get_data(uint32_t *mean, uint32_t *hits, uint32_t *readings) {
   *mean = rplidar_get_mean(&global_sweep);
   *hits = global_sweep.hits;
+  *readings = global_sweep.readings;
   rplidar_clear_sweep(&global_sweep);
   return 0;
 }

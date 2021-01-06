@@ -164,16 +164,17 @@ static void dfu_observer(nrf_dfu_evt_type_t evt_type)
 #ifdef ENABLE_SENSOR
 int16_t read_sensor_data(uint8_t *buffer, uint16_t buf_len)
 {
-    uint32_t mean, hits;
+    uint32_t mean, hits, readings;
     
-    int ret = lidar_get_data(&mean, &hits);
-    NRF_LOG_INFO("%d hits, %d mean %d ret", hits, mean, ret);
+    int ret = lidar_get_data(&mean, &hits, &readings);
+    NRF_LOG_INFO("%d hits, %d mean, readings %d, %d ret", hits, mean, readings, ret);
     
     nanocbor_encoder_t encoder;
     nanocbor_encoder_init(&encoder, buffer, buf_len);
-    nanocbor_fmt_array(&encoder, 2);
+    nanocbor_fmt_array(&encoder, 3);
     nanocbor_fmt_uint(&encoder, mean);
     nanocbor_fmt_uint(&encoder, hits);
+    nanocbor_fmt_uint(&encoder, readings);
     return nanocbor_encoded_len(&encoder);
 }
 #endif

@@ -123,6 +123,7 @@ typedef struct rplidar_sweep_t
     int swap1[360];
     int delta[360]; 
     int hits;
+    int readings;
 } rplidar_sweep_t;
 
 uint32_t rplidar_get_device_info(rplidar_response_device_info_t * info);
