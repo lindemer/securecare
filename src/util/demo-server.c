@@ -275,7 +275,7 @@ hnd_put_sensor(coap_context_t *ctx UNUSED_PARAM,
         decoder_error = 1;
       } else {
         int alarm = get_alarm(mean) ? 255 : 0;
-        printf("%d,%d,%d", mean, alarm, readings);
+        printf("%d,%d\n", mean, alarm);
 	fflush(stdout);
       }
     }
