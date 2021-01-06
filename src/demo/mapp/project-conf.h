@@ -238,7 +238,7 @@ __ALIGN(4) static const uint8_t demo_node_key_priv[32] =
  */
 #define TRUSTSTORE_PARSE_BUFFER_SIZE 1024
 
-#define SENSOR_PERIOD    1000 //ms
+#define SENSOR_PERIOD    500 //ms
 /*
  * This path for putting sensor data needs to exist on the target demo server
  */

@@ -997,8 +997,8 @@ int16_t read_sensor_data(uint8_t *buffer, uint16_t buf_len)
   uint32_t mean = 0xa, hits = 0xb, readings = 0xc;
 
 #if HAVE_LIDAR
-  int ret = lidar_get_data(&mean, &hits, &readings);
-  NRF_LOG_INFO("%d hits, %d mean, %d readings, %d ret", hits, mean, readings, ret);
+  lidar_get_data(&mean, &hits, &readings);
+  //NRF_LOG_INFO("%d hits, %d mean, %d readings, %d ret", hits, mean, readings, ret);
 #endif
 
   nanocbor_encoder_t encoder;

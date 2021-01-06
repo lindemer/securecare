@@ -125,7 +125,7 @@ void init_lidar() {
                      APP_IRQ_PRIORITY_LOWEST,
                      err_code);
   //APP_ERROR_CHECK(err_code);
-
+  
   rplidar_response_device_info_t info;
   err_code = rplidar_get_device_info(&info);
   //APP_ERROR_CHECK(err_code);

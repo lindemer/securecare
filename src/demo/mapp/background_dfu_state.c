@@ -636,7 +636,7 @@ uint32_t background_dfu_handle_event(background_dfu_context_t * p_dfu_ctx,
   p_dfu_ctx->dfu_state     = BACKGROUND_PERIODIC_REPORTING;
   p_dfu_ctx->dfu_diag.prev_state = BACKGROUND_PERIODIC_IDLE;
 //break, no break? Do we want to read the sensor data also for the first iteration? //TODO
-  //break;
+  break;
   case BACKGROUND_PERIODIC_REPORTING:
 
     NRF_LOG_INFO("setup sensor data");
