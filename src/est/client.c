@@ -26,9 +26,10 @@
 #include <coap2/net.h>
 
 #include "client.h"
+
+#include "crypto-wrapper.h"
 #include "est.h"
 #include "est-x509.h"
-#include "mbedtls-wrapper.h"
 
 #define MAX_USER 128 /* Maximum length of a user name (i.e., PSK
  * identity) in bytes. */

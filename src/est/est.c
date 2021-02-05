@@ -67,7 +67,7 @@ extern const uint8_t client_mac_id[];
 
 #include "xiot.h"
 
-#include "mbedtls-wrapper.h"
+#include "crypto-wrapper.h"
 
 #if STANDALONE_VERSION
 #include "util/nrf_log_wrapper.h"
@@ -763,9 +763,9 @@ est_process_enroll_response(uint8_t *incoming_buffer, const uint16_t buf_len, un
 int16_t
 est_create_enroll_request(uint8_t *buffer, uint16_t buf_len)
 {
-#if USE_CBOR_ENCODING
-  return est_create_enroll_request_cbor(buffer, buf_len);
-#endif
+//#if USE_CBOR_ENCODING
+//  return est_create_enroll_request_cbor(buffer, buf_len);
+//#endif
 
   int res = 0;
   memset(buffer, 0, buf_len);

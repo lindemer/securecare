@@ -1,15 +1,20 @@
 UTIL  := $(CURDIR)/util
 #ECC  := $(CURDIR)/../other-ecc
 CBOR  := $(CURDIR)/../../lib/NanoCBOR
+DONNA := $(CURDIR)/../../lib/curve25519-donna
 BUILD := $(CURDIR)/build
 
 CC := gcc
-	
-_OBJ = est-client.o client.o est.o est-asn1.o est-base64.o est-cms.o est-oid.o est-pkcs10.o est-x509.o  
-_OBJ += mbedtls-wrapper.o
+
+_OBJ += est-client.o
+#_OBJ += ecdh_example.o	
+_OBJ += client.o est.o est-asn1.o est-base64.o est-cms.o est-oid.o est-pkcs10.o est-x509.o  
+_OBJ += crypto-wrapper.o
 #other-ecc.o ecc-sha1.o secp256r1.o sha224-256.o
 _OBJ += memb.o
 _OBJ += encoder.o decoder.o
+_OBJ += curve25519-donna.o
+
 
 ifeq ($(UC),1)
 ${info Compiling with CBOR}
@@ -47,7 +52,8 @@ INCLUDES += -I$(CBOR)/include/
 #INCLUDES += -I$(EST)
 INCLUDES += -I$(UTIL)
 INCLUDES += -I.
-CFLAGS += -Wall -Werror -g $(INCLUDES)
+#CFLAGS += -Wall -Werror -g $(INCLUDES)
+CFLAGS += -w -g $(INCLUDES)
 CFLAGS += -DJACOBIAN_COORDINATES=1 -DSECP256R1=1
 
 LIBS = -lmbedtls -lmbedcrypto -lmbedx509 -lcoap-2-openssl
@@ -73,6 +79,9 @@ $(BUILD)/encoder.o: $(CBOR)/src/encoder.c
 	$(CC) -c -o $@ $< $(CFLAGS) $(INCLUDES) 
 
 $(BUILD)/decoder.o: $(CBOR)/src/decoder.c
+	$(CC) -c -o $@ $< $(CFLAGS) $(INCLUDES) 
+
+$(BUILD)/curve25519-donna.o: $(DONNA)/curve25519-donna.c
 	$(CC) -c -o $@ $< $(CFLAGS) $(INCLUDES) 
 
 #$(BUILD)/log.o: $(UTIL)/log.c

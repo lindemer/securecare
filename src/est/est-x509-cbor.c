@@ -51,6 +51,7 @@
 #include "est-oid.h"
 
 #include "../util/memb.h"
+#include "crypto-wrapper.h" //crypto
 //#include "../other-ecc/bigint.h"
 //#include "../other-ecc/other-ecc.h"
 
@@ -59,8 +60,6 @@
 //#include "net-debug.h" /* For PRINTLLADDR */
 //#include "bigint.h"
 #include "est-client.h" //settings
-#include "mbedtls-wrapper.h" //crypto
-
 #include "log.h"
 #define LOG_MODULE "x509-cbor"
 #ifdef LOG_CONF_LEVEL_EST_X509_CBOR

@@ -62,9 +62,10 @@
 #include "background_dfu_transport.h"
 #include "background_dfu_operation.h"
 #include "background_dfu_state.h"
+
+#include "../../est/crypto-wrapper.h"
 #include "nanocbor/nanocbor.h"
 
-#include "mbedtls-wrapper.h"
 #include "project-conf.h"
 
 #define NRF_LOG_MODULE_NAME background_dfu

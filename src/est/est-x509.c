@@ -78,7 +78,7 @@ extern const uint8_t client_mac_id[];
 //#include "net-debug.h" /* For PRINTLLADDR */
 //#include "bigint.h"
 #include "est-client.h" //settings
-#include "mbedtls-wrapper.h" //crypto
+#include "crypto-wrapper.h" //crypto
 
 #if STANDALONE_VERSION
 #include "util/nrf_log_wrapper.h"

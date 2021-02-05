@@ -196,6 +196,10 @@ int est_dtls_wrapper_free();
 int create_ecc_signature(const unsigned char *buffer, size_t data_len, unsigned char *r_buf, const size_t r_len, unsigned char *s_buf, const size_t s_len);
 int verify_ecc_signature(x509_key_context *pk_ctx, const unsigned char *buffer, size_t data_len, const unsigned char *r_buf, const size_t r_len, const unsigned char *s_buf, const size_t s_len);
 int verify_own_signature(const unsigned char *buffer, size_t data_len, const unsigned char *r_buf, const size_t r_len, const unsigned char *s_buf, const size_t s_len);
+/*---------------------------------------------------------------------------*/
+int verify_ecc_sign(unsigned char pub_xy[64], const unsigned char *buffer, size_t data_len, const unsigned char *r_buf, const size_t r_len, const unsigned char *s_buf, const size_t s_len);
+int create_ecc_sign(unsigned char priv_d[32], const unsigned char *buffer, size_t data_len, unsigned char *r_buf, const size_t r_len,  unsigned char *s_buf, const size_t s_len);
+/*---------------------------------------------------------------------------*/
 
 int generate_enrollment_keys(x509_key_context *key_ctx);
 /*---------------------------------------------------------------------------*/
@@ -210,5 +214,7 @@ void mbedtls_wrapper_release();
 //void get_simple_enroll_data(uint8_t *buffer);
 //int get_private_enrollment_key(unsigned char *buf_d);
 int get_pem_enrollment_key(unsigned char *pem_buf);
+
+int generate_shared_secret(unsigned char* P_X, unsigned char* G_Y, unsigned char* G_XY);
 
 #endif /* MBEDTLS_WRAPPER_H_ */

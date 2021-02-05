@@ -66,11 +66,12 @@
 
 #include "project-conf.h" //hardcoded factory certs
 #include "est.h"
-#include "mbedtls-wrapper.h"
 #include <time.h>
 #include <sys/time.h>
 
 #include "mbedtls/version.h" //for mbedtls_version_check_feature
+
+#include "../../est/crypto-wrapper.h"
 #include "sdk_config.h"
 
 #if HAVE_RANDOM
